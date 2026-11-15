@@ -5,6 +5,10 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
+[[bin]]
+name = "amethysctl"
+path = "src/main.rs"
+
 [dependencies]
 amethys-ipc.workspace = true
 tokio.workspace = true
