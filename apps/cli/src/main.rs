@@ -98,7 +98,11 @@ async fn import_detected_steam_game(app_id: &str) -> Result<(), Box<dyn Error>> 
             "Impossible de vérifier la bibliothèque ({}): {}",
             remote_error.code, remote_error.message
         ).into()),
-        Ok(_) => return Err("Amethys a envoyé une réponse inattendue en lisant la bibliothèque.".into()),
+        Ok(_) => {
+            return Err(
+                "Amethys a envoyé une réponse inattendue en lisant la bibliothèque.".into(),
+            );
+        }
     };
 
     let install_path = game.install_path.to_string_lossy().into_owned();
