@@ -1177,6 +1177,29 @@ mod tests {
     }
 
     #[test]
+    fn ignores_battlenet_products_not_marked_as_installed() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-battlenet-not-installed-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let install = root.join("World of Warcraft");
+        std::fs::create_dir_all(&install).expect("create leftover game directory");
+        let settings = encode_bytes_field(1, install.to_string_lossy().as_bytes());
+        let base_state = encode_varint(8).into_iter().chain(encode_varint(0)).collect::<Vec<_>>();
+        let cached_state = encode_bytes_field(1, &base_state);
+        let mut product = encode_bytes_field(2, b"wow");
+        product.extend(encode_bytes_field(3, &settings));
+        product.extend(encode_bytes_field(4, &cached_state));
+        let database = root.join("product.db");
+        std::fs::write(&database, encode_bytes_field(1, &product)).expect("write fixture");
+
+        assert!(super::scan_battlenet_product_db(&database).is_empty());
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
     fn ignores_oversized_battlenet_database() {
         let root = std::env::temp_dir().join(format!(
             "amethys-battlenet-large-{}-{}",
