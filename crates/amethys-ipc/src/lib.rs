@@ -14,6 +14,8 @@ pub enum IpcCommand {
     Ping,
     /// Requests the current lifecycle state of the core.
     GetStatus,
+    /// Lists games saved in the local library.
+    ListGames,
 }
 
 /// A request sent from a local client to the core agent.
@@ -45,6 +47,17 @@ pub enum IpcCoreStatus {
 pub enum IpcResponsePayload {
     Pong,
     CoreStatus { state: IpcCoreStatus },
+    Games { games: Vec<IpcGameEntry> },
+}
+
+/// A game summary transferred from the core to a local client.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct IpcGameEntry {
+    pub id: String,
+    pub name: String,
+    pub platform: String,
+    pub install_path: String,
+    pub executable: Option<String>,
 }
 
 /// A safe, serializable error returned by the remote core process.
@@ -122,9 +135,20 @@ pub fn dispatch_request(
     request: IpcEnvelope<IpcRequest>,
     state: IpcCoreStatus,
 ) -> IpcResponse {
+    dispatch_request_with_games(request, state, &[])
+}
+
+/// Dispatches a request with a snapshot of the locally stored game library.
+#[must_use]
+pub fn dispatch_request_with_games(
+    request: IpcEnvelope<IpcRequest>,
+    state: IpcCoreStatus,
+    games: &[IpcGameEntry],
+) -> IpcResponse {
     let payload = match request.payload.command {
         IpcCommand::Ping => IpcResponsePayload::Pong,
         IpcCommand::GetStatus => IpcResponsePayload::CoreStatus { state },
+        IpcCommand::ListGames => IpcResponsePayload::Games { games: games.to_vec() },
     };
     IpcResponse::success(request.request_id, payload)
 }
@@ -164,8 +188,20 @@ pub async fn serve_connection<S>(
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
+    serve_connection_with_games(stream, state, &[]).await
+}
+
+/// Handles one request using the current game-library snapshot.
+pub async fn serve_connection_with_games<S>(
+    stream: &mut S,
+    state: IpcCoreStatus,
+    games: &[IpcGameEntry],
+) -> Result<(), AmethysError>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
     let request: IpcEnvelope<IpcRequest> = read_envelope(stream).await?;
-    let response = dispatch_request(request, state);
+    let response = dispatch_request_with_games(request, state, games);
     write_message(stream, &response).await
 }
 
