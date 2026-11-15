@@ -816,7 +816,6 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
     if let Some(home) = std::env::var_os("HOME") {
         let home = PathBuf::from(home);
         games.extend(scan_game_folders("GOG", &[home.join("GOG Games")]));
-        games.extend(scan_game_folders("Heroic", &[home.join("Games/Heroic")]));
     }
 
     games.sort_by_key(|game| (game.platform, game.name.to_lowercase()));
