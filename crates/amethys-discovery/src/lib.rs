@@ -383,7 +383,17 @@ pub fn scan_ea_games(roots: &[PathBuf]) -> Vec<DetectedGame> {
 
 fn xml_element_text(contents: &str, element: &str) -> Option<String> {
     let open_tag = format!("<{element}");
-    let open_start = contents.find(&open_tag)?;
+    let mut search_from = 0;
+    let open_start = loop {
+        let relative = contents.get(search_from..)?.find(&open_tag)?;
+        let candidate = search_from + relative;
+        let after_name = candidate + open_tag.len();
+        let next = *contents.as_bytes().get(after_name)?;
+        if next == b'>' || next.is_ascii_whitespace() {
+            break candidate;
+        }
+        search_from = after_name;
+    };
     let open_end = contents[open_start..].find('>')? + open_start + 1;
     let close_tag = format!("</{element}>");
     let close_start = contents[open_end..].find(&close_tag)? + open_end;
