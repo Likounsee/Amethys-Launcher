@@ -1,0 +1,13 @@
+[package]
+name = "ametis-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ametis-errors.workspace = true
+ametis-events.workspace = true
+
+[lints]
+workspace = true
