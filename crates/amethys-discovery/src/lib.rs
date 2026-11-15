@@ -874,7 +874,6 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
     #[cfg(windows)]
     {
         let program_files = std::env::var_os("ProgramFiles").map(PathBuf::from);
-        let program_files_x86 = std::env::var_os("ProgramFiles(x86)").map(PathBuf::from);
         if let Some(root) = program_files.as_ref() {
             games.extend(scan_ea_games(&[root.join("EA Games")]));
             // GOG is detected from Galaxy's installed-product database rather
@@ -886,7 +885,6 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
         }
         // Ubisoft is detected from its registry install records. A generic
         // folder scan could report manually-created or leftover directories.
-        let _ = program_files_x86;
         games.extend(discover_ubisoft_games());
     if let Some(database) = battlenet_product_database() {
         games.extend(scan_battlenet_product_db(&database));
