@@ -258,7 +258,6 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
     {
         let program_files = std::env::var_os("ProgramFiles").map(PathBuf::from);
         let program_files_x86 = std::env::var_os("ProgramFiles(x86)").map(PathBuf::from);
-        let program_data = std::env::var_os("ProgramData").map(PathBuf::from);
         if let Some(root) = program_files.as_ref() {
             games.extend(scan_game_folders("EA app", &[root.join("EA Games")]));
             games.extend(scan_game_folders("GOG", &[root.join("GOG Games")]));
