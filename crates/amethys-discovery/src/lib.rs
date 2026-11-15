@@ -254,23 +254,39 @@ pub fn scan_heroic_legendary_installed(installed_json: &Path) -> Vec<DetectedGam
     games
 }
 
-/// Returns known Legendary installed.json locations used by Heroic on each OS.
+/// Returns known Heroic and standalone Legendary installed.json locations.
+///
+/// Heroic stores its configuration below Electron's appData/heroic directory;
+/// standalone Legendary uses its own XDG-style config directory.
 pub fn heroic_legendary_installed_files() -> Vec<PathBuf> {
     let mut files = BTreeSet::new();
+
     #[cfg(windows)]
-    if let Some(profile) = std::env::var_os("USERPROFILE") {
-        files.insert(PathBuf::from(profile).join(".config/legendary/installed.json"));
+    if let Some(app_data) = std::env::var_os("APPDATA") {
+        files.insert(PathBuf::from(app_data).join("heroic/legendaryConfig/legendary/installed.json"));
     }
+
     #[cfg(target_os = "linux")]
-    if let Some(home) = std::env::var_os("HOME") {
-        let home = PathBuf::from(home);
-        files.insert(home.join(".config/legendary/installed.json"));
-        files.insert(home.join(".var/app/com.heroicgameslauncher.hgl/config/legendary/installed.json"));
+    {
+        if let Some(config_home) = std::env::var_os("XDG_CONFIG_HOME") {
+            files.insert(PathBuf::from(config_home).join("heroic/legendaryConfig/legendary/installed.json"));
+            files.insert(PathBuf::from(config_home).join("legendary/installed.json"));
+        } else if let Some(home) = std::env::var_os("HOME") {
+            let config = PathBuf::from(home).join(".config");
+            files.insert(config.join("heroic/legendaryConfig/legendary/installed.json"));
+            files.insert(config.join("legendary/installed.json"));
+        }
+        if let Some(home) = std::env::var_os("HOME") {
+            files.insert(PathBuf::from(home).join(".var/app/com.heroicgameslauncher.hgl/config/heroic/legendaryConfig/legendary/installed.json"));
+        }
     }
+
     #[cfg(target_os = "macos")]
     if let Some(home) = std::env::var_os("HOME") {
+        files.insert(PathBuf::from(home).join("Library/Application Support/heroic/legendaryConfig/legendary/installed.json"));
         files.insert(PathBuf::from(home).join(".config/legendary/installed.json"));
     }
+
     files.into_iter().filter(|path| path.is_file()).collect()
 }
 
