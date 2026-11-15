@@ -944,7 +944,7 @@ mod tests {
         parse_app_manifest, parse_library_folders, scan_epic_manifests, scan_game_folders,
         scan_steam_libraries,
     };
-    use std::path::Path;
+    use std::{collections::BTreeSet, path::Path};
 
     #[cfg(not(windows))]
     #[test]
