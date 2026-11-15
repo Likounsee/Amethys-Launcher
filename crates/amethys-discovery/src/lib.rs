@@ -264,12 +264,11 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
             games.extend(scan_game_folders("GOG", &[root.join("GOG Games")]));
             games.extend(scan_game_folders("Xbox", &[root.join("XboxGames")]));
         }
+        if let Some(system_drive) = std::env::var_os("SystemDrive") {
+            games.extend(scan_game_folders("GOG", &[PathBuf::from(system_drive).join("GOG Games")]));
+        }
         if let Some(root) = program_files_x86.as_ref() {
             games.extend(scan_game_folders("Ubisoft Connect", &[root.join("Ubisoft/Ubisoft Game Launcher/games")]));
-            games.extend(scan_game_folders("Battle.net", &[root.join("Battle.net")]));
-        }
-        if let Some(root) = program_data.as_ref() {
-            games.extend(scan_game_folders("EA app", &[root.join("EA")]));
         }
     }
 
@@ -278,7 +277,6 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
         let home = PathBuf::from(home);
         games.extend(scan_game_folders("GOG", &[home.join("GOG Games")]));
         games.extend(scan_game_folders("Heroic", &[home.join("Games/Heroic")]));
-        games.extend(scan_game_folders("Lutris", &[home.join("Games")]));
     }
 
     games.sort_by_key(|game| (game.platform, game.name.to_lowercase()));
