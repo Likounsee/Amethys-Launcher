@@ -1100,6 +1100,54 @@ mod tests {
     }
 
     #[test]
+    fn skips_invalid_gog_titles_and_stale_install_paths() {
+        use rusqlite::{params, Connection};
+
+        let root = std::env::temp_dir().join(format!(
+            "amethys-gog-invalid-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create fixture root");
+        let installed = root.join("Valid Game");
+        std::fs::create_dir_all(&installed).expect("create installed game");
+        let database = root.join("galaxy-2.0.db");
+        let connection = Connection::open(&database).expect("create fixture database");
+        connection.execute_batch(
+            "CREATE TABLE InstalledBaseProducts (productId TEXT, installationPath TEXT);
+             CREATE TABLE GamePieces (releaseKey TEXT, gamePieceTypeId INTEGER, value TEXT);
+             CREATE TABLE GamePieceTypes (id INTEGER, type TEXT);
+             INSERT INTO GamePieceTypes VALUES (1, 'originalTitle');"
+        ).expect("create GOG metadata tables");
+
+        let rows = [
+            ("valid", installed.to_string_lossy().into_owned(), r#"{"title":"Valid Game"}"#),
+            ("bad-json", installed.to_string_lossy().into_owned(), "{not-json"),
+            ("empty-title", installed.to_string_lossy().into_owned(), r#"{"title":"  "}"#),
+            ("stale-path", root.join("Removed Game").to_string_lossy().into_owned(), r#"{"title":"Removed Game"}"#),
+        ];
+        for (id, location, title) in rows {
+            connection.execute(
+                "INSERT INTO InstalledBaseProducts VALUES (?1, ?2)",
+                params![id, location],
+            ).expect("insert GOG product");
+            connection.execute(
+                "INSERT INTO GamePieces VALUES (?1, 1, ?2)",
+                params![format!("gog_{id}"), title],
+            ).expect("insert GOG title");
+        }
+        drop(connection);
+
+        let games = super::scan_gog_galaxy(&database);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform_id.as_deref(), Some("valid"));
+        assert_eq!(games[0].name, "Valid Game");
+        assert_eq!(games[0].install_path, installed);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
     fn ignores_unknown_or_missing_gog_galaxy_databases() {
         use rusqlite::Connection;
 
