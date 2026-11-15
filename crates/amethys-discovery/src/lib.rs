@@ -23,7 +23,8 @@ pub fn parse_library_folders(contents: &str, steam_root: &Path) -> Vec<PathBuf> 
         let Some((key, value)) = quoted_pair(line) else {
             continue;
         };
-        if key == "path" && !value.is_empty() {
+        // Newer Steam files use a nested path field; older files use numeric keys.
+        if (key == "path" || key.parse::<u32>().is_ok()) && !value.is_empty() {
             paths.insert(PathBuf::from(unescape_vdf(&value)));
         }
     }
@@ -38,6 +39,12 @@ pub fn parse_app_manifest(contents: &str) -> Option<(String, String, String)> {
     let install_dir = find_vdf_value(contents, "installdir")?;
 
     if app_id.is_empty() || name.trim().is_empty() || install_dir.trim().is_empty() {
+        return None;
+    }
+
+    if Path::new(&install_dir).components().any(|component| {
+        !matches!(component, std::path::Component::Normal(_))
+    }) {
         return None;
     }
 
