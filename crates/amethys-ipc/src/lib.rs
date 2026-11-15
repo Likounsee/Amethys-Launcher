@@ -78,7 +78,7 @@ mod tests {
     use serde::{Deserialize, Serialize};
     use tokio::io::duplex;
 
-    #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
+    #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
     struct Payload { command: String }
 
     #[tokio::test]
