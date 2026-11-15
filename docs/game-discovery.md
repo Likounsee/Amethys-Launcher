@@ -16,7 +16,7 @@ Amethys discovery is read-only. A scan reports installed games; it does not add 
 | Steam | `libraryfolders.vdf` and `appmanifest_*.acf` | Metadata-based detection; checks that the install directory exists. |
 | Epic Games | Launcher `.item` JSON manifests | Metadata-based on Windows. Linux/macOS Heroic support still needs a dedicated adapter. |
 | EA app | `__Installer/installerdata.xml` in each EA Games child directory | Reads game title and content ID when present; falls back to the install folder name. Custom locations remain to do. |
-| GOG | Known GOG Games directories | Folder-based preliminary detection; GOG Galaxy database support remains to do. |
+| GOG | Known GOG Games directories and Galaxy `galaxy-2.0.db` | Reads installed product IDs, original titles and installation paths from Galaxy metadata when available. |
 | Ubisoft Connect | Known Ubisoft game directory | Folder-based preliminary detection; registry/custom locations remain to do. |
 | Xbox | Known XboxGames directory | Preliminary folder-based detection; package-aware detection remains to do. |
 | Heroic | Known Heroic games directory | Preliminary folder-based detection. |
@@ -27,7 +27,7 @@ Amethys discovery is read-only. A scan reports installed games; it does not add 
 
 1. Keep discovery read-only and avoid scanning broad folders that would produce false positives.
 2. Prefer launcher metadata over guessing from directory names.
-3. Add dedicated adapters and fixture-based tests for Battle.net, GOG Galaxy, Ubisoft Connect and Xbox. EA app and Amazon Games now have metadata-based adapters.
+3. Add dedicated adapters and fixture-based tests for Battle.net, Ubisoft Connect and Xbox. EA app, GOG Galaxy and Amazon Games now have metadata-based adapters.
 4. Discover custom install locations where reliable metadata is available.
 5. Add Linux/macOS coverage for launchers available on those systems.
 6. Only after detection is dependable, add explicit import/selection into the Amethys library.
