@@ -202,12 +202,8 @@ pub fn epic_manifest_roots() -> Vec<PathBuf> {
     if let Some(program_data) = std::env::var_os("ProgramData") {
         roots.insert(PathBuf::from(program_data).join("Epic/EpicGamesLauncher/Data/Manifests"));
     }
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    if let Some(home) = std::env::var_os("HOME") {
-        let home = PathBuf::from(home);
-        roots.insert(home.join(".config/heroic/store_cache"));
-        roots.insert(home.join(".config/legendary"));
-    }
+    // Epic's .item launcher manifests are currently supported on Windows.
+    // Heroic/Legendary use different metadata formats and are scanned separately.
     roots.into_iter().filter(|path| path.is_dir()).collect()
 }
 
