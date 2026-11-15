@@ -1,7 +1,9 @@
-//! Native local IPC stream connection helpers.
+//! Native local IPC server and client helpers.
 //!
 //! Unix-domain sockets are used on Linux/macOS and named pipes on Windows.
-//! Connecting does not itself authenticate the peer or configure server ACLs.
+//! Unix sockets are restricted to the owning user (0600). Windows named-pipe
+//! access is governed by the process token's default security descriptor.
+//! Callers must still validate the peer's protocol and authorize every command.
 
 use crate::{AmethysError, ErrorCode};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -11,50 +13,149 @@ impl<T> IpcStream for T where T: AsyncRead + AsyncWrite + Unpin + Send {}
 
 pub type BoxedIpcStream = Box<dyn IpcStream>;
 
+#[cfg(unix)]
+pub struct IpcListener {
+    listener: tokio::net::UnixListener,
+    socket_path: std::path::PathBuf,
+}
+
+#[cfg(windows)]
+pub struct IpcListener {
+    server: tokio::net::windows::named_pipe::NamedPipeServer,
+}
+
+#[cfg(unix)]
+impl Drop for IpcListener {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.socket_path);
+    }
+}
+
+#[cfg(unix)]
+impl IpcListener {
+    /// Binds a local socket and restricts its filesystem permissions to 0600.
+    pub async fn bind(endpoint: impl AsRef<std::path::Path>) -> Result<Self, AmethysError> {
+        use std::os::unix::fs::PermissionsExt;
+
+        let socket_path = endpoint.as_ref().to_path_buf();
+        let listener = tokio::net::UnixListener::bind(&socket_path)
+            .map_err(io_error)?;
+        if let Err(error) = std::fs::set_permissions(
+            &socket_path,
+            std::fs::Permissions::from_mode(0o600),
+        ) {
+            drop(listener);
+            let _ = std::fs::remove_file(&socket_path);
+            return Err(io_error(error));
+        }
+        Ok(Self { listener, socket_path })
+    }
+
+    /// Accepts one client. Bind another listener instance to accept concurrently.
+    pub async fn accept(self) -> Result<BoxedIpcStream, AmethysError> {
+        let (stream, _) = self.listener.accept().await.map_err(io_error)?;
+        Ok(Box::new(stream))
+    }
+}
+
+#[cfg(windows)]
+impl IpcListener {
+    /// Creates one local named-pipe server instance.
+    pub async fn bind(endpoint: impl AsRef<str>) -> Result<Self, AmethysError> {
+        let server = tokio::net::windows::named_pipe::ServerOptions::new()
+            .first_pipe_instance(true)
+            .create(endpoint.as_ref())
+            .map_err(io_error)?;
+        Ok(Self { server })
+    }
+
+    /// Accepts one client connection.
+    pub async fn accept(self) -> Result<BoxedIpcStream, AmethysError> {
+        self.server.connect().await.map_err(io_error)?;
+        Ok(Box::new(self.server))
+    }
+}
+
 /// Connects to a Unix-domain socket path on Linux or macOS.
 #[cfg(unix)]
-pub async fn connect(endpoint: &str) -> Result<BoxedIpcStream, AmethysError> {
+pub async fn connect(endpoint: impl AsRef<std::path::Path>) -> Result<BoxedIpcStream, AmethysError> {
     tokio::net::UnixStream::connect(endpoint)
         .await
         .map(|stream| Box::new(stream) as BoxedIpcStream)
-        .map_err(|error| AmethysError::new(ErrorCode::IpcIo, error.to_string()))
+        .map_err(io_error)
 }
 
 /// Connects to a Windows named pipe, for example \\.\pipe\amethys-core.
 #[cfg(windows)]
-pub async fn connect(endpoint: &str) -> Result<BoxedIpcStream, AmethysError> {
+pub async fn connect(endpoint: impl AsRef<str>) -> Result<BoxedIpcStream, AmethysError> {
     tokio::net::windows::named_pipe::ClientOptions::new()
-        .open(endpoint)
+        .open(endpoint.as_ref())
         .map(|stream| Box::new(stream) as BoxedIpcStream)
-        .map_err(|error| AmethysError::new(ErrorCode::IpcIo, error.to_string()))
+        .map_err(io_error)
+}
+
+#[cfg(not(any(unix, windows)))]
+pub struct IpcListener;
+
+#[cfg(not(any(unix, windows)))]
+impl IpcListener {
+    pub async fn bind(_endpoint: &str) -> Result<Self, AmethysError> {
+        Err(unsupported_platform())
+    }
+
+    pub async fn accept(self) -> Result<BoxedIpcStream, AmethysError> {
+        Err(unsupported_platform())
+    }
 }
 
 #[cfg(not(any(unix, windows)))]
 pub async fn connect(_endpoint: &str) -> Result<BoxedIpcStream, AmethysError> {
-    Err(AmethysError::new(
+    Err(unsupported_platform())
+}
+
+fn io_error(error: std::io::Error) -> AmethysError {
+    AmethysError::new(ErrorCode::IpcIo, error.to_string())
+}
+
+#[cfg(not(any(unix, windows)))]
+fn unsupported_platform() -> AmethysError {
+    AmethysError::new(
         ErrorCode::IpcIo,
         "Native IPC transport is not supported on this operating system.",
-    ))
+    )
 }
 
 #[cfg(all(test, unix))]
 mod tests {
-    use super::connect;
-    use tokio::net::UnixListener;
+    use super::{IpcListener, connect};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[tokio::test]
-    async fn connects_to_a_local_unix_socket() {
+    async fn client_and_server_exchange_bytes_over_private_socket() {
+        use std::os::unix::fs::PermissionsExt;
+
         let path = std::env::temp_dir().join(format!(
             "amethys-ipc-{}.sock",
             uuid::Uuid::new_v4()
         ));
-        let listener = UnixListener::bind(&path).expect("bind test socket");
-        let endpoint = path.to_string_lossy().into_owned();
-        let client = connect(&endpoint).await.expect("connect");
-        let (server, _) = listener.accept().await.expect("accept");
-        drop(client);
-        drop(server);
-        drop(listener);
-        std::fs::remove_file(path).expect("remove test socket");
+        let listener = IpcListener::bind(&path).await.expect("bind socket");
+        let mode = std::fs::metadata(&path).expect("socket metadata").permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600);
+
+        let client_path = path.clone();
+        let client_task = tokio::spawn(async move {
+            let mut client = connect(client_path).await.expect("connect");
+            client.write_all(b"ping").await.expect("send");
+            let mut response = [0_u8; 4];
+            client.read_exact(&mut response).await.expect("receive");
+            response
+        });
+
+        let mut server = listener.accept().await.expect("accept");
+        let mut request = [0_u8; 4];
+        server.read_exact(&mut request).await.expect("read request");
+        assert_eq!(&request, b"ping");
+        server.write_all(b"pong").await.expect("write response");
+        assert_eq!(&client_task.await.expect("client task"), b"pong");
     }
 }
