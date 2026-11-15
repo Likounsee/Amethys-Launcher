@@ -415,9 +415,11 @@ pub fn parse_ubisoft_registry_output(contents: &str) -> Vec<DetectedGame> {
             current_id = Some(id.trim().to_owned());
             continue;
         }
-        if let Some(value) = trimmed.strip_prefix("InstallDir    REG_SZ    ")
-            .or_else(|| trimmed.strip_prefix("InstallDir    REG_EXPAND_SZ    "))
+        if let Some((name, value)) = trimmed.split_once("REG_SZ")
+            .or_else(|| trimmed.split_once("REG_EXPAND_SZ"))
+            .filter(|(name, _)| name.trim() == "InstallDir")
         {
+            let _ = name;
             let install_path = PathBuf::from(value.trim());
             if !install_path.is_dir() {
                 continue;
