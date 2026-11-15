@@ -8,7 +8,7 @@ use std::{
 /// Discovery is read-only: it never changes platform files or the game library.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DetectedGame {
-    pub app_id: String,
+    pub platform_id: Option<String>,
     pub name: String,
     pub install_path: PathBuf,
     pub platform: &'static str,
@@ -83,7 +83,7 @@ pub fn scan_steam_libraries(libraries: &[PathBuf]) -> Vec<DetectedGame> {
             let install_path = manifests.join("common").join(install_dir);
             if install_path.is_dir() && seen.insert(app_id.clone()) {
                 games.push(DetectedGame {
-                    app_id,
+                    platform_id: Some(app_id),
                     name,
                     install_path,
                     platform: "Steam",
@@ -146,6 +146,149 @@ pub fn discover_steam_games() -> Vec<DetectedGame> {
     scan_steam_libraries(&discover_steam_libraries())
 }
 
+
+/// Reads Epic Games Launcher manifests. Invalid or incomplete manifests are ignored.
+pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
+    let entries = match fs::read_dir(manifests_dir) {
+        Ok(entries) => entries,
+        Err(_) => return Vec::new(),
+    };
+    let mut games = Vec::new();
+    let mut seen = BTreeSet::new();
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|value| value.to_str()) != Some("item") {
+            continue;
+        }
+        let Ok(contents) = fs::read_to_string(&path) else {
+            continue;
+        };
+        let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&contents) else {
+            continue;
+        };
+        let Some(install_location) = manifest.get("InstallLocation").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let install_path = PathBuf::from(install_location);
+        if !install_path.is_dir() {
+            continue;
+        }
+        let Some(name) = manifest.get("DisplayName").and_then(|v| v.as_str())
+            .filter(|value| !value.trim().is_empty())
+            .or_else(|| install_path.file_name().and_then(|value| value.to_str()))
+        else {
+            continue;
+        };
+        let platform_id = manifest.get("AppName").and_then(|v| v.as_str()).map(str::to_owned);
+        let dedup_key = install_path.to_string_lossy().to_lowercase();
+        if seen.insert(dedup_key) {
+            games.push(DetectedGame {
+                platform_id,
+                name: name.to_owned(),
+                install_path,
+                platform: "Epic Games",
+            });
+        }
+    }
+    games.sort_by_key(|game| game.name.to_lowercase());
+    games
+}
+
+/// Returns the usual Epic Games manifest folder for the current operating system.
+pub fn epic_manifest_roots() -> Vec<PathBuf> {
+    let mut roots = BTreeSet::new();
+    #[cfg(windows)]
+    if let Some(program_data) = std::env::var_os("ProgramData") {
+        roots.insert(PathBuf::from(program_data).join("Epic/EpicGamesLauncher/Data/Manifests"));
+    }
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = PathBuf::from(home);
+        roots.insert(home.join(".config/heroic/store_cache"));
+        roots.insert(home.join(".config/legendary"));
+    }
+    roots.into_iter().filter(|path| path.is_dir()).collect()
+}
+
+/// Finds game folders inside known libraries for launchers without a stable,
+/// documented local manifest format. Only immediate child folders are considered.
+pub fn scan_game_folders(platform: &'static str, roots: &[PathBuf]) -> Vec<DetectedGame> {
+    let mut games = Vec::new();
+    let mut seen = BTreeSet::new();
+    for root in roots {
+        let entries = match fs::read_dir(root) {
+            Ok(entries) => entries,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if !path.is_dir() {
+                continue;
+            }
+            let Some(name) = path.file_name().and_then(|value| value.to_str())
+                .filter(|value| !value.trim().is_empty())
+            else {
+                continue;
+            };
+            let key = path.to_string_lossy().to_lowercase();
+            if seen.insert(key) {
+                games.push(DetectedGame {
+                    platform_id: None,
+                    name: name.to_owned(),
+                    install_path: path,
+                    platform,
+                });
+            }
+        }
+    }
+    games.sort_by_key(|game| game.name.to_lowercase());
+    games
+}
+
+/// Collects read-only detections from supported launchers. Missing launchers
+/// simply contribute no results and never prevent other adapters from running.
+pub fn discover_all_games() -> Vec<DetectedGame> {
+    let mut games = discover_steam_games();
+    for root in epic_manifest_roots() {
+        games.extend(scan_epic_manifests(&root));
+    }
+
+    #[cfg(windows)]
+    {
+        let program_files = std::env::var_os("ProgramFiles").map(PathBuf::from);
+        let program_files_x86 = std::env::var_os("ProgramFiles(x86)").map(PathBuf::from);
+        let program_data = std::env::var_os("ProgramData").map(PathBuf::from);
+        if let Some(root) = program_files.as_ref() {
+            games.extend(scan_game_folders("EA app", &[root.join("EA Games")]));
+            games.extend(scan_game_folders("GOG", &[root.join("GOG Games")]));
+            games.extend(scan_game_folders("Xbox", &[root.join("XboxGames")]));
+        }
+        if let Some(root) = program_files_x86.as_ref() {
+            games.extend(scan_game_folders("Ubisoft Connect", &[root.join("Ubisoft/Ubisoft Game Launcher/games")]));
+            games.extend(scan_game_folders("Battle.net", &[root.join("Battle.net")]));
+        }
+        if let Some(root) = program_data.as_ref() {
+            games.extend(scan_game_folders("EA app", &[root.join("EA")]));
+        }
+    }
+
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = PathBuf::from(home);
+        games.extend(scan_game_folders("GOG", &[home.join("GOG Games")]));
+        games.extend(scan_game_folders("Heroic", &[home.join("Games/Heroic")]));
+        games.extend(scan_game_folders("Lutris", &[home.join("Games")]));
+    }
+
+    games.sort_by_key(|game| (game.platform, game.name.to_lowercase()));
+    games.dedup_by(|left, right| {
+        left.platform == right.platform
+            && left.install_path.to_string_lossy().eq_ignore_ascii_case(&right.install_path.to_string_lossy())
+    });
+    games
+}
+
 fn find_vdf_value(contents: &str, wanted_key: &str) -> Option<String> {
     contents.lines().find_map(|line| {
         let (key, value) = quoted_pair(line)?;
@@ -171,7 +314,7 @@ fn unescape_vdf(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_app_manifest, parse_library_folders, scan_steam_libraries};
+    use super::{parse_app_manifest, parse_library_folders, scan_epic_manifests, scan_steam_libraries};
     use std::path::Path;
 
     #[test]
@@ -256,11 +399,41 @@ mod tests {
 
         let games = scan_steam_libraries(std::slice::from_ref(&root));
         assert_eq!(games.len(), 1);
-        assert_eq!(games[0].app_id, "570");
+        assert_eq!(games[0].platform_id.as_deref(), Some("570"));
         assert_eq!(games[0].name, "Dota 2");
         assert_eq!(games[0].install_path, game_dir);
 
         std::fs::remove_dir_all(root).expect("remove temporary Steam library");
+    }
+
+    #[test]
+    fn reads_epic_games_from_item_manifests_and_ignores_missing_installs() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-epic-discovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let manifests = root.join("Manifests");
+        let installed = root.join("Installed").join("Example Game");
+        std::fs::create_dir_all(&manifests).expect("create manifests");
+        std::fs::create_dir_all(&installed).expect("create game folder");
+        std::fs::write(manifests.join("installed.item"), format!(
+            r#"{{"AppName":"ExampleApp","DisplayName":"Example Game","InstallLocation":{}}}"#,
+            serde_json::to_string(&installed.to_string_lossy()).expect("encode path")
+        )).expect("write manifest");
+        std::fs::write(manifests.join("missing.item"),
+            r#"{"AppName":"Missing","DisplayName":"Missing Game","InstallLocation":"not-a-real-path"}"#
+        ).expect("write stale manifest");
+        std::fs::write(manifests.join("broken.item"), "{broken").expect("write invalid manifest");
+
+        let games = scan_epic_manifests(&manifests);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform, "Epic Games");
+        assert_eq!(games[0].platform_id.as_deref(), Some("ExampleApp"));
+        assert_eq!(games[0].name, "Example Game");
+        assert_eq!(games[0].install_path, installed);
+        std::fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]
