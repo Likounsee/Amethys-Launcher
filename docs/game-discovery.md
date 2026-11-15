@@ -16,8 +16,8 @@ Amethys discovery is read-only. A scan reports installed games; it does not add 
 | Steam | `libraryfolders.vdf` and `appmanifest_*.acf` | Metadata-based detection; checks install directories and filters known Steam runtimes/redistributables. |
 | Epic Games | Launcher `.item` JSON manifests | Metadata-based on Windows. Heroic/Legendary is handled by its own adapter on supported OSes. |
 | EA app | `__Installer/installerdata.xml` in each EA Games child directory | Reads game title and content ID when present; falls back to the install folder name. Custom locations remain to do. |
-| GOG | Known GOG Games directories and Galaxy `galaxy-2.0.db` | Reads installed product IDs, original titles and installation paths from Galaxy metadata when available; opens the database read-only, skips malformed titles and stale paths, and de-duplicates canonical install paths without folding case on case-sensitive filesystems. |
-| Ubisoft Connect | Windows registry install records plus known game directory | Reads install IDs and paths from the Ubisoft registry key; custom display-name lookup and other OS coverage remain to do. |
+| GOG | Galaxy `galaxy-2.0.db` | Reads installed product IDs, original titles and installation paths from Galaxy metadata; opens the database read-only, skips malformed titles and stale paths, and de-duplicates canonical install paths without folding case on case-sensitive filesystems. Generic `GOG Games` folders are deliberately not scanned because folder names alone can produce false positives. |
+| Ubisoft Connect | Windows registry install records | Reads install IDs and paths from the Ubisoft registry key. Generic Ubisoft game folders are not scanned, because leftover or manually-created directories do not prove an installed game. Custom display-name lookup and other OS coverage remain to do. |
 | Xbox | Not currently scanned | Folder-name guessing was removed because a directory alone does not prove that a game package is installed. Package-aware, permission-respecting detection remains to do. |
 | Heroic | Heroic/Legendary `installed.json` | Reads installed app names, titles and paths from Legendary metadata; validates that each install directory exists. Checks Heroic's platform-specific application-data location (including Linux Flatpak) and standalone Legendary's XDG config location. |
 | Battle.net | `%ProgramData%/Battle.net/Agent/product.db` protobuf metadata | Windows read-only adapter; extracts product codes, install paths and the launcher's explicit installed flag; it validates directories and ignores launcher records, uninstalled entries and malformed/stale data. Known product codes get friendly names; unknown products fall back to the install-folder name. |
@@ -25,7 +25,7 @@ Amethys discovery is read-only. A scan reports installed games; it does not add 
 
 ## Development priorities
 
-1. Keep discovery read-only and avoid scanning broad folders that would produce false positives.
+1. Keep discovery read-only and require launcher metadata or another reliable installation record; do not infer games from generic folder names.
 2. Implement Xbox package-aware detection and expand Battle.net product-name coverage. Battle.net, EA app, GOG Galaxy, Ubisoft Connect, Amazon Games and Heroic/Legendary have metadata-based adapters.
 3. Discover custom install locations where reliable metadata is available.
 4. Add Linux/macOS coverage for launchers available on those systems.
