@@ -42,9 +42,11 @@ pub fn parse_app_manifest(contents: &str) -> Option<(String, String, String)> {
         return None;
     }
 
-    if Path::new(&install_dir).components().any(|component| {
-        !matches!(component, std::path::Component::Normal(_))
-    }) {
+    if install_dir.contains('/') || install_dir.contains('\\\\')
+        || Path::new(&install_dir).components().any(|component| {
+            !matches!(component, std::path::Component::Normal(_))
+        })
+    {
         return None;
     }
 
