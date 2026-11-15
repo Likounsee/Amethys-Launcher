@@ -1,8 +1,10 @@
-use amethys_ipc::{
-    IpcCommand, IpcCoreStatus, IpcRequest, IpcResponsePayload, send_request,
-    transport::{self, BoxedIpcStream},
-};
-use std::{error::Error, path::PathBuf};
+use amethys_ipc::{IpcCommand, IpcCoreStatus, IpcRequest, IpcResponsePayload, send_request};
+use std::error::Error;
+
+#[cfg(any(unix, windows))]
+use amethys_ipc::transport::{self, BoxedIpcStream};
+#[cfg(unix)]
+use std::path::PathBuf;
 
 fn parse_command(argument: Option<&str>) -> Result<IpcCommand, &'static str> {
     match argument {
@@ -12,6 +14,7 @@ fn parse_command(argument: Option<&str>) -> Result<IpcCommand, &'static str> {
     }
 }
 
+#[cfg(unix)]
 fn data_directory() -> PathBuf {
     std::env::var_os("AMETHYS_DATA_DIR")
         .map(PathBuf::from)
