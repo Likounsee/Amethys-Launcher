@@ -1,4 +1,12 @@
-# Amethys Launcher
+<p align="center">
+  <img src="Document%20Assets/logo-text.png" alt="Amethys Launcher" width="720">
+</p>
+
+<p align="center">
+  <a href="https://github.com/Likounsee/Amethys-Launcher/actions/workflows/ci.yml"><img src="https://github.com/Likounsee/Amethys-Launcher/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
+  <img src="https://img.shields.io/badge/Rust-2024-orange?logo=rust" alt="Rust 2024">
+  <img src="https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue" alt="Windows, Linux and macOS">
+</p>
 
 A free, community-driven, cross-platform game library and launcher client.
 
