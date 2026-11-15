@@ -1078,6 +1078,14 @@ mod tests {
         connection.execute("INSERT INTO GamePieces VALUES (?1, 1, ?2)",
             rusqlite::params!["gog_1234567890", r#"{"title":"Heroes of Might and Magic 3"}"#])
             .expect("insert GOG title");
+        connection.execute(
+            "INSERT INTO InstalledBaseProducts VALUES (?1, ?2)",
+            rusqlite::params!["duplicate-product", install.to_string_lossy()],
+        )
+        .expect("insert duplicate install path");
+        connection.execute("INSERT INTO GamePieces VALUES (?1, 1, ?2)",
+            rusqlite::params!["gog_duplicate-product", r#"{"title":"Duplicate entry"}"#])
+            .expect("insert duplicate GOG title");
         drop(connection);
 
         let games = super::scan_gog_galaxy(&database);
