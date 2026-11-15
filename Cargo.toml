@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = ["apps/agent", "crates/ametis-config", "crates/ametis-errors", "crates/ametis-events", "crates/ametis-ipc", "crates/ametis-logging", "crates/ametis-orchestration", "crates/ametis-runtime", "crates/ametis-storage"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+rust-version = "1.85"
+
+[workspace.dependencies]
+ametis-config = { path = "crates/ametis-config" }
+ametis-errors = { path = "crates/ametis-errors" }
+ametis-events = { path = "crates/ametis-events" }
+ametis-ipc = { path = "crates/ametis-ipc" }
+ametis-logging = { path = "crates/ametis-logging" }
+ametis-orchestration = { path = "crates/ametis-orchestration" }
+ametis-runtime = { path = "crates/ametis-runtime" }
+ametis-storage = { path = "crates/ametis-storage" }
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
