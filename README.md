@@ -12,7 +12,7 @@ Amethys Launcher aims to bring game libraries, installations, updates, saves and
 
 ## Project status
 
-The project is at **Core Foundation 0.1**. This first stage builds the Rust foundation before any graphical interface or store integration is introduced.
+The project is at **Core Foundation 0.1**. The Rust foundation is being built alongside an early, read-only multi-platform game discovery system. The graphical interface and online store/catalogue come later.
 
 ## Principles
 
@@ -30,12 +30,13 @@ The project is at **Core Foundation 0.1**. This first stage builds the Rust foun
 1. Rust workspace and project conventions.
 2. Core runtime and lifecycle.
 3. Typed internal event system.
-4. Cross-platform IPC protocol foundation.
-5. Module, task and worker management foundations.
-6. SQLite storage and configuration.
-7. Structured logging, error codes and diagnostics.
+6. Cross-platform IPC protocol foundation.
+7. Module, task and worker management foundations.
+8. SQLite storage and configuration.
+9. Structured logging, error codes and diagnostics.
+10. Read-only discovery of installed games from multiple PC launchers.
 
-The desktop GUI, store integrations, downloads, save synchronization and account system are intentionally out of scope for this foundation stage.
+The desktop GUI, Amethys online store/catalogue, downloads, save synchronization and account system are intentionally out of scope for this foundation stage. Local game discovery is a separate feature and is part of the current development.
 
 ## Repository
 
