@@ -413,10 +413,10 @@ fn xml_element_text(contents: &str, element: &str) -> Option<String> {
 pub fn amazon_games_database() -> Option<PathBuf> {
     #[cfg(windows)]
     {
-        return std::env::var_os("LOCALAPPDATA").map(|local_app_data| {
+        std::env::var_os("LOCALAPPDATA").map(|local_app_data| {
             PathBuf::from(local_app_data)
                 .join("Amazon Games/Data/Games/Sql/GameInstallInfo.sqlite")
-        });
+        })
     }
     #[cfg(not(windows))]
     {
