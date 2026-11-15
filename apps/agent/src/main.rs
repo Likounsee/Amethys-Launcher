@@ -1,5 +1,5 @@
 use amethys_events::EventBus;
-use amethys_ipc::{IpcCoreStatus, serve_connection, transport::IpcListener};
+use amethys_ipc::{IpcCoreStatus, IpcGameEntry, serve_connection_with_games, transport::IpcListener};
 use amethys_runtime::{CoreRuntime, RuntimeState};
 use amethys_storage::Database;
 use std::{
@@ -52,7 +52,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let data_dir = data_directory();
     std::fs::create_dir_all(&data_dir)?;
-    let _database = Database::open(data_dir.join("amethys.sqlite"))?;
+    let database = Database::open(data_dir.join("amethys.sqlite"))?;
 
     let mut runtime = CoreRuntime::new(EventBus::new(128));
     runtime.start()?;
@@ -82,10 +82,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
             accepted = listener.accept() => {
                 match accepted {
                     Ok(mut stream) => {
+                        let games = match database.list_games() {
+                            Ok(entries) => entries.into_iter().map(|game| IpcGameEntry {
+                                id: game.id,
+                                name: game.name,
+                                platform: game.platform,
+                                install_path: game.install_path,
+                                executable: game.executable,
+                            }).collect::<Vec<_>>(),
+                            Err(error) => {
+                                tracing::error!(%error, "Unable to read local game library");
+                                continue;
+                            }
+                        };
                         let state = Arc::clone(&shared_state);
                         connections.spawn(async move {
                             let current_state = ipc_status(&state);
-                            if let Err(error) = serve_connection(&mut stream, current_state).await {
+                            if let Err(error) = serve_connection_with_games(&mut stream, current_state, &games).await {
                                 tracing::debug!(%error, "Local IPC request failed");
                             }
                         });
