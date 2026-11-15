@@ -164,7 +164,7 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
         Err(_) => return Vec::new(),
     };
     let mut games = Vec::new();
-    let mut seen = BTreeSet::new();
+    let mut seen_paths = Vec::new();
 
     for entry in entries.flatten() {
         let path = entry.path();
@@ -193,8 +193,7 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
             continue;
         };
         let platform_id = manifest.get("AppName").and_then(|v| v.as_str()).map(str::to_owned);
-        let dedup_key = install_path.to_string_lossy().to_lowercase();
-        if seen.insert(dedup_key) {
+        if insert_unique_install_path(&mut seen_paths, &install_path) {
             games.push(DetectedGame {
                 platform_id,
                 name: name.to_owned(),
@@ -231,7 +230,7 @@ pub fn scan_heroic_legendary_installed(installed_json: &Path) -> Vec<DetectedGam
     let Some(entries) = entries.as_object() else { return Vec::new(); };
 
     let mut games = Vec::new();
-    let mut seen = BTreeSet::new();
+    let mut seen_paths = Vec::new();
     for (key, value) in entries {
         let Some(record) = value.as_object() else { continue; };
         let app_name = record.get("app_name").and_then(|value| value.as_str())
@@ -242,7 +241,7 @@ pub fn scan_heroic_legendary_installed(installed_json: &Path) -> Vec<DetectedGam
             .filter(|value| !value.trim().is_empty()) else { continue; };
         let install_path = PathBuf::from(install_location);
         if !install_path.is_dir() { continue; }
-        if !seen.insert(install_path.to_string_lossy().to_lowercase()) { continue; }
+        if !insert_unique_install_path(&mut seen_paths, &install_path) { continue; }
         games.push(DetectedGame {
             platform_id: Some(app_name.to_owned()),
             name: title.to_owned(),
@@ -428,7 +427,7 @@ pub fn scan_amazon_games(database: &Path) -> Vec<DetectedGame> {
 /// Reads EA app installations using the installer metadata shipped with each game.
 pub fn scan_ea_games(roots: &[PathBuf]) -> Vec<DetectedGame> {
     let mut games = Vec::new();
-    let mut seen = BTreeSet::new();
+    let mut seen_paths = Vec::new();
 
     for root in roots {
         let entries = match fs::read_dir(root) {
@@ -457,8 +456,7 @@ pub fn scan_ea_games(roots: &[PathBuf]) -> Vec<DetectedGame> {
             }
             let platform_id = xml_element_text(&contents, "contentID")
                 .filter(|value| !value.trim().is_empty());
-            let key = install_path.to_string_lossy().to_lowercase();
-            if seen.insert(key) {
+            if insert_unique_install_path(&mut seen_paths, &install_path) {
                 games.push(DetectedGame {
                     platform_id,
                     name,
@@ -575,8 +573,8 @@ pub fn discover_ubisoft_games() -> Vec<DetectedGame> {
         };
         games.extend(parse_ubisoft_registry_output(&String::from_utf8_lossy(&output.stdout)));
     }
-    let mut seen = BTreeSet::new();
-    games.retain(|game| seen.insert(game.install_path.to_string_lossy().to_lowercase()));
+    let mut seen_paths = Vec::new();
+    games.retain(|game| insert_unique_install_path(&mut seen_paths, &game.install_path));
     games.sort_by_key(|game| game.name.to_lowercase());
     games
 }
@@ -585,7 +583,7 @@ pub fn discover_ubisoft_games() -> Vec<DetectedGame> {
 /// documented local manifest format. Only immediate child folders are considered.
 pub fn scan_game_folders(platform: &'static str, roots: &[PathBuf]) -> Vec<DetectedGame> {
     let mut games = Vec::new();
-    let mut seen = BTreeSet::new();
+    let mut seen_paths = Vec::new();
     for root in roots {
         let entries = match fs::read_dir(root) {
             Ok(entries) => entries,
@@ -601,8 +599,7 @@ pub fn scan_game_folders(platform: &'static str, roots: &[PathBuf]) -> Vec<Detec
             else {
                 continue;
             };
-            let key = path.to_string_lossy().to_lowercase();
-            if seen.insert(key) {
+            if insert_unique_install_path(&mut seen_paths, &path) {
                 games.push(DetectedGame {
                     platform_id: None,
                     name: name.to_owned(),
@@ -642,7 +639,7 @@ pub fn scan_battlenet_product_db(database: &Path) -> Vec<DetectedGame> {
     }
 
     let mut games = Vec::new();
-    let mut seen = BTreeSet::new();
+    let mut seen_paths = Vec::new();
     for install in installs {
         let Some(code_bytes) = protobuf_length_delimited_fields(install, 2)
             .and_then(|fields| fields.into_iter().next())
@@ -684,8 +681,7 @@ pub fn scan_battlenet_product_db(database: &Path) -> Vec<DetectedGame> {
         if !install_path.is_dir() {
             continue;
         }
-        let key = install_path.to_string_lossy().to_lowercase();
-        if !seen.insert(key) {
+        if !insert_unique_install_path(&mut seen_paths, &install_path) {
             continue;
         }
         let name = battlenet_product_name(product_code)
@@ -873,6 +869,15 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
         left.platform == right.platform && same_install_path(&left.install_path, &right.install_path)
     });
     games
+}
+
+/// Adds an install path once, respecting the host filesystem's case rules.
+fn insert_unique_install_path(seen: &mut Vec<PathBuf>, candidate: &Path) -> bool {
+    if seen.iter().any(|existing| same_install_path(existing, candidate)) {
+        return false;
+    }
+    seen.push(candidate.to_path_buf());
+    true
 }
 
 /// Compares canonical install paths using the filesystem's case rules.
