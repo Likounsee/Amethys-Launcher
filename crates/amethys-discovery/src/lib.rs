@@ -311,7 +311,10 @@ fn unescape_vdf(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_app_manifest, parse_library_folders, scan_epic_manifests, scan_steam_libraries};
+    use super::{
+        parse_app_manifest, parse_library_folders, scan_epic_manifests, scan_game_folders,
+        scan_steam_libraries,
+    };
     use std::path::Path;
 
     #[test]
@@ -430,6 +433,32 @@ mod tests {
         assert_eq!(games[0].platform_id.as_deref(), Some("ExampleApp"));
         assert_eq!(games[0].name, "Example Game");
         assert_eq!(games[0].install_path, installed);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn scans_only_immediate_children_of_a_known_launcher_library() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-folder-discovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock is after Unix epoch")
+                .as_nanos()
+        ));
+        let installed = root.join("Installed Game");
+        let nested = installed.join("Game Data");
+        std::fs::create_dir_all(&nested).expect("create nested game folder");
+        std::fs::create_dir_all(root.join("Launcher Cache")).expect("create cache folder");
+
+        let games = scan_game_folders("EA app", std::slice::from_ref(&root));
+        assert_eq!(games.len(), 2);
+        assert!(games.iter().any(|game| game.name == "Installed Game"));
+        assert!(games.iter().any(|game| game.name == "Launcher Cache"));
+        assert!(games.iter().all(|game| game.platform == "EA app"));
+        assert!(games.iter().all(|game| game.platform_id.is_none()));
+        assert!(!games.iter().any(|game| game.name == "Game Data"));
+
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
