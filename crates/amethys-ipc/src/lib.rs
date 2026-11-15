@@ -155,10 +155,15 @@ pub fn dispatch_request_with_games(
         IpcCommand::Ping => IpcResponsePayload::Pong,
         IpcCommand::GetStatus => IpcResponsePayload::CoreStatus { state },
         IpcCommand::ListGames => IpcResponsePayload::Games { games: games.to_vec() },
-        IpcCommand::AddGame { .. } => IpcResponsePayload::GameAdded {
-            game: IpcGameEntry { id: String::new(), name: String::new(), platform: String::new(), install_path: String::new(), executable: None },
-        },
-        IpcCommand::RemoveGame { .. } => IpcResponsePayload::GameRemoved { removed: false },
+        IpcCommand::AddGame { .. } | IpcCommand::RemoveGame { .. } => {
+            return IpcResponse::failure(
+                request.request_id,
+                IpcRemoteError::new(
+                    "AM-IPC-0008",
+                    "Game changes must be handled by the storage-aware core service.",
+                ),
+            );
+        }
     };
     IpcResponse::success(request.request_id, payload)
 }
