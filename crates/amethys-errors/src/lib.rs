@@ -9,6 +9,7 @@ pub enum ErrorCode {
     IpcFrameTooLarge,
     IpcSerialization,
     IpcDeserialization,
+    IpcUnsupportedVersion,
     IpcIo,
     ConfigurationRead,
     ConfigurationWrite,
@@ -21,6 +22,7 @@ pub enum ErrorCode {
     WorkerAlreadyRunning,
     WorkerNotFound,
     WorkerFailed,
+    WorkerShutdownTimeout,
 }
 
 impl std::fmt::Display for ErrorCode {
@@ -41,6 +43,7 @@ impl ErrorCode {
             Self::IpcSerialization => "AM-IPC-0003",
             Self::IpcDeserialization => "AM-IPC-0004",
             Self::IpcIo => "AM-IPC-0005",
+            Self::IpcUnsupportedVersion => "AM-IPC-0006",
             Self::ConfigurationRead => "AM-CONFIG-0001",
             Self::ConfigurationWrite => "AM-CONFIG-0002",
             Self::StorageOpen => "AM-STORAGE-0001",
@@ -52,6 +55,7 @@ impl ErrorCode {
             Self::WorkerAlreadyRunning => "AM-WORKER-0001",
             Self::WorkerNotFound => "AM-WORKER-0002",
             Self::WorkerFailed => "AM-WORKER-0003",
+            Self::WorkerShutdownTimeout => "AM-WORKER-0004",
         }
     }
 }
@@ -71,10 +75,14 @@ impl AmethysError {
     }
 
     #[must_use]
-    pub const fn code(&self) -> ErrorCode { self.code }
+    pub const fn code(&self) -> ErrorCode {
+        self.code
+    }
 
     #[must_use]
-    pub fn message(&self) -> &str { &self.message }
+    pub fn message(&self) -> &str {
+        &self.message
+    }
 }
 
 #[cfg(test)]
@@ -84,16 +92,29 @@ mod tests {
     #[test]
     fn error_codes_are_unique() {
         let codes = [
-            ErrorCode::RuntimeInvalidTransition, ErrorCode::EventNoSubscribers,
-            ErrorCode::IpcInvalidLength, ErrorCode::IpcFrameTooLarge,
-            ErrorCode::IpcSerialization, ErrorCode::IpcDeserialization, ErrorCode::IpcIo,
-            ErrorCode::ConfigurationRead, ErrorCode::ConfigurationWrite,
-            ErrorCode::StorageOpen, ErrorCode::StorageMigration,
-            ErrorCode::ModuleAlreadyRegistered, ErrorCode::ModuleNotFound,
-            ErrorCode::TaskAlreadyRunning, ErrorCode::TaskNotFound,
-            ErrorCode::WorkerAlreadyRunning, ErrorCode::WorkerNotFound, ErrorCode::WorkerFailed,
+            ErrorCode::RuntimeInvalidTransition,
+            ErrorCode::EventNoSubscribers,
+            ErrorCode::IpcInvalidLength,
+            ErrorCode::IpcFrameTooLarge,
+            ErrorCode::IpcSerialization,
+            ErrorCode::IpcDeserialization,
+            ErrorCode::IpcUnsupportedVersion,
+            ErrorCode::IpcIo,
+            ErrorCode::ConfigurationRead,
+            ErrorCode::ConfigurationWrite,
+            ErrorCode::StorageOpen,
+            ErrorCode::StorageMigration,
+            ErrorCode::ModuleAlreadyRegistered,
+            ErrorCode::ModuleNotFound,
+            ErrorCode::TaskAlreadyRunning,
+            ErrorCode::TaskNotFound,
+            ErrorCode::WorkerAlreadyRunning,
+            ErrorCode::WorkerNotFound,
+            ErrorCode::WorkerFailed,
+            ErrorCode::WorkerShutdownTimeout,
         ];
-        let unique: std::collections::HashSet<_> = codes.into_iter().map(ErrorCode::as_str).collect();
+        let unique: std::collections::HashSet<_> =
+            codes.into_iter().map(ErrorCode::as_str).collect();
         assert_eq!(unique.len(), codes.len());
     }
 

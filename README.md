@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="Document%20Assets/logo-text.png" alt="Amethys Launcher" width="720">
-</p>
+![Amethys Launcher](doc/asset/logo-text.png)
 
 <p align="center">
   <a href="https://github.com/Likounsee/Amethys-Launcher/actions/workflows/ci.yml"><img src="https://github.com/Likounsee/Amethys-Launcher/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
