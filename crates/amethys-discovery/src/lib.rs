@@ -877,18 +877,16 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
         let program_files_x86 = std::env::var_os("ProgramFiles(x86)").map(PathBuf::from);
         if let Some(root) = program_files.as_ref() {
             games.extend(scan_ea_games(&[root.join("EA Games")]));
-            games.extend(scan_game_folders("GOG", &[root.join("GOG Games")]));
+            // GOG is detected from Galaxy's installed-product database rather
+            // than guessed from folders that may contain unrelated files.
             // Xbox is intentionally not inferred from `XboxGames` folders:
             // that directory alone does not prove a package is installed.
             // Add Xbox discovery only when package metadata can identify games
             // reliably without bypassing Windows package permissions.
         }
-        if let Some(system_drive) = std::env::var_os("SystemDrive") {
-            games.extend(scan_game_folders("GOG", &[PathBuf::from(system_drive).join("GOG Games")]));
-        }
-        if let Some(root) = program_files_x86.as_ref() {
-            games.extend(scan_game_folders("Ubisoft Connect", &[root.join("Ubisoft/Ubisoft Game Launcher/games")]));
-        }
+        // Ubisoft is detected from its registry install records. A generic
+        // folder scan could report manually-created or leftover directories.
+        let _ = program_files_x86;
         games.extend(discover_ubisoft_games());
     if let Some(database) = battlenet_product_database() {
         games.extend(scan_battlenet_product_db(&database));
