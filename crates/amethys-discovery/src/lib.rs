@@ -344,7 +344,9 @@ pub fn scan_gog_galaxy(database: &Path) -> Vec<DetectedGame> {
             continue;
         };
         let install_path = PathBuf::from(install_location);
-        let path_key = install_path.to_string_lossy().to_lowercase();
+        let Ok(path_key) = fs::canonicalize(&install_path) else {
+            continue;
+        };
         if install_path.is_dir()
             && seen_products.insert(platform_id.to_owned())
             && seen_paths.insert(path_key)
