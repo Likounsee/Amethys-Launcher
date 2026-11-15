@@ -20,7 +20,7 @@ Amethys discovery is read-only. A scan reports installed games; it does not add 
 | Ubisoft Connect | Windows registry install records plus known game directory | Reads install IDs and paths from the Ubisoft registry key; custom display-name lookup and other OS coverage remain to do. |
 | Xbox | Known XboxGames directory | Preliminary folder-based detection; package-aware detection remains to do. |
 | Heroic | Known Heroic games directory | Preliminary folder-based detection. |
-| Battle.net | `%ProgramData%/Battle.net/Agent/product.db` protobuf metadata | Windows read-only adapter; extracts product codes and install paths, validates directories, ignores launcher records and malformed/stale entries. Known product codes get friendly names; unknown products fall back to the install-folder name. |
+| Battle.net | `%ProgramData%/Battle.net/Agent/product.db` protobuf metadata | Windows read-only adapter; extracts product codes, install paths and the launcher's explicit installed flag; it validates directories and ignores launcher records, uninstalled entries and malformed/stale data. Known product codes get friendly names; unknown products fall back to the install-folder name. |
 | Amazon Games | `GameInstallInfo.sqlite` (`DbSet`) | Read-only metadata detection; returns installed rows only when the directory exists. Windows path discovery is implemented. |
 
 ## Development priorities
