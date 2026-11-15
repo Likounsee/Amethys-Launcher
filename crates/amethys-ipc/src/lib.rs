@@ -107,4 +107,55 @@ mod tests {
         let error = envelope.validate_version().expect_err("version must be rejected");
         assert_eq!(error.code(), ErrorCode::IpcUnsupportedVersion);
     }
+
+    #[tokio::test]
+    async fn read_envelope_rejects_unsupported_protocol_version() {
+        let (mut writer, mut reader) = duplex(1024);
+        let mut outgoing = IpcEnvelope::new(Payload { command: "ping".to_owned() });
+        outgoing.protocol_version = PROTOCOL_VERSION + 1;
+        let send = tokio::spawn(async move {
+            write_message(&mut writer, &outgoing).await.expect("write");
+        });
+
+        let error = super::read_envelope::<_, Payload>(&mut reader)
+            .await
+            .expect_err("unsupported version must fail during read");
+        send.await.expect("writer task");
+        assert_eq!(error.code(), ErrorCode::IpcUnsupportedVersion);
+    }
+
+    #[tokio::test]
+    async fn read_message_rejects_empty_frame() {
+        let (mut writer, mut reader) = duplex(8);
+        let send = tokio::spawn(async move {
+            tokio::io::AsyncWriteExt::write_u32(&mut writer, 0)
+                .await
+                .expect("write empty frame header");
+        });
+
+        let error = super::read_message::<_, serde_json::Value>(&mut reader)
+            .await
+            .expect_err("empty frame must fail");
+        send.await.expect("writer task");
+        assert_eq!(error.code(), ErrorCode::IpcInvalidLength);
+    }
+
+    #[tokio::test]
+    async fn read_message_rejects_frame_larger_than_limit_before_allocating() {
+        let (mut writer, mut reader) = duplex(8);
+        let send = tokio::spawn(async move {
+            tokio::io::AsyncWriteExt::write_u32(
+                &mut writer,
+                (super::MAX_FRAME_SIZE as u32) + 1,
+            )
+            .await
+            .expect("write oversized frame header");
+        });
+
+        let error = super::read_message::<_, serde_json::Value>(&mut reader)
+            .await
+            .expect_err("oversized frame must fail");
+        send.await.expect("writer task");
+        assert_eq!(error.code(), ErrorCode::IpcFrameTooLarge);
+    }
 }
