@@ -207,6 +207,70 @@ pub fn epic_manifest_roots() -> Vec<PathBuf> {
     roots.into_iter().filter(|path| path.is_dir()).collect()
 }
 
+/// Reads installed Amazon Games entries from its local SQLite database.
+///
+/// The database is opened read-only. Rows without a valid title, product ID,
+/// installed directory, or existing directory are ignored.
+pub fn scan_amazon_games(database: &Path) -> Vec<DetectedGame> {
+    use rusqlite::{Connection, OpenFlags};
+
+    let connection = match Connection::open_with_flags(database, OpenFlags::SQLITE_OPEN_READ_ONLY) {
+        Ok(connection) => connection,
+        Err(_) => return Vec::new(),
+    };
+    let mut statement = match connection.prepare(
+        "SELECT ProductAsin, ProductTitle, InstallDirectory FROM DbSet WHERE Installed = 1"
+    ) {
+        Ok(statement) => statement,
+        Err(_) => return Vec::new(),
+    };
+    let rows = match statement.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    }) {
+        Ok(rows) => rows,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut games = Vec::new();
+    let mut seen = BTreeSet::new();
+    for row in rows.flatten() {
+        let (platform_id, name, install_location) = row;
+        if platform_id.trim().is_empty() || name.trim().is_empty() || install_location.trim().is_empty() {
+            continue;
+        }
+        let install_path = PathBuf::from(install_location);
+        if install_path.is_dir() && seen.insert(platform_id.clone()) {
+            games.push(DetectedGame {
+                platform_id: Some(platform_id),
+                name,
+                install_path,
+                platform: "Amazon Games",
+            });
+        }
+    }
+    games.sort_by_key(|game| game.name.to_lowercase());
+    games
+}
+
+/// Returns the standard Amazon Games install metadata database on Windows.
+pub fn amazon_games_database() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        return std::env::var_os("LOCALAPPDATA").map(|local_app_data| {
+            PathBuf::from(local_app_data)
+                .join("Amazon Games/Data/Games/Sql/GameInstallInfo.sqlite")
+        });
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
 /// Finds game folders inside known libraries for launchers without a stable,
 /// documented local manifest format. Only immediate child folders are considered.
 pub fn scan_game_folders(platform: &'static str, roots: &[PathBuf]) -> Vec<DetectedGame> {
@@ -248,6 +312,9 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
     let mut games = discover_steam_games();
     for root in epic_manifest_roots() {
         games.extend(scan_epic_manifests(&root));
+    }
+    if let Some(database) = amazon_games_database() {
+        games.extend(scan_amazon_games(&database));
     }
 
     #[cfg(windows)]
@@ -429,6 +496,73 @@ mod tests {
         assert_eq!(games[0].platform_id.as_deref(), Some("ExampleApp"));
         assert_eq!(games[0].name, "Example Game");
         assert_eq!(games[0].install_path, installed);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn reads_only_installed_amazon_games_from_read_only_database() {
+        use rusqlite::Connection;
+
+        let root = std::env::temp_dir().join(format!(
+            "amethys-amazon-discovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create fixture root");
+        let installed = root.join("Blue Fire");
+        let not_installed = root.join("Not Installed");
+        std::fs::create_dir_all(&installed).expect("create installed game");
+        std::fs::create_dir_all(&not_installed).expect("create uninstalled game");
+        let database = root.join("GameInstallInfo.sqlite");
+        let connection = Connection::open(&database).expect("create fixture database");
+        connection.execute_batch(
+            "CREATE TABLE DbSet (
+                Id TEXT,
+                InstallDirectory TEXT,
+                Installed INTEGER,
+                ProductAsin TEXT,
+                ProductTitle TEXT
+            );"
+        ).expect("create Amazon metadata table");
+        connection.execute(
+            "INSERT INTO DbSet (Id, InstallDirectory, Installed, ProductAsin, ProductTitle)
+             VALUES (?1, ?2, 1, ?3, ?4)",
+            rusqlite::params!["blue-fire", installed.to_string_lossy(), "amzn1.blue-fire", "Blue Fire"],
+        ).expect("insert installed game");
+        connection.execute(
+            "INSERT INTO DbSet (Id, InstallDirectory, Installed, ProductAsin, ProductTitle)
+             VALUES (?1, ?2, 0, ?3, ?4)",
+            rusqlite::params!["other", not_installed.to_string_lossy(), "amzn1.other", "Not Installed"],
+        ).expect("insert uninstalled game");
+        drop(connection);
+
+        let games = super::scan_amazon_games(&database);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform, "Amazon Games");
+        assert_eq!(games[0].platform_id.as_deref(), Some("amzn1.blue-fire"));
+        assert_eq!(games[0].name, "Blue Fire");
+        assert_eq!(games[0].install_path, installed);
+
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn ignores_unknown_or_missing_amazon_databases() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-amazon-empty-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create fixture root");
+        let unknown = root.join("unknown.sqlite");
+        rusqlite::Connection::open(&unknown)
+            .expect("create empty database")
+            .execute_batch("CREATE TABLE unrelated (value TEXT);")
+            .expect("create unrelated table");
+        assert!(super::scan_amazon_games(&unknown).is_empty());
+        assert!(super::scan_amazon_games(&root.join("missing.sqlite")).is_empty());
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
