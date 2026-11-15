@@ -212,7 +212,11 @@ mod tests {
     fn rejects_install_directories_that_escape_the_steam_game_folder() {
         for install_dir in ["../outside", r"..\\outside", "folder/game", r"folder\\game"] {
             let contents = format!(
-                r#""appid" "10" "name" "Unsafe" "installdir" "{install_dir}""#
+                r#"
+                    "appid" "10"
+                    "name" "Unsafe"
+                    "installdir" "{install_dir}"
+                "#
             );
             assert_eq!(parse_app_manifest(&contents), None, "accepted {install_dir}");
         }
