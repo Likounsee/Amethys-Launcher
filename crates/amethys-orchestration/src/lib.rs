@@ -23,15 +23,15 @@ impl ModuleManager {
     /// Registers a module in the disabled state.
     pub fn register(&mut self, name: impl Into<String>) -> Result<(), AmethysError> {
         let name = name.into();
-        if let std::collections::hash_map::Entry::Vacant(entry) = self.modules.entry(name) {
-            entry.insert(false);
-            Ok(())
-        } else {
-            let name = self.modules.keys().last().map_or("unknown", String::as_str);
-            Err(AmethysError::new(
+        match self.modules.entry(name.clone()) {
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                entry.insert(false);
+                Ok(())
+            }
+            std::collections::hash_map::Entry::Occupied(_) => Err(AmethysError::new(
                 ErrorCode::ModuleAlreadyRegistered,
                 format!("Module '{name}' is already registered."),
-            ))
+            )),
         }
     }
 
@@ -241,7 +241,9 @@ mod tests {
         manager.register("steam").expect("register");
         manager.enable("steam").expect("enable");
         assert!(manager.is_enabled("steam"));
-        assert!(manager.register("steam").is_err());
+        let error = manager.register("steam").expect_err("duplicate must fail");
+        assert_eq!(error.code(), ErrorCode::ModuleAlreadyRegistered);
+        assert!(error.message().contains("steam"));
     }
 
     #[tokio::test]
