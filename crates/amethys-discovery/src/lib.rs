@@ -81,7 +81,10 @@ pub fn scan_steam_libraries(libraries: &[PathBuf]) -> Vec<DetectedGame> {
                 continue;
             };
             let install_path = manifests.join("common").join(install_dir);
-            if install_path.is_dir() && seen.insert(app_id.clone()) {
+            if install_path.is_dir()
+                && !is_steam_runtime_component(&app_id, &name)
+                && seen.insert(app_id.clone())
+            {
                 games.push(DetectedGame {
                     platform_id: Some(app_id),
                     name,
@@ -94,6 +97,13 @@ pub fn scan_steam_libraries(libraries: &[PathBuf]) -> Vec<DetectedGame> {
 
     games.sort_by_key(|game| game.name.to_lowercase());
     games
+}
+
+fn is_steam_runtime_component(app_id: &str, name: &str) -> bool {
+    matches!(app_id, "228980" | "1070560" | "1391110" | "1628350" | "1826330")
+        || name.starts_with("Steamworks Common Redistributables")
+        || name.starts_with("Steam Linux Runtime")
+        || name.starts_with("Proton ")
 }
 
 /// Finds common Steam installation roots for the current operating system.
@@ -415,11 +425,10 @@ pub fn parse_ubisoft_registry_output(contents: &str) -> Vec<DetectedGame> {
             current_id = Some(id.trim().to_owned());
             continue;
         }
-        if let Some((name, value)) = trimmed.split_once("REG_SZ")
+        if let Some((_, value)) = trimmed.split_once("REG_SZ")
             .or_else(|| trimmed.split_once("REG_EXPAND_SZ"))
             .filter(|(name, _)| name.trim() == "InstallDir")
         {
-            let _ = name;
             let install_path = PathBuf::from(value.trim());
             if !install_path.is_dir() {
                 continue;
@@ -906,6 +915,14 @@ mod tests {
         assert!(!games.iter().any(|game| game.name == "Game Data"));
 
         std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn filters_steam_runtime_components_from_game_results() {
+        assert!(super::is_steam_runtime_component("228980", "Steamworks Common Redistributables"));
+        assert!(super::is_steam_runtime_component("1070560", "Steam Linux Runtime"));
+        assert!(super::is_steam_runtime_component("123", "Proton Experimental"));
+        assert!(!super::is_steam_runtime_component("570", "Dota 2"));
     }
 
     #[test]
