@@ -220,6 +220,60 @@ pub fn epic_manifest_roots() -> Vec<PathBuf> {
     roots.into_iter().filter(|path| path.is_dir()).collect()
 }
 
+/// Reads Heroic/Legendary installed-game metadata without starting the launcher.
+///
+/// Legendary stores one JSON object per installed Epic game in installed.json.
+/// Only entries with a non-empty app name/title and an existing install directory
+/// are returned; malformed entries and stale paths are ignored.
+pub fn scan_heroic_legendary_installed(installed_json: &Path) -> Vec<DetectedGame> {
+    let Ok(contents) = fs::read_to_string(installed_json) else { return Vec::new(); };
+    let Ok(entries) = serde_json::from_str::<serde_json::Value>(&contents) else { return Vec::new(); };
+    let Some(entries) = entries.as_object() else { return Vec::new(); };
+
+    let mut games = Vec::new();
+    let mut seen = BTreeSet::new();
+    for (key, value) in entries {
+        let Some(record) = value.as_object() else { continue; };
+        let app_name = record.get("app_name").and_then(|value| value.as_str())
+            .filter(|value| !value.trim().is_empty()).unwrap_or(key);
+        let Some(title) = record.get("title").and_then(|value| value.as_str())
+            .filter(|value| !value.trim().is_empty()) else { continue; };
+        let Some(install_location) = record.get("install_path").and_then(|value| value.as_str())
+            .filter(|value| !value.trim().is_empty()) else { continue; };
+        let install_path = PathBuf::from(install_location);
+        if !install_path.is_dir() { continue; }
+        if !seen.insert(install_path.to_string_lossy().to_lowercase()) { continue; }
+        games.push(DetectedGame {
+            platform_id: Some(app_name.to_owned()),
+            name: title.to_owned(),
+            install_path,
+            platform: "Heroic",
+        });
+    }
+    games.sort_by_key(|game| game.name.to_lowercase());
+    games
+}
+
+/// Returns known Legendary installed.json locations used by Heroic on each OS.
+pub fn heroic_legendary_installed_files() -> Vec<PathBuf> {
+    let mut files = BTreeSet::new();
+    #[cfg(windows)]
+    if let Some(profile) = std::env::var_os("USERPROFILE") {
+        files.insert(PathBuf::from(profile).join(".config/legendary/installed.json"));
+    }
+    #[cfg(target_os = "linux")]
+    if let Some(home) = std::env::var_os("HOME") {
+        let home = PathBuf::from(home);
+        files.insert(home.join(".config/legendary/installed.json"));
+        files.insert(home.join(".var/app/com.heroicgameslauncher.hgl/config/legendary/installed.json"));
+    }
+    #[cfg(target_os = "macos")]
+    if let Some(home) = std::env::var_os("HOME") {
+        files.insert(PathBuf::from(home).join(".config/legendary/installed.json"));
+    }
+    files.into_iter().filter(|path| path.is_file()).collect()
+}
+
 /// Reads locally installed GOG Galaxy games from its read-only SQLite database.
 pub fn scan_gog_galaxy(database: &Path) -> Vec<DetectedGame> {
     use rusqlite::{Connection, OpenFlags};
@@ -726,6 +780,9 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
     let mut games = discover_steam_games();
     for root in epic_manifest_roots() {
         games.extend(scan_epic_manifests(&root));
+    }
+    for installed_json in heroic_legendary_installed_files() {
+        games.extend(scan_heroic_legendary_installed(&installed_json));
     }
     for database in gog_galaxy_databases() {
         games.extend(scan_gog_galaxy(&database));
@@ -1266,6 +1323,35 @@ mod tests {
         assert!(games.iter().all(|game| game.platform_id.is_none()));
         assert!(!games.iter().any(|game| game.name == "Game Data"));
 
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn reads_heroic_legendary_installed_metadata_and_skips_stale_entries() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-heroic-discovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create fixture root");
+        let installed = root.join("Hades");
+        std::fs::create_dir_all(&installed).expect("create installed game");
+        let database = root.join("installed.json");
+        let contents = serde_json::json!({
+            "HadesApp": { "app_name": "HadesApp", "title": "Hades", "install_path": installed.to_string_lossy() },
+            "RemovedApp": { "app_name": "RemovedApp", "title": "Removed Game", "install_path": root.join("Removed Game").to_string_lossy() },
+            "BrokenApp": { "app_name": "BrokenApp", "title": "Broken Game" }
+        });
+        std::fs::write(&database, contents.to_string()).expect("write Legendary metadata");
+
+        let games = super::scan_heroic_legendary_installed(&database);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform, "Heroic");
+        assert_eq!(games[0].platform_id.as_deref(), Some("HadesApp"));
+        assert_eq!(games[0].name, "Hades");
+        assert_eq!(games[0].install_path, installed);
+        assert!(super::scan_heroic_legendary_installed(&root.join("missing.json")).is_empty());
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
