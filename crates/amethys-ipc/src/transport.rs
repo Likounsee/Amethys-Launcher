@@ -52,7 +52,7 @@ impl IpcListener {
         Ok(Self { listener, socket_path })
     }
 
-    /// Accepts one client. Bind another listener instance to accept concurrently.
+    /// Accepts the next client connection. The same listener can be reused.
     pub async fn accept(&mut self) -> Result<BoxedIpcStream, AmethysError> {
         let (stream, _) = self.listener.accept().await.map_err(io_error)?;
         Ok(Box::new(stream))
@@ -137,8 +137,8 @@ mod tests {
 
     #[tokio::test]
     async fn listener_accepts_multiple_clients_without_rebinding() {
-        let path = std::env::temp_dir().join(format!(
-            "amethys-ipc-multi-{}.sock",
+        let path = std::path::PathBuf::from(format!(
+            "/tmp/amethys-ipc-{}.sock",
             uuid::Uuid::new_v4()
         ));
         let mut listener = IpcListener::bind(&path).await.expect("bind socket");
