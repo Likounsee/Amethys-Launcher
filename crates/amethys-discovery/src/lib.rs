@@ -275,7 +275,8 @@ pub fn scan_gog_galaxy(database: &Path) -> Vec<DetectedGame> {
 
 /// Returns known GOG Galaxy database locations for the current operating system.
 pub fn gog_galaxy_databases() -> Vec<PathBuf> {
-    let mut databases = BTreeSet::new();
+    #[allow(unused_mut)]
+    let mut databases: BTreeSet<PathBuf> = BTreeSet::new();
     #[cfg(windows)]
     if let Some(program_data) = std::env::var_os("ProgramData") {
         databases.insert(PathBuf::from(program_data).join("GOG.com/Galaxy/storage/galaxy-2.0.db"));
