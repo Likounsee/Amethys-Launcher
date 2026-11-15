@@ -42,7 +42,7 @@ pub fn parse_app_manifest(contents: &str) -> Option<(String, String, String)> {
         return None;
     }
 
-    if install_dir.contains('/') || install_dir.contains('\\\\')
+    if install_dir.contains('/') || install_dir.contains('\\')
         || Path::new(&install_dir).components().any(|component| {
             !matches!(component, std::path::Component::Normal(_))
         })
@@ -80,12 +80,8 @@ pub fn scan_steam_libraries(libraries: &[PathBuf]) -> Vec<DetectedGame> {
             let Some((app_id, name, install_dir)) = parse_app_manifest(&contents) else {
                 continue;
             };
-            if !seen.insert(app_id.clone()) {
-                continue;
-            }
-
             let install_path = manifests.join("common").join(install_dir);
-            if install_path.is_dir() {
+            if install_path.is_dir() && seen.insert(app_id.clone()) {
                 games.push(DetectedGame {
                     app_id,
                     name,
@@ -175,7 +171,7 @@ fn unescape_vdf(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_app_manifest, parse_library_folders};
+    use super::{parse_app_manifest, parse_library_folders, scan_steam_libraries};
     use std::path::Path;
 
     #[test]
@@ -196,6 +192,59 @@ mod tests {
         let paths = parse_library_folders(contents, Path::new("C:/Steam"));
         assert!(paths.contains(&Path::new("C:/Steam").to_path_buf()));
         assert!(paths.contains(&Path::new(r"D:\SteamLibrary").to_path_buf()));
+    }
+
+    #[test]
+    fn supports_older_flat_steam_library_entries() {
+        let contents = r#"
+            "libraryfolders"
+            {
+                "0" "C:\\\\Steam"
+                "1" "D:\\\\SteamLibrary"
+            }
+        "#;
+        let paths = parse_library_folders(contents, Path::new("C:/DefaultSteam"));
+        assert!(paths.contains(&Path::new(r"C:\Steam").to_path_buf()));
+        assert!(paths.contains(&Path::new(r"D:\SteamLibrary").to_path_buf()));
+    }
+
+    #[test]
+    fn rejects_install_directories_that_escape_the_steam_game_folder() {
+        for install_dir in ["../outside", r"..\\outside", "folder/game", r"folder\\game"] {
+            let contents = format!(
+                r#""appid" "10" "name" "Unsafe" "installdir" "{install_dir}""#
+            );
+            assert_eq!(parse_app_manifest(&contents), None, "accepted {install_dir}");
+        }
+    }
+
+    #[test]
+    fn scans_only_manifests_with_existing_game_directories() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-steam-discovery-{}",
+            uuid::Uuid::new_v4()
+        ));
+        let steamapps = root.join("steamapps");
+        let game_dir = steamapps.join("common").join("Dota 2");
+        std::fs::create_dir_all(&game_dir).expect("create installed game directory");
+        std::fs::write(
+            steamapps.join("appmanifest_570.acf"),
+            r#""appid" "570" "name" "Dota 2" "installdir" "Dota 2""#,
+        )
+        .expect("write installed game manifest");
+        std::fs::write(
+            steamapps.join("appmanifest_10.acf"),
+            r#""appid" "10" "name" "Missing Game" "installdir" "Missing Game""#,
+        )
+        .expect("write missing game manifest");
+
+        let games = scan_steam_libraries(std::slice::from_ref(&root));
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].app_id, "570");
+        assert_eq!(games[0].name, "Dota 2");
+        assert_eq!(games[0].install_path, game_dir);
+
+        std::fs::remove_dir_all(root).expect("remove temporary Steam library");
     }
 
     #[test]
