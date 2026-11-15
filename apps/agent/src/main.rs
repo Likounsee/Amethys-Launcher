@@ -10,7 +10,6 @@ use std::{
         atomic::{AtomicU8, Ordering},
     },
 };
-use tokio::task::JoinSet;
 
 const STATE_CREATED: u8 = 0;
 const STATE_RUNNING: u8 = 1;
@@ -122,7 +121,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tracing::info!("Amethys Core is running and waiting for local requests");
 
-    let mut connections = JoinSet::new();
     loop {
         tokio::select! {
             signal = tokio::signal::ctrl_c() => {
@@ -144,18 +142,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     }
                 }
             }
-            Some(result) = connections.join_next(), if !connections.is_empty() => {
-                if let Err(error) = result {
-                    tracing::warn!(%error, "IPC connection task ended unexpectedly");
-                }
-            }
         }
     }
 
     shared_state.store(STATE_STOPPING, Ordering::Release);
-    connections.abort_all();
-    while connections.join_next().await.is_some() {}
-
     runtime.shutdown()?;
     store_runtime_state(&shared_state, runtime.state());
     tracing::info!("Amethys Core stopped");
