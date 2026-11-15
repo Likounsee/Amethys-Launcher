@@ -274,6 +274,27 @@ mod tests {
     }
 
     #[test]
+    fn dispatch_returns_saved_game_library_entries() {
+        let request = IpcEnvelope::new(super::IpcRequest::new(super::IpcCommand::ListGames));
+        let games = vec![super::IpcGameEntry {
+            id: "game-1".to_owned(),
+            name: "Example Game".to_owned(),
+            platform: "Steam".to_owned(),
+            install_path: "/games/example".to_owned(),
+            executable: Some("game.exe".to_owned()),
+        }];
+        let response = super::dispatch_request_with_games(
+            request,
+            super::IpcCoreStatus::Running,
+            &games,
+        );
+        assert_eq!(
+            response.result,
+            Ok(super::IpcResponsePayload::Games { games }),
+        );
+    }
+
+    #[test]
     fn dispatch_returns_the_current_core_status() {
         let request = IpcEnvelope::new(super::IpcRequest::new(super::IpcCommand::GetStatus));
         let response = super::dispatch_request(request, super::IpcCoreStatus::Stopping);
