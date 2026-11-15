@@ -628,7 +628,7 @@ pub fn battlenet_product_database() -> Option<PathBuf> {
 ///
 /// The decoder is intentionally bounded by the source slice and rejects malformed
 /// tags, overflowing lengths, unsupported wire types, and truncated values.
-fn protobuf_length_delimited_fields<'a>(bytes: &'a [u8], wanted: u32) -> Option<Vec<&'a [u8]>> {
+fn protobuf_length_delimited_fields(bytes: &[u8], wanted: u32) -> Option<Vec<&[u8]>> {
     let mut offset = 0usize;
     let mut values = Vec::new();
     while offset < bytes.len() {
