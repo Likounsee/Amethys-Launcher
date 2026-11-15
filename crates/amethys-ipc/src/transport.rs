@@ -136,6 +136,29 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[tokio::test]
+    async fn listener_accepts_multiple_clients_without_rebinding() {
+        let path = std::env::temp_dir().join(format!(
+            "amethys-ipc-multi-{}.sock",
+            uuid::Uuid::new_v4()
+        ));
+        let mut listener = IpcListener::bind(&path).await.expect("bind socket");
+
+        for expected in [b"one".as_slice(), b"two".as_slice()] {
+            let client_path = path.clone();
+            let client_task = tokio::spawn(async move {
+                let mut client = connect(client_path).await.expect("connect");
+                client.write_all(expected).await.expect("send");
+            });
+
+            let mut server = listener.accept().await.expect("accept client");
+            let mut received = vec![0; expected.len()];
+            server.read_exact(&mut received).await.expect("read client data");
+            assert_eq!(received, expected);
+            client_task.await.expect("client task");
+        }
+    }
+
+    #[tokio::test]
     async fn client_and_server_exchange_bytes_over_private_socket() {
         use std::os::unix::fs::PermissionsExt;
 
