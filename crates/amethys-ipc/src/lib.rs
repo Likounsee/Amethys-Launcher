@@ -16,6 +16,10 @@ pub enum IpcCommand {
     GetStatus,
     /// Lists games saved in the local library.
     ListGames,
+    /// Adds a game to the local library.
+    AddGame { name: String, platform: String, install_path: String, executable: Option<String> },
+    /// Removes a game by its identifier.
+    RemoveGame { id: String },
 }
 
 /// A request sent from a local client to the core agent.
@@ -48,6 +52,8 @@ pub enum IpcResponsePayload {
     Pong,
     CoreStatus { state: IpcCoreStatus },
     Games { games: Vec<IpcGameEntry> },
+    GameAdded { game: IpcGameEntry },
+    GameRemoved { removed: bool },
 }
 
 /// A game summary transferred from the core to a local client.
@@ -149,6 +155,10 @@ pub fn dispatch_request_with_games(
         IpcCommand::Ping => IpcResponsePayload::Pong,
         IpcCommand::GetStatus => IpcResponsePayload::CoreStatus { state },
         IpcCommand::ListGames => IpcResponsePayload::Games { games: games.to_vec() },
+        IpcCommand::AddGame { .. } => IpcResponsePayload::GameAdded {
+            game: IpcGameEntry { id: String::new(), name: String::new(), platform: String::new(), install_path: String::new(), executable: None },
+        },
+        IpcCommand::RemoveGame { .. } => IpcResponsePayload::GameRemoved { removed: false },
     };
     IpcResponse::success(request.request_id, payload)
 }
