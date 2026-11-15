@@ -490,11 +490,13 @@ fn xml_element_text(contents: &str, element: &str) -> Option<String> {
     if raw.is_empty() {
         return None;
     }
-    Some(raw.replace("&amp;", "&")
-        .replace("&lt;", "<")
+    // Decode named XML entities in one pass. Decode ampersands last so
+    // escaped entity text such as "&amp;lt;" remains "&lt;".
+    Some(raw.replace("&lt;", "<")
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
-        .replace("&apos;", "'"))
+        .replace("&apos;", "'")
+        .replace("&amp;", "&"))
 }
 
 /// Returns the standard Amazon Games install metadata database on Windows.
@@ -1269,6 +1271,15 @@ mod tests {
         assert_eq!(games[0].name, "Dead Space");
         assert_eq!(games[0].install_path, install);
         std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn xml_entity_decoding_does_not_decode_escaped_entity_text_twice() {
+        assert_eq!(
+            super::xml_element_text("<gameTitle>Rock &amp;lt; Roll &amp;amp; More</gameTitle>", "gameTitle")
+                .as_deref(),
+            Some("Rock &lt; Roll &amp; More"),
+        );
     }
 
     #[test]
