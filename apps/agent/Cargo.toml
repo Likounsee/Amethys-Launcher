@@ -10,6 +10,7 @@ ametis-events.workspace = true
 ametis-logging.workspace = true
 ametis-runtime.workspace = true
 ametis-storage.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true
