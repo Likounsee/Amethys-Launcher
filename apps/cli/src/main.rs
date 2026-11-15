@@ -50,13 +50,36 @@ fn status_label(status: IpcCoreStatus) -> &'static str {
     }
 }
 
+fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
+    match arguments {
+        [command] => parse_command(Some(command)),
+        [group, action, name, platform, install_path] if group == "games" && action == "add" => {
+            Ok(IpcCommand::AddGame {
+                name: name.clone(),
+                platform: platform.clone(),
+                install_path: install_path.clone(),
+                executable: None,
+            })
+        }
+        [group, action, name, platform, install_path, executable] if group == "games" && action == "add" => {
+            Ok(IpcCommand::AddGame {
+                name: name.clone(),
+                platform: platform.clone(),
+                install_path: install_path.clone(),
+                executable: Some(executable.clone()),
+            })
+        }
+        [group, action, id] if group == "games" && action == "remove" => {
+            Ok(IpcCommand::RemoveGame { id: id.clone() })
+        }
+        _ => Err("Utilisation : amethysctl games add <nom> <plateforme> <dossier> [executable] | games remove <id>"),
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let mut arguments = std::env::args().skip(1);
-    let command = parse_command(arguments.next().as_deref())?;
-    if arguments.next().is_some() {
-        return Err("Une seule commande peut être utilisée à la fois.".into());
-    }
+    let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    let command = parse_arguments(&arguments)?;
 
     let mut connection = connect_to_core().await.map_err(|error| {
         format!("Impossible de joindre Amethys. Vérifie que le programme fonctionne. Détail : {error}")
@@ -87,13 +110,24 @@ async fn main() -> Result<(), Box<dyn Error>> {
             }
             Ok(())
         }
+        Ok(IpcResponsePayload::GameAdded { game }) => {
+            println!("Jeu ajouté : {} (identifiant : {}).", game.name, game.id);
+            Ok(())
+        }
+        Ok(IpcResponsePayload::GameRemoved { removed: true }) => {
+            println!("Jeu supprimé de la bibliothèque.");
+            Ok(())
+        }
+        Ok(IpcResponsePayload::GameRemoved { removed: false }) => {
+            Err("Aucun jeu ne correspond à cet identifiant.".into())
+        }
         Ok(_) => Err("Amethys a envoyé une réponse inattendue.".into()),
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_command, status_label};
+    use super::{parse_arguments, parse_command, status_label};
     use amethys_ipc::{IpcCommand, IpcCoreStatus};
 
     #[test]
@@ -101,6 +135,19 @@ mod tests {
         assert_eq!(parse_command(Some("ping")), Ok(IpcCommand::Ping));
         assert_eq!(parse_command(Some("status")), Ok(IpcCommand::GetStatus));
         assert_eq!(parse_command(Some("games")), Ok(IpcCommand::ListGames));
+    }
+
+    #[test]
+    fn parses_game_management_commands() {
+        let add = vec!["games".to_owned(), "add".to_owned(), "Game".to_owned(), "Steam".to_owned(), "/games/game".to_owned(), "game.exe".to_owned()];
+        assert_eq!(parse_arguments(&add), Ok(IpcCommand::AddGame {
+            name: "Game".to_owned(),
+            platform: "Steam".to_owned(),
+            install_path: "/games/game".to_owned(),
+            executable: Some("game.exe".to_owned()),
+        }));
+        let remove = vec!["games".to_owned(), "remove".to_owned(), "game-id".to_owned()];
+        assert_eq!(parse_arguments(&remove), Ok(IpcCommand::RemoveGame { id: "game-id".to_owned() }));
     }
 
     #[test]
