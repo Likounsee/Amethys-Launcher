@@ -23,6 +23,12 @@ pub enum ErrorCode {
     WorkerFailed,
 }
 
+impl std::fmt::Display for ErrorCode {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.as_str())
+    }
+}
+
 impl ErrorCode {
     /// Returns the stable public identifier for this category.
     #[must_use]
