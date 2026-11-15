@@ -287,7 +287,7 @@ pub fn scan_amazon_games(database: &Path) -> Vec<DetectedGame> {
         Err(_) => return Vec::new(),
     };
     let mut statement = match connection.prepare(
-        "SELECT ProductAsin, ProductTitle, InstallDirectory FROM DbSet WHERE Installed = 1"
+        "SELECT Id, ProductTitle, InstallDirectory FROM DbSet"
     ) {
         Ok(statement) => statement,
         Err(_) => return Vec::new(),
@@ -760,20 +760,19 @@ mod tests {
             "CREATE TABLE DbSet (
                 Id TEXT,
                 InstallDirectory TEXT,
-                Installed INTEGER,
                 ProductAsin TEXT,
                 ProductTitle TEXT
             );"
         ).expect("create Amazon metadata table");
         connection.execute(
-            "INSERT INTO DbSet (Id, InstallDirectory, Installed, ProductAsin, ProductTitle)
-             VALUES (?1, ?2, 1, ?3, ?4)",
-            rusqlite::params!["blue-fire", installed.to_string_lossy(), "amzn1.blue-fire", "Blue Fire"],
+            "INSERT INTO DbSet (Id, InstallDirectory, ProductAsin, ProductTitle)
+             VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["amzn1.blue-fire", installed.to_string_lossy(), "amzn1.blue-fire", "Blue Fire"],
         ).expect("insert installed game");
         connection.execute(
-            "INSERT INTO DbSet (Id, InstallDirectory, Installed, ProductAsin, ProductTitle)
-             VALUES (?1, ?2, 0, ?3, ?4)",
-            rusqlite::params!["other", not_installed.to_string_lossy(), "amzn1.other", "Not Installed"],
+            "INSERT INTO DbSet (Id, InstallDirectory, ProductAsin, ProductTitle)
+             VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params!["amzn1.other", not_installed.to_string_lossy(), "amzn1.other", "Not Installed"],
         ).expect("insert uninstalled game");
         drop(connection);
 
