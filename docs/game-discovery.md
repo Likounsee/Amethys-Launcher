@@ -21,13 +21,13 @@ Amethys discovery is read-only. A scan reports installed games; it does not add 
 | Xbox | Known XboxGames directory | Preliminary folder-based detection; package-aware detection remains to do. |
 | Heroic | Known Heroic games directory | Preliminary folder-based detection. |
 | Battle.net | Not implemented yet | Needs a dedicated metadata adapter and tests. |
-| Amazon Games | Not implemented yet | Needs a dedicated metadata adapter and tests. |
+| Amazon Games | `GameInstallInfo.sqlite` (`DbSet`) | Read-only metadata detection; returns installed rows only when the directory exists. Windows path discovery is implemented. |
 
 ## Development priorities
 
 1. Keep discovery read-only and avoid scanning broad folders that would produce false positives.
 2. Prefer launcher metadata over guessing from directory names.
-3. Add dedicated adapters and fixture-based tests for Battle.net, GOG Galaxy, EA app, Ubisoft Connect, Xbox and Amazon Games.
+3. Add dedicated adapters and fixture-based tests for Battle.net, GOG Galaxy, EA app, Ubisoft Connect and Xbox. Amazon Games now has a read-only SQLite adapter.
 4. Discover custom install locations where reliable metadata is available.
 5. Add Linux/macOS coverage for launchers available on those systems.
 6. Only after detection is dependable, add explicit import/selection into the Amethys library.
