@@ -893,11 +893,8 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
     }
     }
 
-    #[cfg(any(target_os = "linux", target_os = "macos"))]
-    if let Some(home) = std::env::var_os("HOME") {
-        let home = PathBuf::from(home);
-        games.extend(scan_game_folders("GOG", &[home.join("GOG Games")]));
-    }
+    // Do not infer installed games from generic `GOG Games` directories.
+    // GOG Galaxy metadata is the source of truth when its database is available.
 
     games.sort_by_key(|game| (game.platform, game.name.to_lowercase()));
     let mut seen_installations = BTreeSet::new();
