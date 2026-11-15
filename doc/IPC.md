@@ -14,6 +14,18 @@ version is checked before dispatch.
 Every envelope carries a UUID request ID. Handlers should preserve that ID in
 their response so callers can correlate concurrent requests.
 
+## Request and response messages
+
+The shared protocol types currently define two requests:
+
+- `ping`: checks whether the agent can answer.
+- `get_status`: asks for the core's current state.
+
+A response contains the original request ID and either a result (a pong or the
+core state) or a structured error code and message. These are message formats
+only: the agent does not yet execute these commands. A dispatcher and the
+connection between the agent and this protocol are still to be implemented.
+
 ## Platform endpoints
 
 - Windows: named pipes, for example `\\\\.\\pipe\\amethys-core`.

@@ -6,7 +6,6 @@ use uuid::Uuid;
 pub const PROTOCOL_VERSION: u16 = 1;
 pub const MAX_FRAME_SIZE: usize = 8 * 1024 * 1024;
 
-
 /// Commands that a local client may request from the core agent.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
