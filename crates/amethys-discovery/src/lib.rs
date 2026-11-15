@@ -753,26 +753,24 @@ mod tests {
         let installed = root.join("Blue Fire");
         let not_installed = root.join("Not Installed");
         std::fs::create_dir_all(&installed).expect("create installed game");
-        std::fs::create_dir_all(&not_installed).expect("create uninstalled game");
         let database = root.join("GameInstallInfo.sqlite");
         let connection = Connection::open(&database).expect("create fixture database");
         connection.execute_batch(
             "CREATE TABLE DbSet (
                 Id TEXT,
                 InstallDirectory TEXT,
-                ProductAsin TEXT,
                 ProductTitle TEXT
             );"
         ).expect("create Amazon metadata table");
         connection.execute(
-            "INSERT INTO DbSet (Id, InstallDirectory, ProductAsin, ProductTitle)
-             VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params!["amzn1.blue-fire", installed.to_string_lossy(), "amzn1.blue-fire", "Blue Fire"],
+            "INSERT INTO DbSet (Id, InstallDirectory, ProductTitle)
+             VALUES (?1, ?2, ?3)",
+            rusqlite::params!["amzn1.blue-fire", installed.to_string_lossy(), "Blue Fire"],
         ).expect("insert installed game");
         connection.execute(
-            "INSERT INTO DbSet (Id, InstallDirectory, ProductAsin, ProductTitle)
-             VALUES (?1, ?2, ?3, ?4)",
-            rusqlite::params!["amzn1.other", not_installed.to_string_lossy(), "amzn1.other", "Not Installed"],
+            "INSERT INTO DbSet (Id, InstallDirectory, ProductTitle)
+             VALUES (?1, ?2, ?3)",
+            rusqlite::params!["amzn1.other", not_installed.to_string_lossy(), "Not Installed"],
         ).expect("insert uninstalled game");
         drop(connection);
 
