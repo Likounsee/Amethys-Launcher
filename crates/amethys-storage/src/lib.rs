@@ -130,7 +130,7 @@ fn game_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GameEntry> {
 }
 
 fn storage_error(message: impl Into<String>) -> AmethysError {
-    AmethysError::new(ErrorCode::StorageMigration, message)
+    AmethysError::new(ErrorCode::StorageQuery, message)
 }
 
 #[cfg(test)]
