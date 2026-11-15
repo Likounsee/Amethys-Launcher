@@ -827,7 +827,10 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
         if let Some(root) = program_files.as_ref() {
             games.extend(scan_ea_games(&[root.join("EA Games")]));
             games.extend(scan_game_folders("GOG", &[root.join("GOG Games")]));
-            games.extend(scan_game_folders("Xbox", &[root.join("XboxGames")]));
+            // Xbox is intentionally not inferred from `XboxGames` folders:
+            // that directory alone does not prove a package is installed.
+            // Add Xbox discovery only when package metadata can identify games
+            // reliably without bypassing Windows package permissions.
         }
         if let Some(system_drive) = std::env::var_os("SystemDrive") {
             games.extend(scan_game_folders("GOG", &[PathBuf::from(system_drive).join("GOG Games")]));
