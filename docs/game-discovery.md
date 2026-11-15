@@ -19,7 +19,7 @@ Amethys discovery is read-only. A scan reports installed games; it does not add 
 | GOG | Known GOG Games directories and Galaxy `galaxy-2.0.db` | Reads installed product IDs, original titles and installation paths from Galaxy metadata when available. |
 | Ubisoft Connect | Windows registry install records plus known game directory | Reads install IDs and paths from the Ubisoft registry key; custom display-name lookup and other OS coverage remain to do. |
 | Xbox | Known XboxGames directory | Preliminary folder-based detection; package-aware detection remains to do. |
-| Heroic | Heroic/Legendary `installed.json` | Reads installed app names, titles and paths from Legendary metadata; validates that each install directory exists. Linux Flatpak and standard Linux/macOS/Windows config locations are considered. |
+| Heroic | Heroic/Legendary `installed.json` | Reads installed app names, titles and paths from Legendary metadata; validates that each install directory exists. Checks Heroic's platform-specific application-data location (including Linux Flatpak) and standalone Legendary's XDG config location. |
 | Battle.net | `%ProgramData%/Battle.net/Agent/product.db` protobuf metadata | Windows read-only adapter; extracts product codes, install paths and the launcher's explicit installed flag; it validates directories and ignores launcher records, uninstalled entries and malformed/stale data. Known product codes get friendly names; unknown products fall back to the install-folder name. |
 | Amazon Games | `GameInstallInfo.sqlite` (`DbSet`) | Read-only metadata detection; returns installed rows only when the directory exists. Windows path discovery is implemented. |
 
