@@ -208,6 +208,73 @@ pub fn epic_manifest_roots() -> Vec<PathBuf> {
     roots.into_iter().filter(|path| path.is_dir()).collect()
 }
 
+/// Reads locally installed GOG Galaxy games from its read-only SQLite database.
+pub fn scan_gog_galaxy(database: &Path) -> Vec<DetectedGame> {
+    use rusqlite::{Connection, OpenFlags};
+
+    let connection = match Connection::open_with_flags(database, OpenFlags::SQLITE_OPEN_READ_ONLY) {
+        Ok(connection) => connection,
+        Err(_) => return Vec::new(),
+    };
+    let mut statement = match connection.prepare(
+        "SELECT ibp.productId, ibp.installationPath, gp.value
+         FROM InstalledBaseProducts AS ibp
+         JOIN GamePieces AS gp ON gp.releaseKey = 'gog_' || ibp.productId
+         JOIN GamePieceTypes AS gpt ON gp.gamePieceTypeId = gpt.id
+         WHERE gpt.type = 'originalTitle'"
+    ) {
+        Ok(statement) => statement,
+        Err(_) => return Vec::new(),
+    };
+    let rows = match statement.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    }) {
+        Ok(rows) => rows,
+        Err(_) => return Vec::new(),
+    };
+
+    let mut games = Vec::new();
+    let mut seen = BTreeSet::new();
+    for row in rows.flatten() {
+        let (platform_id, install_location, title_json) = row;
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&title_json) else {
+            continue;
+        };
+        let Some(name) = value.get("title").and_then(|title| title.as_str())
+            .filter(|title| !title.trim().is_empty())
+        else {
+            continue;
+        };
+        let install_path = PathBuf::from(install_location);
+        if install_path.is_dir() && seen.insert(platform_id.clone()) {
+            games.push(DetectedGame {
+                platform_id: Some(platform_id),
+                name: name.to_owned(),
+                install_path,
+                platform: "GOG",
+            });
+        }
+    }
+    games.sort_by_key(|game| game.name.to_lowercase());
+    games
+}
+
+/// Returns known GOG Galaxy database locations for the current operating system.
+pub fn gog_galaxy_databases() -> Vec<PathBuf> {
+    let mut databases = BTreeSet::new();
+    #[cfg(windows)]
+    if let Some(program_data) = std::env::var_os("ProgramData") {
+        databases.insert(PathBuf::from(program_data).join("GOG.com/Galaxy/storage/galaxy-2.0.db"));
+    }
+    #[cfg(target_os = "macos")]
+    databases.insert(PathBuf::from("/Users/Shared/GOG.com/Galaxy/Storage/galaxy-2.0.db"));
+    databases.into_iter().filter(|path| path.is_file()).collect()
+}
+
 /// Reads installed Amazon Games entries from its local SQLite database.
 ///
 /// The database is opened read-only. Rows without a valid title, product ID,
@@ -377,6 +444,9 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
     let mut games = discover_steam_games();
     for root in epic_manifest_roots() {
         games.extend(scan_epic_manifests(&root));
+    }
+    for database in gog_galaxy_databases() {
+        games.extend(scan_gog_galaxy(&database));
     }
     if let Some(database) = amazon_games_database() {
         games.extend(scan_amazon_games(&database));
@@ -561,6 +631,65 @@ mod tests {
         assert_eq!(games[0].platform_id.as_deref(), Some("ExampleApp"));
         assert_eq!(games[0].name, "Example Game");
         assert_eq!(games[0].install_path, installed);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn reads_installed_gog_games_from_galaxy_database() {
+        use rusqlite::Connection;
+
+        let root = std::env::temp_dir().join(format!(
+            "amethys-gog-discovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create fixture root");
+        let install = root.join("Heroes 3");
+        std::fs::create_dir_all(&install).expect("create installed game");
+        let database = root.join("galaxy-2.0.db");
+        let connection = Connection::open(&database).expect("create fixture database");
+        connection.execute_batch(
+            "CREATE TABLE InstalledBaseProducts (productId TEXT, installationPath TEXT);
+             CREATE TABLE GamePieces (releaseKey TEXT, gamePieceTypeId INTEGER, value TEXT);
+             CREATE TABLE GamePieceTypes (id INTEGER, type TEXT);"
+        ).expect("create GOG metadata tables");
+        connection.execute("INSERT INTO InstalledBaseProducts VALUES (?1, ?2)",
+            rusqlite::params!["1234567890", install.to_string_lossy()])
+            .expect("insert installed GOG product");
+        connection.execute("INSERT INTO GamePieceTypes VALUES (1, 'originalTitle')", [])
+            .expect("insert title type");
+        connection.execute("INSERT INTO GamePieces VALUES (?1, 1, ?2)",
+            rusqlite::params!["gog_1234567890", r#"{"title":"Heroes of Might and Magic 3"}"#])
+            .expect("insert GOG title");
+        drop(connection);
+
+        let games = super::scan_gog_galaxy(&database);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform, "GOG");
+        assert_eq!(games[0].platform_id.as_deref(), Some("1234567890"));
+        assert_eq!(games[0].name, "Heroes of Might and Magic 3");
+        assert_eq!(games[0].install_path, install);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn ignores_unknown_or_missing_gog_galaxy_databases() {
+        use rusqlite::Connection;
+
+        let root = std::env::temp_dir().join(format!(
+            "amethys-gog-empty-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create fixture root");
+        let database = root.join("unknown.db");
+        Connection::open(&database).expect("create empty database")
+            .execute_batch("CREATE TABLE unrelated (value TEXT);")
+            .expect("create unrelated table");
+        assert!(super::scan_gog_galaxy(&database).is_empty());
+        assert!(super::scan_gog_galaxy(&root.join("missing.db")).is_empty());
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
