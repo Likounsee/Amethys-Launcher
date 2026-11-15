@@ -113,6 +113,39 @@ impl<T> IpcEnvelope<T> {
     }
 }
 
+/// Converts a validated request into its matching response.
+///
+/// The caller supplies the current core state so this crate stays independent
+/// from the runtime implementation.
+#[must_use]
+pub fn dispatch_request(
+    request: IpcEnvelope<IpcRequest>,
+    state: IpcCoreStatus,
+) -> IpcResponse {
+    let payload = match request.payload.command {
+        IpcCommand::Ping => IpcResponsePayload::Pong,
+        IpcCommand::GetStatus => IpcResponsePayload::CoreStatus { state },
+    };
+    IpcResponse::success(request.request_id, payload)
+}
+
+/// Handles one request on an already accepted local connection.
+///
+/// A connection carries one request and one response. The listener owner is
+/// responsible for accepting additional clients and calling this function
+/// for each connection.
+pub async fn serve_connection<S>(
+    stream: &mut S,
+    state: IpcCoreStatus,
+) -> Result<(), AmethysError>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    let request: IpcEnvelope<IpcRequest> = read_envelope(stream).await?;
+    let response = dispatch_request(request, state);
+    write_message(stream, &response).await
+}
+
 pub async fn write_message<W, T>(writer: &mut W, message: &T) -> Result<(), AmethysError>
 where W: AsyncWrite + Unpin, T: Serialize {
     let payload = serde_json::to_vec(message)
