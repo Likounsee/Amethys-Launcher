@@ -79,7 +79,7 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
 async fn import_detected_steam_game(app_id: &str) -> Result<(), Box<dyn Error>> {
     let game = amethys_discovery::discover_steam_games()
         .into_iter()
-        .find(|game| game.app_id == app_id)
+        .find(|game| game.platform_id.as_deref() == Some(app_id))
         .ok_or_else(|| format!(
             "Aucun jeu Steam installé ne correspond à l'AppID {app_id}. Lance « amethysctl games scan » pour voir les jeux détectés."
         ))?;
@@ -142,13 +142,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
     }
     if arguments.as_slice() == ["games", "scan"] {
-        let games = amethys_discovery::discover_steam_games();
+        let games = amethys_discovery::discover_all_games();
         if games.is_empty() {
-            println!("Aucun jeu Steam installé n'a été détecté.");
+            println!("Aucun jeu installé n'a été détecté dans les plateformes prises en charge.");
         } else {
-            println!("Jeux Steam détectés (aucun ajout automatique) :");
+            println!("Jeux détectés (aucun ajout automatique) :");
             for game in games {
-                println!("- {} (AppID {}) — {}", game.name, game.app_id, game.install_path.display());
+                println!("- {} [{}]{} — {}", game.name, game.platform, game.platform_id.as_deref().map(|id| format!(" — ID {id}")).unwrap_or_default(), game.install_path.display());
             }
         }
         return Ok(());
