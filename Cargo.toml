@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["apps/agent", "crates/ametis-config", "crates/ametis-errors", "crates/ametis-events", "crates/ametis-ipc", "crates/ametis-logging", "crates/ametis-orchestration", "crates/ametis-runtime", "crates/ametis-storage"]
+members = ["apps/agent", "crates/amethys-config", "crates/amethys-errors", "crates/amethys-events", "crates/amethys-ipc", "crates/amethys-logging", "crates/amethys-orchestration", "crates/amethys-runtime", "crates/amethys-storage"]
 
 [workspace.package]
 version = "0.1.0"
@@ -9,14 +9,14 @@ license = "MIT"
 rust-version = "1.85"
 
 [workspace.dependencies]
-ametis-config = { path = "crates/ametis-config" }
-ametis-errors = { path = "crates/ametis-errors" }
-ametis-events = { path = "crates/ametis-events" }
-ametis-ipc = { path = "crates/ametis-ipc" }
-ametis-logging = { path = "crates/ametis-logging" }
-ametis-orchestration = { path = "crates/ametis-orchestration" }
-ametis-runtime = { path = "crates/ametis-runtime" }
-ametis-storage = { path = "crates/ametis-storage" }
+amethys-config = { path = "crates/amethys-config" }
+amethys-errors = { path = "crates/amethys-errors" }
+amethys-events = { path = "crates/amethys-events" }
+amethys-ipc = { path = "crates/amethys-ipc" }
+amethys-logging = { path = "crates/amethys-logging" }
+amethys-orchestration = { path = "crates/amethys-orchestration" }
+amethys-runtime = { path = "crates/amethys-runtime" }
+amethys-storage = { path = "crates/amethys-storage" }
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

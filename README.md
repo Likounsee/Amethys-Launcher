@@ -1,8 +1,8 @@
-# Ametis Launcher
+# Amethys Launcher
 
 A free, community-driven, cross-platform game library and launcher client.
 
-Ametis Launcher aims to bring game libraries, installations, updates, saves and platform integrations together without replacing the official stores, accounts, licenses, DRM or platform policies.
+Amethys Launcher aims to bring game libraries, installations, updates, saves and platform integrations together without replacing the official stores, accounts, licenses, DRM or platform policies.
 
 ## Project status
 
@@ -15,7 +15,7 @@ The project is at **Core Foundation 0.1**. This first stage builds the Rust foun
 - Official platform APIs and permitted mechanisms only; no DRM, licensing, authentication or anti-cheat circumvention.
 - SQLite is the initial local database.
 - Core/worker communication uses a versioned JSON + Serde protocol.
-- No `unsafe` code in Ametis-owned Rust source.
+- No `unsafe` code in Amethys-owned Rust source.
 - Errors must be explicit, identifiable and diagnosable.
 - Tests and CI are required on every supported operating system.
 
@@ -33,7 +33,7 @@ The desktop GUI, store integrations, downloads, save synchronization and account
 
 ## Repository
 
-This repository is currently named `Amethys-Launcher`. The project/product name is **Ametis Launcher**; the repository name can be changed separately later if desired.
+This repository is currently named `Amethys-Launcher`. The project/product name is **Amethys Launcher**; the repository name can be changed separately later if desired.
 
 ## License
 
