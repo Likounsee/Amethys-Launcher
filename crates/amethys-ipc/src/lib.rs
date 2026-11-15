@@ -205,6 +205,48 @@ mod tests {
     struct Payload { command: String }
 
     #[test]
+    fn dispatch_returns_pong_with_the_same_request_identifier() {
+        let request = IpcEnvelope::new(super::IpcRequest::new(super::IpcCommand::Ping));
+        let request_id = request.request_id;
+        let response = super::dispatch_request(request, super::IpcCoreStatus::Running);
+
+        assert_eq!(response.request_id, request_id);
+        assert_eq!(response.result, Ok(super::IpcResponsePayload::Pong));
+    }
+
+    #[test]
+    fn dispatch_returns_the_current_core_status() {
+        let request = IpcEnvelope::new(super::IpcRequest::new(super::IpcCommand::GetStatus));
+        let response = super::dispatch_request(request, super::IpcCoreStatus::Stopping);
+
+        assert_eq!(
+            response.result,
+            Ok(super::IpcResponsePayload::CoreStatus {
+                state: super::IpcCoreStatus::Stopping,
+            }),
+        );
+    }
+
+    #[tokio::test]
+    async fn connection_handler_reads_request_and_writes_correlated_response() {
+        let (mut client, mut server) = duplex(1024);
+        let request = IpcEnvelope::new(super::IpcRequest::new(super::IpcCommand::Ping));
+        let request_id = request.request_id;
+        let send = tokio::spawn(async move {
+            write_message(&mut client, &request).await.expect("send request");
+            let response: super::IpcResponse = read_message(&mut client).await.expect("read response");
+            response
+        });
+
+        super::serve_connection(&mut server, super::IpcCoreStatus::Running)
+            .await
+            .expect("serve request");
+        let response = send.await.expect("client task");
+        assert_eq!(response.request_id, request_id);
+        assert_eq!(response.result, Ok(super::IpcResponsePayload::Pong));
+    }
+
+    #[test]
     fn ipc_response_keeps_original_request_identifier() {
         let request = IpcEnvelope::new(super::IpcRequest::new(super::IpcCommand::Ping));
         let response = super::IpcResponse::success(
