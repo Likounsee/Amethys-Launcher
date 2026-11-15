@@ -129,6 +129,29 @@ pub fn dispatch_request(
     IpcResponse::success(request.request_id, payload)
 }
 
+/// Sends one request and verifies that the response belongs to it.
+pub async fn send_request<S>(
+    stream: &mut S,
+    request: IpcRequest,
+) -> Result<IpcResponse, AmethysError>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    let envelope = IpcEnvelope::new(request);
+    let request_id = envelope.request_id;
+    write_message(stream, &envelope).await?;
+
+    let response: IpcResponse = read_message(stream).await?;
+    if response.request_id != request_id {
+        return Err(AmethysError::new(
+            ErrorCode::IpcResponseMismatch,
+            "The IPC response does not match the request that was sent.",
+        ));
+    }
+
+    Ok(response)
+}
+
 /// Handles one request on an already accepted local connection.
 ///
 /// A connection carries one request and one response. The listener owner is
@@ -225,6 +248,52 @@ mod tests {
                 state: super::IpcCoreStatus::Stopping,
             }),
         );
+    }
+
+    #[tokio::test]
+    async fn client_helper_sends_request_and_checks_response_identifier() {
+        let (mut client, mut server) = duplex(1024);
+        let server_task = tokio::spawn(async move {
+            super::serve_connection(&mut server, super::IpcCoreStatus::Running)
+                .await
+                .expect("serve request");
+        });
+
+        let response = super::send_request(
+            &mut client,
+            super::IpcRequest::new(super::IpcCommand::Ping),
+        )
+        .await
+        .expect("send request");
+        server_task.await.expect("server task");
+
+        assert_eq!(response.result, Ok(super::IpcResponsePayload::Pong));
+    }
+
+    #[tokio::test]
+    async fn client_helper_rejects_response_for_another_request() {
+        let (mut client, mut server) = duplex(1024);
+        let server_task = tokio::spawn(async move {
+            let _: super::IpcEnvelope<super::IpcRequest> =
+                super::read_envelope(&mut server).await.expect("read request");
+            let response = super::IpcResponse::success(
+                Uuid::new_v4(),
+                super::IpcResponsePayload::Pong,
+            );
+            super::write_message(&mut server, &response)
+                .await
+                .expect("write mismatched response");
+        });
+
+        let error = super::send_request(
+            &mut client,
+            super::IpcRequest::new(super::IpcCommand::Ping),
+        )
+        .await
+        .expect_err("mismatched response must be rejected");
+        server_task.await.expect("server task");
+
+        assert_eq!(error.code(), ErrorCode::IpcResponseMismatch);
     }
 
     #[tokio::test]
