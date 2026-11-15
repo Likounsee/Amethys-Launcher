@@ -159,6 +159,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn protocol_request_round_trips_over_native_socket() {
+        use crate::{IpcCommand, IpcCoreStatus, IpcRequest, IpcResponsePayload, send_request};
+
+        let path = std::env::temp_dir().join(format!(
+            "amethys-ipc-{}.sock",
+            uuid::Uuid::new_v4()
+        ));
+        let mut listener = IpcListener::bind(&path).await.expect("bind socket");
+
+        let server_task = tokio::spawn(async move {
+            let mut stream = listener.accept().await.expect("accept client");
+            crate::serve_connection(&mut stream, IpcCoreStatus::Running)
+                .await
+                .expect("serve protocol request");
+        });
+
+        let mut client = connect(&path).await.expect("connect client");
+        let response = send_request(
+            &mut client,
+            IpcRequest::new(IpcCommand::GetStatus),
+        )
+        .await
+        .expect("send protocol request");
+
+        assert_eq!(
+            response.result,
+            Ok(IpcResponsePayload::CoreStatus {
+                state: IpcCoreStatus::Running,
+            }),
+        );
+        server_task.await.expect("server task");
+    }
+
+    #[tokio::test]
     async fn client_and_server_exchange_bytes_over_private_socket() {
         use std::os::unix::fs::PermissionsExt;
 
