@@ -1099,7 +1099,7 @@ mod tests {
         ));
         let install = root.join("WoW");
         std::fs::create_dir_all(&install).expect("create installed game");
-        let mut settings = encode_bytes_field(1, install.to_string_lossy().as_bytes());
+        let settings = encode_bytes_field(1, install.to_string_lossy().as_bytes());
         let mut product = encode_bytes_field(2, b"wow");
         product.extend(encode_bytes_field(3, &settings));
         let database_bytes = encode_bytes_field(1, &product);
@@ -1124,7 +1124,7 @@ mod tests {
                 .expect("clock").as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("create fixture root");
-        let mut settings = encode_bytes_field(1, root.join("missing").to_string_lossy().as_bytes());
+        let settings = encode_bytes_field(1, root.join("missing").to_string_lossy().as_bytes());
         let mut agent = encode_bytes_field(2, b"agent");
         agent.extend(encode_bytes_field(3, &settings));
         let mut malformed = encode_bytes_field(1, &agent);
