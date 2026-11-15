@@ -403,6 +403,59 @@ pub fn amazon_games_database() -> Option<PathBuf> {
     }
 }
 
+/// Parses Ubisoft Connect's registry output into installed game records.
+pub fn parse_ubisoft_registry_output(contents: &str) -> Vec<DetectedGame> {
+    let mut games = Vec::new();
+    let mut current_id: Option<String> = None;
+    for line in contents.lines() {
+        let trimmed = line.trim();
+        if let Some(id) = trimmed.strip_prefix(
+            r"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs\"
+        ) {
+            current_id = Some(id.trim().to_owned());
+            continue;
+        }
+        if let Some(value) = trimmed.strip_prefix("InstallDir    REG_SZ    ")
+            .or_else(|| trimmed.strip_prefix("InstallDir    REG_EXPAND_SZ    "))
+        {
+            let install_path = PathBuf::from(value.trim());
+            if !install_path.is_dir() {
+                continue;
+            }
+            let Some(name) = install_path.file_name().and_then(|value| value.to_str())
+                .filter(|value| !value.trim().is_empty())
+            else {
+                continue;
+            };
+            if let Some(platform_id) = current_id.as_ref().filter(|id| !id.is_empty()) {
+                games.push(DetectedGame {
+                    platform_id: Some(platform_id.clone()),
+                    name: name.to_owned(),
+                    install_path,
+                    platform: "Ubisoft Connect",
+                });
+            }
+        }
+    }
+    games.sort_by_key(|game| game.name.to_lowercase());
+    games
+}
+
+/// Reads Ubisoft Connect's machine-wide install registry entries on Windows.
+#[cfg(windows)]
+pub fn discover_ubisoft_games() -> Vec<DetectedGame> {
+    const INSTALLS_KEY: &str =
+        r"HKLM\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs";
+    let output = match std::process::Command::new("reg")
+        .args(["query", INSTALLS_KEY, "/s"])
+        .output()
+    {
+        Ok(output) if output.status.success() => output,
+        _ => return Vec::new(),
+    };
+    parse_ubisoft_registry_output(&String::from_utf8_lossy(&output.stdout))
+}
+
 /// Finds game folders inside known libraries for launchers without a stable,
 /// documented local manifest format. Only immediate child folders are considered.
 pub fn scan_game_folders(platform: &'static str, roots: &[PathBuf]) -> Vec<DetectedGame> {
@@ -467,6 +520,7 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
         if let Some(root) = program_files_x86.as_ref() {
             games.extend(scan_game_folders("Ubisoft Connect", &[root.join("Ubisoft/Ubisoft Game Launcher/games")]));
         }
+        games.extend(discover_ubisoft_games());
     }
 
     #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -800,6 +854,29 @@ mod tests {
             .expect("create unrelated table");
         assert!(super::scan_amazon_games(&unknown).is_empty());
         assert!(super::scan_amazon_games(&root.join("missing.sqlite")).is_empty());
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn parses_ubisoft_registry_install_locations() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-ubisoft-discovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let install = root.join("Assassins Creed");
+        std::fs::create_dir_all(&install).expect("create game install");
+        let output = format!(
+            "HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Ubisoft\\Launcher\\Installs\\44\n    InstallDir    REG_SZ    {}\n",
+            install.display()
+        );
+        let games = super::parse_ubisoft_registry_output(&output);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform, "Ubisoft Connect");
+        assert_eq!(games[0].platform_id.as_deref(), Some("44"));
+        assert_eq!(games[0].name, "Assassins Creed");
+        assert_eq!(games[0].install_path, install);
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
