@@ -18,18 +18,53 @@ pub struct DetectedGame {
 pub fn parse_library_folders(contents: &str, steam_root: &Path) -> Vec<PathBuf> {
     let mut paths = BTreeSet::new();
     paths.insert(steam_root.to_path_buf());
+    let mut depth = 0usize;
 
     for line in contents.lines() {
-        let Some((key, value)) = quoted_pair(line) else {
-            continue;
-        };
-        // Newer Steam files use a nested path field; older files use numeric keys.
-        if (key == "path" || key.parse::<u32>().is_ok()) && !value.is_empty() {
-            paths.insert(PathBuf::from(unescape_vdf(&value)));
+        if let Some((key, value)) = quoted_pair(line) {
+            // Legacy entries are numeric key/value pairs directly inside the
+            // libraryfolders object. Modern entries store their path one level
+            // deeper; numeric keys inside their nested "apps" map are app IDs,
+            // not library paths.
+            let is_legacy_library = depth == 1 && key.parse::<u32>().is_ok();
+            let is_modern_library_path = depth == 2 && key == "path";
+            if (is_legacy_library || is_modern_library_path) && !value.is_empty() {
+                paths.insert(PathBuf::from(unescape_vdf(&value)));
+            }
         }
+
+        depth = vdf_update_depth(depth, line);
     }
 
     paths.into_iter().collect()
+}
+
+/// Counts VDF braces outside quoted strings so braces in paths do not affect nesting.
+fn vdf_update_depth(depth: usize, line: &str) -> usize {
+    let mut depth = depth;
+    let mut in_quotes = false;
+    let mut escaped = false;
+
+    for character in line.chars() {
+        if in_quotes {
+            if escaped {
+                escaped = false;
+            } else if character == '\\\\' {
+                escaped = true;
+            } else if character == '"' {
+                in_quotes = false;
+            }
+        } else {
+            match character {
+                '"' => in_quotes = true,
+                '{' => depth = depth.saturating_add(1),
+                '}' => depth = depth.saturating_sub(1),
+                _ => {}
+            }
+        }
+    }
+
+    depth
 }
 
 /// Extracts the small set of fields needed from an appmanifest_*.acf file.
@@ -1006,6 +1041,31 @@ mod tests {
         let paths = parse_library_folders(contents, Path::new("C:/Steam"));
         assert!(paths.contains(&Path::new("C:/Steam").to_path_buf()));
         assert!(paths.contains(&Path::new(r"D:\SteamLibrary").to_path_buf()));
+    }
+
+    #[test]
+    fn ignores_numeric_app_ids_inside_nested_steam_library_metadata() {
+        let contents = r#"
+            "libraryfolders"
+            {
+                "0"
+                {
+                    "path" "C:\\Steam"
+                    "apps"
+                    {
+                        "570" "123456"
+                        "730" "654321"
+                    }
+                }
+                "1" "D:\\SteamLibrary"
+            }
+        "#;
+        let paths = parse_library_folders(contents, Path::new("C:/DefaultSteam"));
+        assert_eq!(paths.len(), 3);
+        assert!(paths.contains(&Path::new(r"C:\Steam").to_path_buf()));
+        assert!(paths.contains(&Path::new(r"D:\SteamLibrary").to_path_buf()));
+        assert!(!paths.contains(&Path::new("123456").to_path_buf()));
+        assert!(!paths.contains(&Path::new("654321").to_path_buf()));
     }
 
     #[test]
