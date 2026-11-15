@@ -502,9 +502,13 @@ pub fn parse_ubisoft_registry_output(contents: &str) -> Vec<DetectedGame> {
     let mut current_id: Option<String> = None;
     for line in contents.lines() {
         let trimmed = line.trim();
-        if let Some(id) = trimmed.strip_prefix(
-            r"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs\"
-        ) {
+        let install_key_prefixes = [
+            r"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs\",
+            r"HKEY_LOCAL_MACHINE\SOFTWARE\Ubisoft\Launcher\Installs\",
+        ];
+        if let Some(id) = install_key_prefixes.iter()
+            .find_map(|prefix| trimmed.strip_prefix(prefix))
+        {
             current_id = Some(id.trim().to_owned());
             continue;
         }
@@ -538,16 +542,25 @@ pub fn parse_ubisoft_registry_output(contents: &str) -> Vec<DetectedGame> {
 /// Reads Ubisoft Connect's machine-wide install registry entries on Windows.
 #[cfg(windows)]
 pub fn discover_ubisoft_games() -> Vec<DetectedGame> {
-    const INSTALLS_KEY: &str =
-        r"HKLM\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs";
-    let output = match std::process::Command::new("reg")
-        .args(["query", INSTALLS_KEY, "/s"])
-        .output()
-    {
-        Ok(output) if output.status.success() => output,
-        _ => return Vec::new(),
-    };
-    parse_ubisoft_registry_output(&String::from_utf8_lossy(&output.stdout))
+    const INSTALLS_KEYS: [&str; 2] = [
+        r"HKLM\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs",
+        r"HKLM\SOFTWARE\Ubisoft\Launcher\Installs",
+    ];
+    let mut games = Vec::new();
+    for key in INSTALLS_KEYS {
+        let output = match std::process::Command::new("reg")
+            .args(["query", key, "/s"])
+            .output()
+        {
+            Ok(output) if output.status.success() => output,
+            _ => continue,
+        };
+        games.extend(parse_ubisoft_registry_output(&String::from_utf8_lossy(&output.stdout)));
+    }
+    let mut seen = BTreeSet::new();
+    games.retain(|game| seen.insert(game.install_path.to_string_lossy().to_lowercase()));
+    games.sort_by_key(|game| game.name.to_lowercase());
+    games
 }
 
 /// Finds game folders inside known libraries for launchers without a stable,
@@ -1184,6 +1197,27 @@ mod tests {
             .expect("create unrelated table");
         assert!(super::scan_amazon_games(&unknown).is_empty());
         assert!(super::scan_amazon_games(&root.join("missing.sqlite")).is_empty());
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn parses_ubisoft_registry_install_locations_from_native_64_bit_key() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-ubisoft-native-discovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let install = root.join("The Crew");
+        std::fs::create_dir_all(&install).expect("create game install");
+        let output = format!(
+            "HKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\55\\n    InstallDir    REG_SZ    {}\\n",
+            install.display()
+        );
+        let games = super::parse_ubisoft_registry_output(&output);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform_id.as_deref(), Some("55"));
+        assert_eq!(games[0].name, "The Crew");
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
