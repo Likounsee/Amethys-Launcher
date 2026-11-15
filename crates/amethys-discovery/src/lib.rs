@@ -870,10 +870,21 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
 
     games.sort_by_key(|game| (game.platform, game.name.to_lowercase()));
     games.dedup_by(|left, right| {
-        left.platform == right.platform
-            && left.install_path.to_string_lossy().eq_ignore_ascii_case(&right.install_path.to_string_lossy())
+        left.platform == right.platform && same_install_path(&left.install_path, &right.install_path)
     });
     games
+}
+
+/// Compares canonical install paths using the filesystem's case rules.
+fn same_install_path(left: &Path, right: &Path) -> bool {
+    #[cfg(windows)]
+    {
+        left.to_string_lossy().eq_ignore_ascii_case(&right.to_string_lossy())
+    }
+    #[cfg(not(windows))]
+    {
+        left == right
+    }
 }
 
 fn find_vdf_value(contents: &str, wanted_key: &str) -> Option<String> {
@@ -906,6 +917,28 @@ mod tests {
         scan_steam_libraries,
     };
     use std::path::Path;
+
+    #[cfg(not(windows))]
+    #[test]
+    fn install_path_comparison_preserves_case_on_case_sensitive_filesystems() {
+        assert!(!super::same_install_path(
+            Path::new("/games/Example"),
+            Path::new("/games/example"),
+        ));
+        assert!(super::same_install_path(
+            Path::new("/games/Example"),
+            Path::new("/games/Example"),
+        ));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn install_path_comparison_ignores_case_on_windows() {
+        assert!(super::same_install_path(
+            Path::new(r"C:\Games\Example"),
+            Path::new(r"c:\games\example"),
+        ));
+    }
 
     #[test]
     fn reads_steam_library_paths_and_keeps_default_library() {
