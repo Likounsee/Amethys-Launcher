@@ -76,9 +76,71 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
     }
 }
 
+async fn import_detected_steam_game(app_id: &str) -> Result<(), Box<dyn Error>> {
+    let game = amethys_discovery::discover_steam_games()
+        .into_iter()
+        .find(|game| game.app_id == app_id)
+        .ok_or_else(|| format!(
+            "Aucun jeu Steam installé ne correspond à l'AppID {app_id}. Lance « amethysctl games scan » pour voir les jeux détectés."
+        ))?;
+
+    let mut library_connection = connect_to_core().await.map_err(|error| {
+        format!("Impossible de joindre Amethys. Vérifie que le programme fonctionne. Détail : {error}")
+    })?;
+    let library_response = send_request(
+        &mut library_connection,
+        IpcRequest::new(IpcCommand::ListGames),
+    ).await?;
+
+    let saved_games = match library_response.result {
+        Ok(IpcResponsePayload::Games { games }) => games,
+        Err(remote_error) => return Err(format!(
+            "Impossible de vérifier la bibliothèque ({}): {}",
+            remote_error.code, remote_error.message
+        ).into()),
+        Ok(_) => return Err("Amethys a envoyé une réponse inattendue en lisant la bibliothèque.".into()),
+    };
+
+    let install_path = game.install_path.to_string_lossy().into_owned();
+    if saved_games.iter().any(|saved| {
+        saved.platform.eq_ignore_ascii_case(game.platform)
+            && saved.install_path == install_path
+    }) {
+        println!("{} est déjà présent dans la bibliothèque Amethys.", game.name);
+        return Ok(());
+    }
+
+    let command = IpcCommand::AddGame {
+        name: game.name.clone(),
+        platform: game.platform.to_owned(),
+        install_path,
+        executable: None,
+    };
+    let mut connection = connect_to_core().await.map_err(|error| {
+        format!("Impossible de joindre Amethys. Vérifie que le programme fonctionne. Détail : {error}")
+    })?;
+    let response = send_request(&mut connection, IpcRequest::new(command)).await?;
+    match response.result {
+        Ok(IpcResponsePayload::GameAdded { game }) => {
+            println!("{} a été ajouté à la bibliothèque Amethys.", game.name);
+            Ok(())
+        }
+        Err(remote_error) => Err(format!(
+            "Amethys n'a pas pu ajouter le jeu ({}): {}",
+            remote_error.code, remote_error.message
+        ).into()),
+        Ok(_) => Err("Amethys a envoyé une réponse inattendue pendant l'ajout du jeu.".into()),
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if let [group, action, app_id] = arguments.as_slice() {
+        if group == "games" && action == "import" {
+            return import_detected_steam_game(app_id).await;
+        }
+    }
     if arguments.as_slice() == ["games", "scan"] {
         let games = amethys_discovery::discover_steam_games();
         if games.is_empty() {
