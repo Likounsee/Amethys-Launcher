@@ -865,10 +865,30 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
     }
 
     games.sort_by_key(|game| (game.platform, game.name.to_lowercase()));
-    games.dedup_by(|left, right| {
-        left.platform == right.platform && same_install_path(&left.install_path, &right.install_path)
+    let mut seen_installations = Vec::new();
+    games.retain(|game| {
+        insert_unique_platform_install_path(
+            &mut seen_installations,
+            game.platform,
+            &game.install_path,
+        )
     });
     games
+}
+
+/// Adds an install path once per platform, respecting the host filesystem's case rules.
+fn insert_unique_platform_install_path(
+    seen: &mut Vec<(String, PathBuf)>,
+    platform: &str,
+    candidate: &Path,
+) -> bool {
+    if seen.iter().any(|(seen_platform, existing)| {
+        seen_platform == platform && same_install_path(existing, candidate)
+    }) {
+        return false;
+    }
+    seen.push((platform.to_owned(), candidate.to_path_buf()));
+    true
 }
 
 /// Adds an install path once, respecting the host filesystem's case rules.
@@ -943,6 +963,24 @@ mod tests {
             Path::new(r"C:\Games\Example"),
             Path::new(r"c:\games\example"),
         ));
+    }
+
+    #[test]
+    fn global_deduplication_keeps_non_adjacent_paths_and_separate_platforms() {
+        let mut seen = Vec::new();
+        assert!(super::insert_unique_platform_install_path(
+            &mut seen, "Steam", Path::new("/games/shared")
+        ));
+        assert!(super::insert_unique_platform_install_path(
+            &mut seen, "Steam", Path::new("/games/other")
+        ));
+        assert!(!super::insert_unique_platform_install_path(
+            &mut seen, "Steam", Path::new("/games/shared")
+        ));
+        assert!(super::insert_unique_platform_install_path(
+            &mut seen, "Epic Games", Path::new("/games/shared")
+        ));
+        assert_eq!(seen.len(), 3);
     }
 
     #[test]
