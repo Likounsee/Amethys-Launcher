@@ -323,21 +323,34 @@ pub fn scan_gog_galaxy(database: &Path) -> Vec<DetectedGame> {
     };
 
     let mut games = Vec::new();
-    let mut seen = BTreeSet::new();
+    let mut seen_products = BTreeSet::new();
+    let mut seen_paths = BTreeSet::new();
     for row in rows.flatten() {
         let (platform_id, install_location, title_json) = row;
+        let platform_id = platform_id.trim();
+        let install_location = install_location.trim();
+        if platform_id.is_empty() || install_location.is_empty() {
+            continue;
+        }
         let Ok(value) = serde_json::from_str::<serde_json::Value>(&title_json) else {
             continue;
         };
-        let Some(name) = value.get("title").and_then(|title| title.as_str())
-            .filter(|title| !title.trim().is_empty())
+        let Some(name) = value
+            .get("title")
+            .and_then(|title| title.as_str())
+            .map(str::trim)
+            .filter(|title| !title.is_empty())
         else {
             continue;
         };
         let install_path = PathBuf::from(install_location);
-        if install_path.is_dir() && seen.insert(platform_id.clone()) {
+        let path_key = install_path.to_string_lossy().to_lowercase();
+        if install_path.is_dir()
+            && seen_products.insert(platform_id.to_owned())
+            && seen_paths.insert(path_key)
+        {
             games.push(DetectedGame {
-                platform_id: Some(platform_id),
+                platform_id: Some(platform_id.to_owned()),
                 name: name.to_owned(),
                 install_path,
                 platform: "GOG",
