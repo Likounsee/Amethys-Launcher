@@ -164,7 +164,7 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
         Err(_) => return Vec::new(),
     };
     let mut games = Vec::new();
-    let mut seen_paths = Vec::new();
+    let mut seen_paths = BTreeSet::new();
 
     for entry in entries.flatten() {
         let path = entry.path();
@@ -865,7 +865,7 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
     }
 
     games.sort_by_key(|game| (game.platform, game.name.to_lowercase()));
-    let mut seen_installations = Vec::new();
+    let mut seen_installations = BTreeSet::new();
     games.retain(|game| {
         insert_unique_platform_install_path(
             &mut seen_installations,
@@ -878,26 +878,28 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
 
 /// Adds an install path once per platform, respecting the host filesystem's case rules.
 fn insert_unique_platform_install_path(
-    seen: &mut Vec<(String, PathBuf)>,
+    seen: &mut BTreeSet<(String, PathBuf)>,
     platform: &str,
     candidate: &Path,
 ) -> bool {
-    if seen.iter().any(|(seen_platform, existing)| {
-        seen_platform == platform && same_install_path(existing, candidate)
-    }) {
-        return false;
-    }
-    seen.push((platform.to_owned(), candidate.to_path_buf()));
-    true
+    seen.insert((platform.to_owned(), install_path_key(candidate)))
 }
 
 /// Adds an install path once, respecting the host filesystem's case rules.
-fn insert_unique_install_path(seen: &mut Vec<PathBuf>, candidate: &Path) -> bool {
-    if seen.iter().any(|existing| same_install_path(existing, candidate)) {
-        return false;
+fn insert_unique_install_path(seen: &mut BTreeSet<PathBuf>, candidate: &Path) -> bool {
+    seen.insert(install_path_key(candidate))
+}
+
+/// Builds an ordered key using the host filesystem's case rules.
+fn install_path_key(path: &Path) -> PathBuf {
+    #[cfg(windows)]
+    {
+        PathBuf::from(path.to_string_lossy().to_lowercase())
     }
-    seen.push(candidate.to_path_buf());
-    true
+    #[cfg(not(windows))]
+    {
+        path.to_path_buf()
+    }
 }
 
 /// Compares canonical install paths using the filesystem's case rules.
