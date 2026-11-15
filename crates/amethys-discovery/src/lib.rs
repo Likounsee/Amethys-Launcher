@@ -563,6 +563,13 @@ pub fn scan_battlenet_product_db(database: &Path) -> Vec<DetectedGame> {
         else {
             continue;
         };
+        let Some(cached_state) = protobuf_length_delimited_fields(install, 4)
+            .and_then(|fields| fields.into_iter().next())
+        else { continue; };
+        let Some(base_state) = protobuf_length_delimited_fields(cached_state, 1)
+            .and_then(|fields| fields.into_iter().next())
+        else { continue; };
+        if protobuf_varint_field(base_state, 1) != Some(1) { continue; }
         let Ok(path_text) = std::str::from_utf8(path_bytes) else {
             continue;
         };
@@ -664,6 +671,27 @@ fn protobuf_length_delimited_fields(bytes: &[u8], wanted: u32) -> Option<Vec<&[u
         }
     }
     Some(values)
+}
+
+fn protobuf_varint_field(bytes: &[u8], wanted: u32) -> Option<u64> {
+    let mut offset = 0usize;
+    let mut found = None;
+    while offset < bytes.len() {
+        let (tag, tag_len) = protobuf_varint(&bytes[offset..])?;
+        offset = offset.checked_add(tag_len)?;
+        let field = u32::try_from(tag >> 3).ok()?;
+        let wire = (tag & 7) as u8;
+        if field == 0 { return None; }
+        match wire {
+            0 => { let (value, len) = protobuf_varint(&bytes[offset..])?; offset = offset.checked_add(len)?; if field == wanted { found = Some(value); } }
+            1 => offset = offset.checked_add(8)?,
+            2 => { let (length, len) = protobuf_varint(&bytes[offset..])?; offset = offset.checked_add(len)?; offset = offset.checked_add(usize::try_from(length).ok()?)?; }
+            5 => offset = offset.checked_add(4)?,
+            _ => return None,
+        }
+        if offset > bytes.len() { return None; }
+    }
+    found
 }
 
 fn protobuf_varint(bytes: &[u8]) -> Option<(u64, usize)> {
@@ -1100,8 +1128,11 @@ mod tests {
         let install = root.join("WoW");
         std::fs::create_dir_all(&install).expect("create installed game");
         let settings = encode_bytes_field(1, install.to_string_lossy().as_bytes());
+        let base_state = encode_varint(8).into_iter().chain(encode_varint(1)).collect::<Vec<_>>();
+        let cached_state = encode_bytes_field(1, &base_state);
         let mut product = encode_bytes_field(2, b"wow");
         product.extend(encode_bytes_field(3, &settings));
+        product.extend(encode_bytes_field(4, &cached_state));
         let database_bytes = encode_bytes_field(1, &product);
         let database = root.join("product.db");
         std::fs::write(&database, database_bytes).expect("write protobuf fixture");
