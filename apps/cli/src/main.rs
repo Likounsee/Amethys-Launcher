@@ -72,13 +72,26 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
         [group, action, id] if group == "games" && action == "remove" => {
             Ok(IpcCommand::RemoveGame { id: id.clone() })
         }
-        _ => Err("Utilisation : amethysctl games add <nom> <plateforme> <dossier> [executable] | games remove <id>"),
+        _ => Err("Utilisation : amethysctl games add <nom> <plateforme> <dossier> [executable] | games remove <id> | games scan"),
     }
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if arguments.as_slice() == ["games", "scan"] {
+        let games = amethys_discovery::discover_steam_games();
+        if games.is_empty() {
+            println!("Aucun jeu Steam installé n'a été détecté.");
+        } else {
+            println!("Jeux Steam détectés (aucun ajout automatique) :");
+            for game in games {
+                println!("- {} (AppID {}) — {}", game.name, game.app_id, game.install_path.display());
+            }
+        }
+        return Ok(());
+    }
+
     let command = parse_arguments(&arguments)?;
 
     let mut connection = connect_to_core().await.map_err(|error| {
