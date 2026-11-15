@@ -132,8 +132,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 match accepted {
                     Ok(mut stream) => {
                         let current_state = ipc_status(&shared_state);
-                        if let Err(error) = serve_database_connection(&mut stream, current_state, &database).await {
-                            tracing::debug!(%error, "Local IPC request failed");
+                        match tokio::time::timeout(
+                            std::time::Duration::from_secs(15),
+                            serve_database_connection(&mut stream, current_state, &database),
+                        ).await {
+                            Ok(Ok(())) => {}
+                            Ok(Err(error)) => {
+                                tracing::debug!(%error, "Local IPC request failed");
+                            }
+                            Err(_) => {
+                                tracing::warn!("Local IPC request timed out after 15 seconds");
+                            }
                         }
                     }
                     Err(error) => {
