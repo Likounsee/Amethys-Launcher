@@ -513,6 +513,173 @@ pub fn scan_game_folders(platform: &'static str, roots: &[PathBuf]) -> Vec<Detec
     games
 }
 
+/// Reads Battle.net Agent product metadata without starting the launcher or changing files.
+///
+/// The product database is a protobuf message. Only the documented length-delimited
+/// fields needed for product code and install path are decoded; unknown fields are
+/// skipped, malformed records are ignored, and every path must already exist.
+pub fn scan_battlenet_product_db(database: &Path) -> Vec<DetectedGame> {
+    const MAX_DATABASE_SIZE: u64 = 16 * 1024 * 1024;
+    let Ok(metadata) = fs::metadata(database) else {
+        return Vec::new();
+    };
+    if !metadata.is_file() || metadata.len() == 0 || metadata.len() > MAX_DATABASE_SIZE {
+        return Vec::new();
+    }
+    let Ok(bytes) = fs::read(database) else {
+        return Vec::new();
+    };
+
+    let mut installs = protobuf_length_delimited_fields(&bytes, 1).unwrap_or_default();
+    // Some Agent versions store a single ProductInstall message directly.
+    if installs.is_empty() && protobuf_length_delimited_fields(&bytes, 2)
+        .is_some_and(|fields| !fields.is_empty())
+    {
+        installs.push(bytes.as_slice());
+    }
+
+    let mut games = Vec::new();
+    let mut seen = BTreeSet::new();
+    for install in installs {
+        let Some(code_bytes) = protobuf_length_delimited_fields(install, 2)
+            .and_then(|fields| fields.into_iter().next())
+        else {
+            continue;
+        };
+        let Ok(product_code) = std::str::from_utf8(code_bytes) else {
+            continue;
+        };
+        let product_code = product_code.trim();
+        if product_code.is_empty() || matches!(product_code, "agent" | "bna") {
+            continue;
+        }
+        let Some(settings) = protobuf_length_delimited_fields(install, 3)
+            .and_then(|fields| fields.into_iter().next())
+        else {
+            continue;
+        };
+        let Some(path_bytes) = protobuf_length_delimited_fields(settings, 1)
+            .and_then(|fields| fields.into_iter().next())
+        else {
+            continue;
+        };
+        let Ok(path_text) = std::str::from_utf8(path_bytes) else {
+            continue;
+        };
+        let path_text = path_text.trim_matches(char::from(0)).trim();
+        if path_text.is_empty() {
+            continue;
+        }
+        let install_path = PathBuf::from(path_text);
+        if !install_path.is_dir() {
+            continue;
+        }
+        let key = install_path.to_string_lossy().to_lowercase();
+        if !seen.insert(key) {
+            continue;
+        }
+        let name = battlenet_product_name(product_code)
+            .map(str::to_owned)
+            .or_else(|| install_path.file_name().and_then(|name| name.to_str()).map(str::to_owned));
+        let Some(name) = name.filter(|name| !name.trim().is_empty()) else {
+            continue;
+        };
+        games.push(DetectedGame {
+            platform_id: Some(product_code.to_owned()),
+            name,
+            install_path,
+            platform: "Battle.net",
+        });
+    }
+    games.sort_by_key(|game| game.name.to_lowercase());
+    games
+}
+
+fn battlenet_product_name(code: &str) -> Option<&'static str> {
+    match code {
+        "wow" => Some("World of Warcraft"),
+        "fenris" => Some("Diablo IV"),
+        "d2r" => Some("Diablo II: Resurrected"),
+        "d3" => Some("Diablo III"),
+        "pro" => Some("Overwatch 2"),
+        "s2" => Some("StarCraft II"),
+        "s1" => Some("StarCraft: Remastered"),
+        "hero" => Some("Heroes of the Storm"),
+        "wtcg" => Some("Hearthstone"),
+        _ => None,
+    }
+}
+
+/// Returns the standard Battle.net Agent product database path on Windows.
+pub fn battlenet_product_database() -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        std::env::var_os("ProgramData").map(|program_data| {
+            PathBuf::from(program_data).join("Battle.net/Agent/product.db")
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        None
+    }
+}
+
+/// Extracts protobuf length-delimited values for one field number.
+///
+/// The decoder is intentionally bounded by the source slice and rejects malformed
+/// tags, overflowing lengths, unsupported wire types, and truncated values.
+fn protobuf_length_delimited_fields<'a>(bytes: &'a [u8], wanted: u32) -> Option<Vec<&'a [u8]>> {
+    let mut offset = 0usize;
+    let mut values = Vec::new();
+    while offset < bytes.len() {
+        let (tag, tag_len) = protobuf_varint(&bytes[offset..])?;
+        offset = offset.checked_add(tag_len)?;
+        let field = u32::try_from(tag >> 3).ok()?;
+        let wire = (tag & 0x07) as u8;
+        if field == 0 {
+            return None;
+        }
+        match wire {
+            0 => {
+                let (_, len) = protobuf_varint(&bytes[offset..])?;
+                offset = offset.checked_add(len)?;
+            }
+            1 => offset = offset.checked_add(8)?,
+            2 => {
+                let (length, len_len) = protobuf_varint(&bytes[offset..])?;
+                offset = offset.checked_add(len_len)?;
+                let length = usize::try_from(length).ok()?;
+                let end = offset.checked_add(length)?;
+                let value = bytes.get(offset..end)?;
+                if field == wanted {
+                    values.push(value);
+                }
+                offset = end;
+            }
+            5 => offset = offset.checked_add(4)?,
+            _ => return None,
+        }
+        if offset > bytes.len() {
+            return None;
+        }
+    }
+    Some(values)
+}
+
+fn protobuf_varint(bytes: &[u8]) -> Option<(u64, usize)> {
+    let mut value = 0u64;
+    for (index, byte) in bytes.iter().copied().take(10).enumerate() {
+        if index == 9 && byte > 1 {
+            return None;
+        }
+        value |= u64::from(byte & 0x7f).checked_shl((index * 7) as u32)?;
+        if byte & 0x80 == 0 {
+            return Some((value, index + 1));
+        }
+    }
+    None
+}
+
 /// Collects read-only detections from supported launchers. Missing launchers
 /// simply contribute no results and never prevent other adapters from running.
 pub fn discover_all_games() -> Vec<DetectedGame> {
@@ -543,6 +710,9 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
             games.extend(scan_game_folders("Ubisoft Connect", &[root.join("Ubisoft/Ubisoft Game Launcher/games")]));
         }
         games.extend(discover_ubisoft_games());
+    if let Some(database) = battlenet_product_database() {
+        games.extend(scan_battlenet_product_db(&database));
+    }
     }
 
     #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -899,6 +1069,85 @@ mod tests {
         assert_eq!(games[0].platform_id.as_deref(), Some("44"));
         assert_eq!(games[0].name, "Assassins Creed");
         assert_eq!(games[0].install_path, install);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    fn encode_varint(mut value: u64) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        while value >= 0x80 {
+            bytes.push((value as u8 & 0x7f) | 0x80);
+            value >>= 7;
+        }
+        bytes.push(value as u8);
+        bytes
+    }
+
+    fn encode_bytes_field(number: u32, value: &[u8]) -> Vec<u8> {
+        let mut bytes = encode_varint((u64::from(number) << 3) | 2);
+        bytes.extend(encode_varint(value.len() as u64));
+        bytes.extend(value);
+        bytes
+    }
+
+    #[test]
+    fn detects_battlenet_products_from_protobuf_metadata() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-battlenet-discovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let install = root.join("WoW");
+        std::fs::create_dir_all(&install).expect("create installed game");
+        let mut settings = encode_bytes_field(1, install.to_string_lossy().as_bytes());
+        let mut product = encode_bytes_field(2, b"wow");
+        product.extend(encode_bytes_field(3, &settings));
+        let database_bytes = encode_bytes_field(1, &product);
+        let database = root.join("product.db");
+        std::fs::write(&database, database_bytes).expect("write protobuf fixture");
+
+        let games = super::scan_battlenet_product_db(&database);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform, "Battle.net");
+        assert_eq!(games[0].platform_id.as_deref(), Some("wow"));
+        assert_eq!(games[0].name, "World of Warcraft");
+        assert_eq!(games[0].install_path, install);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn ignores_battlenet_agent_records_missing_paths_and_malformed_data() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-battlenet-invalid-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create fixture root");
+        let mut settings = encode_bytes_field(1, root.join("missing").to_string_lossy().as_bytes());
+        let mut agent = encode_bytes_field(2, b"agent");
+        agent.extend(encode_bytes_field(3, &settings));
+        let mut malformed = encode_bytes_field(1, &agent);
+        malformed.extend([0x0a, 0xff]);
+        let database = root.join("product.db");
+        std::fs::write(&database, malformed).expect("write malformed fixture");
+        assert!(super::scan_battlenet_product_db(&database).is_empty());
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn ignores_oversized_battlenet_database() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-battlenet-large-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create fixture root");
+        let database = root.join("product.db");
+        let file = std::fs::File::create(&database).expect("create database");
+        file.set_len(16 * 1024 * 1024 + 1).expect("extend database");
+        assert!(super::scan_battlenet_product_db(&database).is_empty());
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
