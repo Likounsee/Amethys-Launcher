@@ -22,6 +22,7 @@ pub struct IpcListener {
 #[cfg(windows)]
 pub struct IpcListener {
     server: tokio::net::windows::named_pipe::NamedPipeServer,
+    endpoint: String,
 }
 
 #[cfg(unix)]
@@ -52,7 +53,7 @@ impl IpcListener {
     }
 
     /// Accepts one client. Bind another listener instance to accept concurrently.
-    pub async fn accept(self) -> Result<BoxedIpcStream, AmethysError> {
+    pub async fn accept(&mut self) -> Result<BoxedIpcStream, AmethysError> {
         let (stream, _) = self.listener.accept().await.map_err(io_error)?;
         Ok(Box::new(stream))
     }
@@ -66,13 +67,17 @@ impl IpcListener {
             .first_pipe_instance(true)
             .create(endpoint.as_ref())
             .map_err(io_error)?;
-        Ok(Self { server })
+        Ok(Self { server, endpoint: endpoint.as_ref().to_owned() })
     }
 
     /// Accepts one client connection.
-    pub async fn accept(self) -> Result<BoxedIpcStream, AmethysError> {
+    pub async fn accept(&mut self) -> Result<BoxedIpcStream, AmethysError> {
         self.server.connect().await.map_err(io_error)?;
-        Ok(Box::new(self.server))
+        let next_server = tokio::net::windows::named_pipe::ServerOptions::new()
+            .create(&self.endpoint)
+            .map_err(io_error)?;
+        let connected_server = std::mem::replace(&mut self.server, next_server);
+        Ok(Box::new(connected_server))
     }
 }
 
@@ -103,7 +108,7 @@ impl IpcListener {
         Err(unsupported_platform())
     }
 
-    pub async fn accept(self) -> Result<BoxedIpcStream, AmethysError> {
+    pub async fn accept(&mut self) -> Result<BoxedIpcStream, AmethysError> {
         Err(unsupported_platform())
     }
 }
@@ -151,6 +156,7 @@ mod tests {
             response
         });
 
+        let mut listener = listener;
         let mut server = listener.accept().await.expect("accept");
         let mut request = [0_u8; 4];
         server.read_exact(&mut request).await.expect("read request");
