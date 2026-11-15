@@ -6,6 +6,90 @@ use uuid::Uuid;
 pub const PROTOCOL_VERSION: u16 = 1;
 pub const MAX_FRAME_SIZE: usize = 8 * 1024 * 1024;
 
+
+/// Commands that a local client may request from the core agent.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum IpcCommand {
+    /// Checks that the core agent is reachable.
+    Ping,
+    /// Requests the current lifecycle state of the core.
+    GetStatus,
+}
+
+/// A request sent from a local client to the core agent.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct IpcRequest {
+    pub command: IpcCommand,
+}
+
+impl IpcRequest {
+    #[must_use]
+    pub const fn new(command: IpcCommand) -> Self {
+        Self { command }
+    }
+}
+
+/// Lifecycle states exposed through the local IPC status command.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum IpcCoreStatus {
+    Created,
+    Running,
+    Stopping,
+    Stopped,
+}
+
+/// Successful results returned by the core agent.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
+pub enum IpcResponsePayload {
+    Pong,
+    CoreStatus { state: IpcCoreStatus },
+}
+
+/// A safe, serializable error returned by the remote core process.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct IpcRemoteError {
+    pub code: String,
+    pub message: String,
+}
+
+impl IpcRemoteError {
+    #[must_use]
+    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
+        Self {
+            code: code.into(),
+            message: message.into(),
+        }
+    }
+}
+
+/// Response correlated with the identifier of the original request envelope.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct IpcResponse {
+    pub request_id: Uuid,
+    pub result: Result<IpcResponsePayload, IpcRemoteError>,
+}
+
+impl IpcResponse {
+    #[must_use]
+    pub const fn success(request_id: Uuid, payload: IpcResponsePayload) -> Self {
+        Self {
+            request_id,
+            result: Ok(payload),
+        }
+    }
+
+    #[must_use]
+    pub const fn failure(request_id: Uuid, error: IpcRemoteError) -> Self {
+        Self {
+            request_id,
+            result: Err(error),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct IpcEnvelope<T> {
     pub protocol_version: u16,
@@ -83,9 +167,41 @@ mod tests {
     use amethys_errors::ErrorCode;
     use serde::{Deserialize, Serialize};
     use tokio::io::duplex;
+    use uuid::Uuid;
 
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
     struct Payload { command: String }
+
+    #[test]
+    fn ipc_response_keeps_original_request_identifier() {
+        let request = IpcEnvelope::new(super::IpcRequest::new(super::IpcCommand::Ping));
+        let response = super::IpcResponse::success(
+            request.request_id,
+            super::IpcResponsePayload::Pong,
+        );
+
+        assert_eq!(response.request_id, request.request_id);
+        assert_eq!(response.result, Ok(super::IpcResponsePayload::Pong));
+    }
+
+    #[test]
+    fn ipc_request_and_response_round_trip_through_json() {
+        let request = super::IpcRequest::new(super::IpcCommand::GetStatus);
+        let encoded = serde_json::to_vec(&request).expect("serialize request");
+        let decoded: super::IpcRequest =
+            serde_json::from_slice(&encoded).expect("deserialize request");
+        assert_eq!(decoded, request);
+
+        let response = super::IpcResponse::failure(
+            Uuid::new_v4(),
+            super::IpcRemoteError::new("AM-CORE-0001", "Core is not running."),
+        );
+        let encoded = serde_json::to_vec(&response).expect("serialize response");
+        let decoded: super::IpcResponse =
+            serde_json::from_slice(&encoded).expect("deserialize response");
+        assert_eq!(decoded, response);
+    }
+
 
     #[tokio::test]
     async fn framed_message_round_trips() {
