@@ -1,0 +1,13 @@
+[package]
+name = "amethys-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+amethys-ipc.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true
