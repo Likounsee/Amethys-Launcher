@@ -162,8 +162,8 @@ mod tests {
     async fn protocol_request_round_trips_over_native_socket() {
         use crate::{IpcCommand, IpcCoreStatus, IpcRequest, IpcResponsePayload, send_request};
 
-        let path = std::env::temp_dir().join(format!(
-            "amethys-ipc-{}.sock",
+        let path = std::path::PathBuf::from(format!(
+            "/tmp/amethys-ipc-{}.sock",
             uuid::Uuid::new_v4()
         ));
         let mut listener = IpcListener::bind(&path).await.expect("bind socket");
