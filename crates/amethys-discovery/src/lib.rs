@@ -230,7 +230,7 @@ pub fn scan_heroic_legendary_installed(installed_json: &Path) -> Vec<DetectedGam
     let Some(entries) = entries.as_object() else { return Vec::new(); };
 
     let mut games = Vec::new();
-    let mut seen_paths = Vec::new();
+    let mut seen_paths = BTreeSet::new();
     for (key, value) in entries {
         let Some(record) = value.as_object() else { continue; };
         let app_name = record.get("app_name").and_then(|value| value.as_str())
@@ -427,7 +427,7 @@ pub fn scan_amazon_games(database: &Path) -> Vec<DetectedGame> {
 /// Reads EA app installations using the installer metadata shipped with each game.
 pub fn scan_ea_games(roots: &[PathBuf]) -> Vec<DetectedGame> {
     let mut games = Vec::new();
-    let mut seen_paths = Vec::new();
+    let mut seen_paths = BTreeSet::new();
 
     for root in roots {
         let entries = match fs::read_dir(root) {
@@ -573,7 +573,7 @@ pub fn discover_ubisoft_games() -> Vec<DetectedGame> {
         };
         games.extend(parse_ubisoft_registry_output(&String::from_utf8_lossy(&output.stdout)));
     }
-    let mut seen_paths = Vec::new();
+    let mut seen_paths = BTreeSet::new();
     games.retain(|game| insert_unique_install_path(&mut seen_paths, &game.install_path));
     games.sort_by_key(|game| game.name.to_lowercase());
     games
@@ -583,7 +583,7 @@ pub fn discover_ubisoft_games() -> Vec<DetectedGame> {
 /// documented local manifest format. Only immediate child folders are considered.
 pub fn scan_game_folders(platform: &'static str, roots: &[PathBuf]) -> Vec<DetectedGame> {
     let mut games = Vec::new();
-    let mut seen_paths = Vec::new();
+    let mut seen_paths = BTreeSet::new();
     for root in roots {
         let entries = match fs::read_dir(root) {
             Ok(entries) => entries,
@@ -639,7 +639,7 @@ pub fn scan_battlenet_product_db(database: &Path) -> Vec<DetectedGame> {
     }
 
     let mut games = Vec::new();
-    let mut seen_paths = Vec::new();
+    let mut seen_paths = BTreeSet::new();
     for install in installs {
         let Some(code_bytes) = protobuf_length_delimited_fields(install, 2)
             .and_then(|fields| fields.into_iter().next())
@@ -970,7 +970,7 @@ mod tests {
 
     #[test]
     fn global_deduplication_keeps_non_adjacent_paths_and_separate_platforms() {
-        let mut seen = Vec::new();
+        let mut seen = BTreeSet::new();
         assert!(super::insert_unique_platform_install_path(
             &mut seen, "Steam", Path::new("/games/shared")
         ));
