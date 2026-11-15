@@ -1,5 +1,5 @@
 use amethys_events::EventBus;
-use amethys_ipc::{IpcCoreStatus, IpcGameEntry, serve_connection_with_games, transport::IpcListener};
+use amethys_ipc::{IpcCommand, IpcCoreStatus, IpcEnvelope, IpcGameEntry, IpcRemoteError, IpcRequest, IpcResponse, IpcResponsePayload, read_envelope, write_message, transport::IpcListener};
 use amethys_runtime::{CoreRuntime, RuntimeState};
 use amethys_storage::Database;
 use std::{
@@ -34,6 +34,57 @@ fn ipc_status(state: &AtomicU8) -> IpcCoreStatus {
         STATE_STOPPED => IpcCoreStatus::Stopped,
         _ => IpcCoreStatus::Created,
     }
+}
+
+async fn serve_database_connection<S>(
+    stream: &mut S,
+    state: IpcCoreStatus,
+    database: &Database,
+) -> Result<(), Box<dyn Error>>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
+{
+    let request: IpcEnvelope<IpcRequest> = read_envelope(stream).await?;
+    let result = match request.payload.command {
+        IpcCommand::Ping => Ok(IpcResponsePayload::Pong),
+        IpcCommand::GetStatus => Ok(IpcResponsePayload::CoreStatus { state }),
+        IpcCommand::ListGames => database.list_games().map(|entries| {
+            IpcResponsePayload::Games {
+                games: entries.into_iter().map(|game| IpcGameEntry {
+                    id: game.id,
+                    name: game.name,
+                    platform: game.platform,
+                    install_path: game.install_path,
+                    executable: game.executable,
+                }).collect(),
+            }
+        }),
+        IpcCommand::AddGame { name, platform, install_path, executable } => {
+            database.add_game(&name, &platform, &install_path, executable.as_deref()).map(|game| {
+                IpcResponsePayload::GameAdded {
+                    game: IpcGameEntry {
+                        id: game.id,
+                        name: game.name,
+                        platform: game.platform,
+                        install_path: game.install_path,
+                        executable: game.executable,
+                    },
+                }
+            })
+        }
+        IpcCommand::RemoveGame { id } => database.remove_game(&id).map(|removed| {
+            IpcResponsePayload::GameRemoved { removed }
+        }),
+    };
+    let response = match result {
+        Ok(payload) => IpcResponse::success(request.request_id, payload),
+        Err(error) => IpcResponse::failure(
+            request.request_id,
+            IpcRemoteError::new(error.code().to_string(), error.message()),
+        ),
+    };
+    write_message(stream, &response).await?;
+    Ok(())
 }
 
 fn store_runtime_state(shared: &AtomicU8, state: RuntimeState) {
@@ -82,26 +133,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
             accepted = listener.accept() => {
                 match accepted {
                     Ok(mut stream) => {
-                        let games = match database.list_games() {
-                            Ok(entries) => entries.into_iter().map(|game| IpcGameEntry {
-                                id: game.id,
-                                name: game.name,
-                                platform: game.platform,
-                                install_path: game.install_path,
-                                executable: game.executable,
-                            }).collect::<Vec<_>>(),
-                            Err(error) => {
-                                tracing::error!(%error, "Unable to read local game library");
-                                continue;
-                            }
-                        };
-                        let state = Arc::clone(&shared_state);
-                        connections.spawn(async move {
-                            let current_state = ipc_status(&state);
-                            if let Err(error) = serve_connection_with_games(&mut stream, current_state, &games).await {
-                                tracing::debug!(%error, "Local IPC request failed");
-                            }
-                        });
+                        let current_state = ipc_status(&shared_state);
+                        if let Err(error) = serve_database_connection(&mut stream, current_state, &database).await {
+                            tracing::debug!(%error, "Local IPC request failed");
+                        }
                     }
                     Err(error) => {
                         tracing::error!(%error, "Unable to accept a local IPC connection");
