@@ -10,7 +10,8 @@ fn parse_command(argument: Option<&str>) -> Result<IpcCommand, &'static str> {
     match argument {
         Some("ping") => Ok(IpcCommand::Ping),
         Some("status") => Ok(IpcCommand::GetStatus),
-        _ => Err("Commande inconnue. Utilisation : amethysctl <ping|status>"),
+        Some("games") => Ok(IpcCommand::ListGames),
+        _ => Err("Commande inconnue. Utilisation : amethysctl <ping|status|games>"),
     }
 }
 
@@ -75,6 +76,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
             println!("État d'Amethys : {}.", status_label(state));
             Ok(())
         }
+        Ok(IpcResponsePayload::Games { games }) if command == IpcCommand::ListGames => {
+            if games.is_empty() {
+                println!("Aucun jeu enregistré dans la bibliothèque.");
+            } else {
+                println!("Jeux enregistrés :");
+                for game in games {
+                    println!("- {} ({}) — {}", game.name, game.platform, game.install_path);
+                }
+            }
+            Ok(())
+        }
         Ok(_) => Err("Amethys a envoyé une réponse inattendue.".into()),
     }
 }
@@ -88,6 +100,7 @@ mod tests {
     fn accepts_supported_commands() {
         assert_eq!(parse_command(Some("ping")), Ok(IpcCommand::Ping));
         assert_eq!(parse_command(Some("status")), Ok(IpcCommand::GetStatus));
+        assert_eq!(parse_command(Some("games")), Ok(IpcCommand::ListGames));
     }
 
     #[test]
