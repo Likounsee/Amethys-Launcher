@@ -197,6 +197,7 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
 
 /// Returns the usual Epic Games manifest folder for the current operating system.
 pub fn epic_manifest_roots() -> Vec<PathBuf> {
+    #[allow(unused_mut)]
     let mut roots: BTreeSet<PathBuf> = BTreeSet::new();
     #[cfg(windows)]
     if let Some(program_data) = std::env::var_os("ProgramData") {
