@@ -174,7 +174,9 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
         let Ok(contents) = fs::read_to_string(&path) else {
             continue;
         };
-        let Ok(manifest) = serde_json::from_str::<serde_json::Value>(&contents) else {
+        // Epic manifests may be written with a UTF-8 BOM.
+        let contents = contents.strip_prefix('\u{feff}').unwrap_or(&contents);
+        let Ok(manifest) = serde_json::from_str::<serde_json::Value>(contents) else {
             continue;
         };
         let Some(install_location) = manifest.get("InstallLocation").and_then(|v| v.as_str()) else {
@@ -915,6 +917,32 @@ mod tests {
         assert_eq!(games[0].platform_id.as_deref(), Some("ExampleApp"));
         assert_eq!(games[0].name, "Example Game");
         assert_eq!(games[0].install_path, installed);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn reads_epic_manifests_with_utf8_bom() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-epic-bom-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let manifests = root.join("Manifests");
+        let install = root.join("Installed Game");
+        std::fs::create_dir_all(&manifests).expect("create manifests");
+        std::fs::create_dir_all(&install).expect("create install");
+        let json = format!(
+            r#"{{"AppName":"BOMGame","DisplayName":"BOM Game","InstallLocation":{}}}"#,
+            serde_json::to_string(&install.to_string_lossy()).expect("encode path")
+        );
+        std::fs::write(manifests.join("bom.item"), format!("\u{feff}{json}"))
+            .expect("write BOM manifest");
+
+        let games = scan_epic_manifests(&manifests);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].name, "BOM Game");
+        assert_eq!(games[0].platform_id.as_deref(), Some("BOMGame"));
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
