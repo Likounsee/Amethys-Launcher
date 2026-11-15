@@ -87,7 +87,7 @@ pub fn scan_steam_libraries(libraries: &[PathBuf]) -> Vec<DetectedGame> {
         }
     }
 
-    games.sort_by(|left, right| left.name.to_lowercase().cmp(&right.name.to_lowercase()));
+    games.sort_by_key(|game| game.name.to_lowercase());
     games
 }
 
