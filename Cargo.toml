@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["apps/agent", "apps/cli", "crates/amethys-config", "crates/amethys-errors", "crates/amethys-events", "crates/amethys-ipc", "crates/amethys-logging", "crates/amethys-orchestration", "crates/amethys-runtime", "crates/amethys-storage"]
+members = ["apps/agent", "apps/cli", "crates/amethys-discovery", "crates/amethys-config", "crates/amethys-errors", "crates/amethys-events", "crates/amethys-ipc", "crates/amethys-logging", "crates/amethys-orchestration", "crates/amethys-runtime", "crates/amethys-storage"]
 
 [workspace.package]
 version = "0.1.0"
