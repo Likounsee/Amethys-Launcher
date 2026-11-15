@@ -60,6 +60,17 @@ where R: AsyncRead + Unpin, T: DeserializeOwned {
         .map_err(|error| AmethysError::new(ErrorCode::IpcDeserialization, error.to_string()))
 }
 
+/// Reads an envelope and rejects protocol versions this build cannot handle.
+pub async fn read_envelope<R, T>(reader: &mut R) -> Result<IpcEnvelope<T>, AmethysError>
+where
+    R: AsyncRead + Unpin,
+    T: DeserializeOwned,
+{
+    let envelope: IpcEnvelope<T> = read_message(reader).await?;
+    envelope.validate_version()?;
+    Ok(envelope)
+}
+
 fn io_error(error: std::io::Error) -> AmethysError {
     AmethysError::new(ErrorCode::IpcIo, error.to_string())
 }
