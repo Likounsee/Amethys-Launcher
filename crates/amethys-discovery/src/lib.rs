@@ -256,6 +256,70 @@ pub fn scan_amazon_games(database: &Path) -> Vec<DetectedGame> {
     games
 }
 
+/// Reads EA app installations using the installer metadata shipped with each game.
+pub fn scan_ea_games(roots: &[PathBuf]) -> Vec<DetectedGame> {
+    let mut games = Vec::new();
+    let mut seen = BTreeSet::new();
+
+    for root in roots {
+        let entries = match fs::read_dir(root) {
+            Ok(entries) => entries,
+            Err(_) => continue,
+        };
+        for entry in entries.flatten() {
+            let install_path = entry.path();
+            if !install_path.is_dir() {
+                continue;
+            }
+            let metadata = install_path.join("__Installer/installerdata.xml");
+            let Ok(contents) = fs::read_to_string(&metadata) else {
+                continue;
+            };
+            let name = xml_element_text(&contents, "gameTitle")
+                .filter(|value| !value.trim().is_empty())
+                .unwrap_or_else(|| {
+                    install_path.file_name()
+                        .and_then(|value| value.to_str())
+                        .unwrap_or_default()
+                        .to_owned()
+                });
+            if name.trim().is_empty() {
+                continue;
+            }
+            let platform_id = xml_element_text(&contents, "contentID")
+                .filter(|value| !value.trim().is_empty());
+            let key = install_path.to_string_lossy().to_lowercase();
+            if seen.insert(key) {
+                games.push(DetectedGame {
+                    platform_id,
+                    name,
+                    install_path,
+                    platform: "EA app",
+                });
+            }
+        }
+    }
+    games.sort_by_key(|game| game.name.to_lowercase());
+    games
+}
+
+fn xml_element_text(contents: &str, element: &str) -> Option<String> {
+    let open_tag = format!("<{element}");
+    let open_start = contents.find(&open_tag)?;
+    let open_end = contents[open_start..].find('>')? + open_start + 1;
+    let close_tag = format!("</{element}>");
+    let close_start = contents[open_end..].find(&close_tag)? + open_end;
+    let raw = contents[open_end..close_start].trim();
+    if raw.is_empty() {
+        return None;
+    }
+    Some(raw.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'"))
+}
+
 /// Returns the standard Amazon Games install metadata database on Windows.
 pub fn amazon_games_database() -> Option<PathBuf> {
     #[cfg(windows)]
@@ -322,7 +386,7 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
         let program_files = std::env::var_os("ProgramFiles").map(PathBuf::from);
         let program_files_x86 = std::env::var_os("ProgramFiles(x86)").map(PathBuf::from);
         if let Some(root) = program_files.as_ref() {
-            games.extend(scan_game_folders("EA app", &[root.join("EA Games")]));
+            games.extend(scan_ea_games(&[root.join("EA Games")]));
             games.extend(scan_game_folders("GOG", &[root.join("GOG Games")]));
             games.extend(scan_game_folders("Xbox", &[root.join("XboxGames")]));
         }
@@ -496,6 +560,52 @@ mod tests {
         assert_eq!(games[0].platform_id.as_deref(), Some("ExampleApp"));
         assert_eq!(games[0].name, "Example Game");
         assert_eq!(games[0].install_path, installed);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn detects_ea_games_from_installer_metadata_and_reads_title_and_content_id() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-ea-discovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let install = root.join("EA Games").join("Dead Space");
+        let metadata_dir = install.join("__Installer");
+        std::fs::create_dir_all(&metadata_dir).expect("create EA metadata folder");
+        std::fs::write(
+            metadata_dir.join("installerdata.xml"),
+            r#"<?xml version="1.0"?><DiPManifest><gameTitle locale="en_US">Dead Space</gameTitle><contentIDs><contentID>DR:12345</contentID></contentIDs></DiPManifest>"#,
+        ).expect("write EA installer metadata");
+
+        let games = super::scan_ea_games(&[root.join("EA Games")]);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform, "EA app");
+        assert_eq!(games[0].platform_id.as_deref(), Some("DR:12345"));
+        assert_eq!(games[0].name, "Dead Space");
+        assert_eq!(games[0].install_path, install);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn ignores_ea_folders_without_installer_metadata_and_falls_back_to_folder_name() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-ea-fallback-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let install = root.join("Mass Effect");
+        std::fs::create_dir_all(install.join("__Installer")).expect("create metadata folder");
+        std::fs::write(install.join("__Installer/installerdata.xml"), "<DiPManifest/>")
+            .expect("write incomplete metadata");
+        std::fs::create_dir_all(root.join("Unrelated Folder")).expect("create unrelated folder");
+
+        let games = super::scan_ea_games(std::slice::from_ref(&root));
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].name, "Mass Effect");
+        assert_eq!(games[0].platform_id, None);
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
