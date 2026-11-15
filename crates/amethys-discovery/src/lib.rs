@@ -199,8 +199,8 @@ mod tests {
         let contents = r#"
             "libraryfolders"
             {
-                "0" "C:\\\\Steam"
-                "1" "D:\\\\SteamLibrary"
+                "0" "C:\\Steam"
+                "1" "D:\\SteamLibrary"
             }
         "#;
         let paths = parse_library_folders(contents, Path::new("C:/DefaultSteam"));
@@ -221,20 +221,32 @@ mod tests {
     #[test]
     fn scans_only_manifests_with_existing_game_directories() {
         let root = std::env::temp_dir().join(format!(
-            "amethys-steam-discovery-{}",
-            uuid::Uuid::new_v4()
+            "amethys-steam-discovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("system clock is after Unix epoch")
+                .as_nanos()
         ));
         let steamapps = root.join("steamapps");
         let game_dir = steamapps.join("common").join("Dota 2");
         std::fs::create_dir_all(&game_dir).expect("create installed game directory");
         std::fs::write(
             steamapps.join("appmanifest_570.acf"),
-            r#""appid" "570" "name" "Dota 2" "installdir" "Dota 2""#,
+            r#"
+                "appid" "570"
+                "name" "Dota 2"
+                "installdir" "Dota 2"
+            "#,
         )
         .expect("write installed game manifest");
         std::fs::write(
             steamapps.join("appmanifest_10.acf"),
-            r#""appid" "10" "name" "Missing Game" "installdir" "Missing Game""#,
+            r#"
+                "appid" "10"
+                "name" "Missing Game"
+                "installdir" "Missing Game"
+            "#,
         )
         .expect("write missing game manifest");
 
