@@ -10,6 +10,7 @@ name = "amethysctl"
 path = "src/main.rs"
 
 [dependencies]
+amethys-discovery = { path = "../../crates/amethys-discovery" }
 amethys-ipc.workspace = true
 tokio.workspace = true
 
