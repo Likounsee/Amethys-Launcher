@@ -902,7 +902,8 @@ fn install_path_key(path: &Path) -> PathBuf {
     }
 }
 
-/// Compares canonical install paths using the filesystem's case rules.
+/// Compares paths for platform-specific case-rule tests.
+#[cfg(test)]
 fn same_install_path(left: &Path, right: &Path) -> bool {
     #[cfg(windows)]
     {
