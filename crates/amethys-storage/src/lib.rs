@@ -41,6 +41,41 @@ impl Database {
                 format!("Could not configure database busy timeout: {error}"),
             )
         )?;
+        // Check the schema before changing persistent SQLite settings. In
+        // particular, opening a database created by a newer Amethys release
+        // must not silently switch its journal mode or otherwise mutate it.
+        let migration_table_exists: bool = connection.query_row(
+            "SELECT EXISTS(
+                 SELECT 1 FROM sqlite_master
+                 WHERE type = 'table' AND name = 'schema_migrations'
+             )",
+            [],
+            |row| row.get(0),
+        ).map_err(|error| AmethysError::new(
+            ErrorCode::StorageMigration,
+            format!("Could not inspect database schema: {error}"),
+        ))?;
+        let detected_version: i64 = if migration_table_exists {
+            connection.query_row(
+                "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
+                [],
+                |row| row.get(0),
+            ).map_err(|error| AmethysError::new(
+                ErrorCode::StorageMigration,
+                format!("Could not read migration history: {error}"),
+            ))?
+        } else {
+            0
+        };
+        if detected_version > 3 {
+            return Err(AmethysError::new(
+                ErrorCode::StorageMigration,
+                format!(
+                    "Database schema version {detected_version} is newer than the supported version 3."
+                ),
+            ));
+        }
+
         connection.execute_batch(
             "PRAGMA foreign_keys = ON;
              PRAGMA journal_mode = WAL;
@@ -66,6 +101,8 @@ impl Database {
             format!("Could not create migration history: {error}"),
         ))?;
 
+        // Re-read under the migration transaction in case another Amethys
+        // process completed a migration after the read-only preflight.
         let current_version: i64 = transaction.query_row(
             "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
             [],
@@ -306,6 +343,14 @@ mod tests {
             |row| row.get(0),
         ).expect("schema catalog is readable");
         assert_eq!(games_exists, 0, "future database must remain untouched");
+        let journal_mode: String = connection.query_row(
+            "PRAGMA journal_mode", [], |row| row.get(0)
+        ).expect("journal mode is readable");
+        assert_eq!(
+            journal_mode.to_ascii_lowercase(),
+            "delete",
+            "rejecting a future schema must not change its persistent journal mode"
+        );
         drop(connection);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
