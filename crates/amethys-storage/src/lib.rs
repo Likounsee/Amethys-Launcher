@@ -32,6 +32,14 @@ impl Database {
             ErrorCode::StorageOpen,
             format!("Could not open {}: {error}", path.display()),
         ))?;
+        // A second Amethys process or another database client may briefly hold
+        // a write lock. Wait for it instead of failing immediately on SQLITE_BUSY.
+        connection.busy_timeout(std::time::Duration::from_secs(5)).map_err(|error|
+            AmethysError::new(
+                ErrorCode::StorageOpen,
+                format!("Could not configure database busy timeout: {error}"),
+            )
+        )?;
         connection.execute_batch(
             "PRAGMA foreign_keys = ON;
              PRAGMA journal_mode = WAL;"
@@ -254,6 +262,19 @@ mod tests {
         ).expect("schema catalog is readable");
         assert_eq!(games_exists, 0, "future database must remain untouched");
         drop(connection);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[test]
+    fn database_configures_a_busy_timeout_for_lock_contention() {
+        let (database, path) = temporary_database();
+        let timeout_ms: i64 = database.connection()
+            .query_row("PRAGMA busy_timeout", [], |row| row.get(0))
+            .expect("busy timeout is readable");
+        assert_eq!(timeout_ms, 5_000);
+        drop(database);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
         let _ = std::fs::remove_file(format!("{}-shm", path.display()));
