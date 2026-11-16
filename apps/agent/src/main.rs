@@ -30,13 +30,16 @@ fn ipc_status(state: &AtomicU8) -> IpcCoreStatus {
 
 async fn serve_database_connection<S>(
     stream: &mut S,
-    state: IpcCoreStatus,
+    shared_state: &AtomicU8,
     database: &Mutex<Database>,
 ) -> Result<(), Box<dyn Error + Send + Sync>>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
     let request: IpcEnvelope<IpcRequest> = read_envelope(stream).await?;
+    // Read the lifecycle state when the request is handled, not when its
+    // socket was accepted: a client may connect and then stall before sending.
+    let state = ipc_status(shared_state);
     let result = match request.payload.command {
         IpcCommand::Ping => Ok(IpcResponsePayload::Pong),
         IpcCommand::GetStatus => Ok(IpcResponsePayload::CoreStatus { state }),
@@ -185,13 +188,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                                 continue;
                             }
                         };
-                        let current_state = ipc_status(&shared_state);
+                        let shared_state = Arc::clone(&shared_state);
                         let database = Arc::clone(&database);
                         connections.spawn(async move {
                             let _permit = permit;
                             match tokio::time::timeout(
                                 std::time::Duration::from_secs(15),
-                                serve_database_connection(&mut stream, current_state, &database),
+                                serve_database_connection(&mut stream, &shared_state, &database),
                             ).await {
                                 Ok(Ok(())) => {}
                                 Ok(Err(error)) => {
