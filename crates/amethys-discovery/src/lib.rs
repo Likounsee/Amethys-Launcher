@@ -889,10 +889,10 @@ pub fn scan_battlenet_product_db(database: &Path) -> Vec<DetectedGame> {
         if !insert_unique_install_path(&mut seen_paths, &install_path) {
             continue;
         }
-        seen_product_codes.insert(product_key);
         let name = battlenet_product_name(&product_key)
             .map(str::to_owned)
             .or_else(|| install_path.file_name().and_then(|name| name.to_str()).map(str::to_owned));
+        seen_product_codes.insert(product_key);
         let Some(name) = name.filter(|name| !name.trim().is_empty()) else {
             continue;
         };
