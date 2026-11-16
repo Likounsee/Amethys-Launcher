@@ -325,7 +325,7 @@ mod tests {
             platform: "Epic Games",
         };
 
-        assert!(super::game_is_already_imported(&[saved.clone()], &same_game));
+        assert!(super::game_is_already_imported(std::slice::from_ref(&saved), &same_game));
         assert!(!super::game_is_already_imported(&[saved], &other_store));
     }
 
