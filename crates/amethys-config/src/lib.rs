@@ -91,12 +91,19 @@ fn resolve_data_directory(
 pub fn prepare_data_directory() -> io::Result<PathBuf> {
     let path = data_directory()?;
     std::fs::create_dir_all(&path)?;
+    restrict_data_directory_permissions(&path)?;
+    Ok(path)
+}
+
+fn restrict_data_directory_permissions(path: &Path) -> io::Result<()> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700))?;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))?;
     }
-    Ok(path)
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
 }
 
 /// User-level application settings.
@@ -213,6 +220,27 @@ mod tests {
         )
         .expect("home data directory resolves");
         assert_eq!(path, Path::new("/home/tester/.local/share/amethys"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn prepared_data_directory_is_private_to_its_owner() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = std::env::temp_dir().join(format!("amethys-private-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&path).expect("temporary data directory is created");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+            .expect("initial permissions are set");
+
+        super::restrict_data_directory_permissions(&path)
+            .expect("private permissions are applied");
+        let mode = std::fs::metadata(&path)
+            .expect("directory metadata is available")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o700);
+        std::fs::remove_dir(path).expect("temporary directory is removed");
     }
 
     #[test]
