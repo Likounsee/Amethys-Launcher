@@ -716,10 +716,12 @@ pub fn parse_ubisoft_registry_output(contents: &str) -> Vec<DetectedGame> {
             r"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs\",
             r"HKEY_LOCAL_MACHINE\SOFTWARE\Ubisoft\Launcher\Installs\",
         ];
-        if let Some(id) = install_key_prefixes.iter()
-            .find_map(|prefix| trimmed.strip_prefix(prefix))
-        {
-            current_id = Some(id.trim().to_owned());
+        if trimmed.starts_with("HKEY_") {
+            // reg.exe /s emits unrelated subkeys as well. Never let an
+            // InstallDir value under another key inherit the previous game ID.
+            current_id = install_key_prefixes.iter()
+                .find_map(|prefix| trimmed.strip_prefix(prefix))
+                .map(|id| id.trim().to_owned());
             continue;
         }
         if let Some((_, value)) = trimmed.split_once("REG_SZ")
@@ -1851,6 +1853,26 @@ mod tests {
         assert_eq!(games[0].platform_id.as_deref(), Some("44"));
         assert_eq!(games[0].name, "Assassins Creed");
         assert_eq!(games[0].install_path, install);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn does_not_attribute_unrelated_registry_install_values_to_previous_ubisoft_game() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-ubisoft-unrelated-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let install = root.join("Not Ubisoft");
+        std::fs::create_dir_all(&install).expect("create unrelated install");
+        let output = format!(
+            "HKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\44\\n    InstallDir    REG_SZ    {}\\nHKEY_LOCAL_MACHINE\\SOFTWARE\\OtherVendor\\Installs\\99\\n    InstallDir    REG_SZ    {}\\n",
+            install.display(), install.display()
+        );
+        let games = super::parse_ubisoft_registry_output(&output);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform_id.as_deref(), Some("44"));
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
