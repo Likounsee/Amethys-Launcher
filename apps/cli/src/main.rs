@@ -72,7 +72,7 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
         [group, action, id] if group == "games" && action == "remove" => {
             Ok(IpcCommand::RemoveGame { id: id.clone() })
         }
-        _ => Err("Utilisation : amethysctl games add <nom> <plateforme> <dossier> [executable] | games remove <id> | games scan | games import <appid> | games import <plateforme> <id>"),
+        _ => Err("Utilisation : amethysctl games add <nom> <plateforme> <dossier> [executable] | games remove <id> | games scan | games import <appid> | games import <plateforme> <id> | games import-all"),
     }
 }
 
@@ -93,6 +93,114 @@ fn same_install_location(saved: &str, detected: &std::path::Path) -> bool {
     }
 }
 
+fn game_is_already_imported(
+    saved_games: &[amethys_ipc::IpcGameEntry],
+    detected: &amethys_discovery::DetectedGame,
+) -> bool {
+    saved_games.iter().any(|saved| {
+        saved.platform.eq_ignore_ascii_case(detected.platform)
+            && match (&saved.platform_id, &detected.platform_id) {
+                (Some(saved_id), Some(detected_id)) => saved_id == detected_id,
+                _ => same_install_location(&saved.install_path, &detected.install_path),
+            }
+    })
+}
+
+async fn load_saved_games() -> Result<Vec<amethys_ipc::IpcGameEntry>, Box<dyn Error>> {
+    let mut connection = connect_to_core().await.map_err(|error| {
+        format!("Impossible de joindre Amethys. Vérifie que le programme fonctionne. Détail : {error}")
+    })?;
+    let response = send_request(
+        &mut connection,
+        IpcRequest::new(IpcCommand::ListGames),
+    ).await?;
+
+    match response.result {
+        Ok(IpcResponsePayload::Games { games }) => Ok(games),
+        Err(remote_error) => Err(format!(
+            "Impossible de vérifier la bibliothèque ({}): {}",
+            remote_error.code, remote_error.message
+        ).into()),
+        Ok(_) => Err(
+            "Amethys a envoyé une réponse inattendue en lisant la bibliothèque.".into(),
+        ),
+    }
+}
+
+async fn import_one_detected_game(
+    game: &amethys_discovery::DetectedGame,
+    saved_games: &mut Vec<amethys_ipc::IpcGameEntry>,
+) -> Result<bool, Box<dyn Error>> {
+    if game_is_already_imported(saved_games, game) {
+        println!("{} est déjà présent dans la bibliothèque Amethys.", game.name);
+        return Ok(false);
+    }
+
+    let command = IpcCommand::AddDetectedGame {
+        name: game.name.clone(),
+        platform: game.platform.to_owned(),
+        platform_id: game.platform_id.clone(),
+        install_path: game.install_path.to_string_lossy().into_owned(),
+        executable: None,
+    };
+    let mut connection = connect_to_core().await.map_err(|error| {
+        format!("Impossible de joindre Amethys. Vérifie que le programme fonctionne. Détail : {error}")
+    })?;
+    let response = send_request(&mut connection, IpcRequest::new(command)).await?;
+    match response.result {
+        Ok(IpcResponsePayload::GameAdded { game }) => {
+            println!("{} a été ajouté à la bibliothèque Amethys.", game.name);
+            saved_games.push(game);
+            Ok(true)
+        }
+        Err(remote_error) => Err(format!(
+            "Amethys n'a pas pu ajouter le jeu ({}): {}",
+            remote_error.code, remote_error.message
+        ).into()),
+        Ok(_) => Err("Amethys a envoyé une réponse inattendue pendant l'ajout du jeu.".into()),
+    }
+}
+
+async fn import_detected_games(
+    detected_games: Vec<amethys_discovery::DetectedGame>,
+) -> Result<(), Box<dyn Error>> {
+    if detected_games.is_empty() {
+        println!("Aucun jeu installé détecté à importer.");
+        return Ok(());
+    }
+
+    let mut saved_games = load_saved_games().await?;
+    let total = detected_games.len();
+    let mut added = 0usize;
+    let mut skipped = 0usize;
+    let mut failures = Vec::new();
+
+    for game in &detected_games {
+        match import_one_detected_game(game, &mut saved_games).await {
+            Ok(true) => added += 1,
+            Ok(false) => skipped += 1,
+            Err(error) => {
+                eprintln!("Échec de l'import de {} : {error}", game.name);
+                failures.push(game.name.clone());
+            }
+        }
+    }
+
+    println!(
+        "Import terminé : {added} ajouté(s), {skipped} déjà présent(s), {} échec(s), sur {total} jeu(x) détecté(s).",
+        failures.len()
+    );
+
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Certains jeux n'ont pas pu être importés : {}.",
+            failures.join(", ")
+        ).into())
+    }
+}
+
 async fn import_detected_game(platform: &str, platform_id: &str) -> Result<(), Box<dyn Error>> {
     let game = amethys_discovery::discover_all_games()
         .into_iter()
@@ -103,66 +211,16 @@ async fn import_detected_game(platform: &str, platform_id: &str) -> Result<(), B
         .ok_or_else(|| format!(
             "Aucun jeu installé de la plateforme « {platform} » ne correspond à l'identifiant {platform_id}. Lance « amethysctl games scan » pour voir les jeux détectés."
         ))?;
-    let mut library_connection = connect_to_core().await.map_err(|error| {
-        format!("Impossible de joindre Amethys. Vérifie que le programme fonctionne. Détail : {error}")
-    })?;
-    let library_response = send_request(
-        &mut library_connection,
-        IpcRequest::new(IpcCommand::ListGames),
-    ).await?;
 
-    let saved_games = match library_response.result {
-        Ok(IpcResponsePayload::Games { games }) => games,
-        Err(remote_error) => return Err(format!(
-            "Impossible de vérifier la bibliothèque ({}): {}",
-            remote_error.code, remote_error.message
-        ).into()),
-        Ok(_) => {
-            return Err(
-                "Amethys a envoyé une réponse inattendue en lisant la bibliothèque.".into(),
-            );
-        }
-    };
-
-    let install_path = game.install_path.to_string_lossy().into_owned();
-    if saved_games.iter().any(|saved| {
-        saved.platform.eq_ignore_ascii_case(game.platform)
-            && match (&saved.platform_id, &game.platform_id) {
-                (Some(saved_id), Some(detected_id)) => saved_id == detected_id,
-                _ => same_install_location(&saved.install_path, &game.install_path),
-            }
-    }) {
-        println!("{} est déjà présent dans la bibliothèque Amethys.", game.name);
-        return Ok(());
-    }
-
-    let command = IpcCommand::AddDetectedGame {
-        name: game.name.clone(),
-        platform: game.platform.to_owned(),
-        platform_id: game.platform_id.clone(),
-        install_path,
-        executable: None,
-    };
-    let mut connection = connect_to_core().await.map_err(|error| {
-        format!("Impossible de joindre Amethys. Vérifie que le programme fonctionne. Détail : {error}")
-    })?;
-    let response = send_request(&mut connection, IpcRequest::new(command)).await?;
-    match response.result {
-        Ok(IpcResponsePayload::GameAdded { game }) => {
-            println!("{} a été ajouté à la bibliothèque Amethys.", game.name);
-            Ok(())
-        }
-        Err(remote_error) => Err(format!(
-            "Amethys n'a pas pu ajouter le jeu ({}): {}",
-            remote_error.code, remote_error.message
-        ).into()),
-        Ok(_) => Err("Amethys a envoyé une réponse inattendue pendant l'ajout du jeu.".into()),
-    }
+    import_detected_games(vec![game]).await
 }
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if arguments.as_slice() == ["games", "import-all"] {
+        return import_detected_games(amethys_discovery::discover_all_games()).await;
+    }
     if let [group, action, app_id] = arguments.as_slice() {
         if group == "games" && action == "import" {
             // Backward-compatible shorthand: a single identifier means Steam.
@@ -243,6 +301,33 @@ async fn main() -> Result<(), Box<dyn Error>> {
 mod tests {
     use super::{parse_arguments, parse_command, same_install_location, status_label};
     use amethys_ipc::{IpcCommand, IpcCoreStatus};
+
+    #[test]
+    fn matches_imported_games_by_platform_and_platform_identifier() {
+        let saved = amethys_ipc::IpcGameEntry {
+            id: "local-id".to_owned(),
+            name: "Example".to_owned(),
+            platform: "Steam".to_owned(),
+            platform_id: Some("570".to_owned()),
+            install_path: "/games/example".to_owned(),
+            executable: None,
+        };
+        let same_game = amethys_discovery::DetectedGame {
+            platform_id: Some("570".to_owned()),
+            name: "Renamed Example".to_owned(),
+            install_path: std::path::PathBuf::from("/different/path"),
+            platform: "steam",
+        };
+        let other_store = amethys_discovery::DetectedGame {
+            platform_id: Some("570".to_owned()),
+            name: "Other Store Game".to_owned(),
+            install_path: std::path::PathBuf::from("/different/path"),
+            platform: "Epic Games",
+        };
+
+        assert!(super::game_is_already_imported(&[saved.clone()], &same_game));
+        assert!(!super::game_is_already_imported(&[saved], &other_store));
+    }
 
     #[test]
     fn recognizes_installation_path_aliases_without_merging_distinct_paths() {
