@@ -9,6 +9,10 @@ use std::{
         atomic::{AtomicU8, Ordering},
     },
 };
+use tokio::{
+    sync::{Mutex, Semaphore},
+    task::JoinSet,
+};
 
 const STATE_CREATED: u8 = 0;
 const STATE_RUNNING: u8 = 1;
@@ -27,13 +31,15 @@ fn ipc_status(state: &AtomicU8) -> IpcCoreStatus {
 async fn serve_database_connection<S>(
     stream: &mut S,
     state: IpcCoreStatus,
-    database: &Database,
-) -> Result<(), Box<dyn Error>>
+    database: &Mutex<Database>,
+) -> Result<(), Box<dyn Error + Send + Sync>>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
     let request: IpcEnvelope<IpcRequest> = read_envelope(stream).await?;
-    let result = match request.payload.command {
+    let result = {
+        let database = database.lock().await;
+        match request.payload.command {
         IpcCommand::Ping => Ok(IpcResponsePayload::Pong),
         IpcCommand::GetStatus => Ok(IpcResponsePayload::CoreStatus { state }),
         IpcCommand::ListGames => database.list_games().map(|entries| {
@@ -85,6 +91,7 @@ where
         IpcCommand::RemoveGame { id } => database.remove_game(&id).map(|removed| {
             IpcResponsePayload::GameRemoved { removed }
         }),
+        }
     };
     let response = match result {
         Ok(payload) => IpcResponse::success(request.request_id, payload),
@@ -112,7 +119,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
     amethys_logging::initialize()?;
 
     let data_dir = amethys_config::prepare_data_directory()?;
-    let database = Database::open(data_dir.join("amethys.sqlite"))?;
+    let database = Arc::new(Mutex::new(Database::open(data_dir.join("amethys.sqlite"))?));
+    // Keep slow or stalled local clients from blocking the accept loop or
+    // exhausting the agent's task and socket resources.
+    const MAX_IPC_CONNECTIONS: usize = 32;
+    let connection_limit = Arc::new(Semaphore::new(MAX_IPC_CONNECTIONS));
+    let mut connections = JoinSet::new();
 
     let mut runtime = CoreRuntime::new(EventBus::new(128));
     runtime.start()?;
@@ -141,19 +153,33 @@ async fn main() -> Result<(), Box<dyn Error>> {
             accepted = listener.accept() => {
                 match accepted {
                     Ok(mut stream) => {
-                        let current_state = ipc_status(&shared_state);
-                        match tokio::time::timeout(
-                            std::time::Duration::from_secs(15),
-                            serve_database_connection(&mut stream, current_state, &database),
-                        ).await {
-                            Ok(Ok(())) => {}
-                            Ok(Err(error)) => {
-                                tracing::debug!(%error, "Local IPC request failed");
-                            }
+                        let permit = match Arc::clone(&connection_limit).try_acquire_owned() {
+                            Ok(permit) => permit,
                             Err(_) => {
-                                tracing::warn!("Local IPC request timed out after 15 seconds");
+                                tracing::warn!(
+                                    limit = MAX_IPC_CONNECTIONS,
+                                    "IPC connection limit reached; rejecting client"
+                                );
+                                continue;
                             }
-                        }
+                        };
+                        let current_state = ipc_status(&shared_state);
+                        let database = Arc::clone(&database);
+                        connections.spawn(async move {
+                            let _permit = permit;
+                            match tokio::time::timeout(
+                                std::time::Duration::from_secs(15),
+                                serve_database_connection(&mut stream, current_state, &database),
+                            ).await {
+                                Ok(Ok(())) => {}
+                                Ok(Err(error)) => {
+                                    tracing::debug!(%error, "Local IPC request failed");
+                                }
+                                Err(_) => {
+                                    tracing::warn!("Local IPC request timed out after 15 seconds");
+                                }
+                            }
+                        });
                     }
                     Err(error) => {
                         tracing::error!(%error, "Unable to accept a local IPC connection");
@@ -165,6 +191,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     shared_state.store(STATE_STOPPING, Ordering::Release);
+    while let Some(result) = connections.join_next().await {
+        if let Err(error) = result {
+            tracing::error!(%error, "IPC connection task failed");
+        }
+    }
     runtime.shutdown()?;
     store_runtime_state(&shared_state, runtime.state());
     tracing::info!("Amethys Core stopped");
