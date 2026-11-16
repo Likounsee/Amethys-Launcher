@@ -421,10 +421,15 @@ pub fn scan_gog_galaxy(database: &Path) -> Vec<DetectedGame> {
         let Ok(path_key) = fs::canonicalize(&install_path) else {
             continue;
         };
+        let product_key = platform_id.to_owned();
         if install_path.is_dir()
-            && seen_products.insert(platform_id.to_owned())
-            && seen_paths.insert(path_key)
+            && !seen_products.contains(&product_key)
+            && !seen_paths.contains(&path_key)
         {
+            // Commit both deduplication keys only after every acceptance
+            // condition passes; a path collision must not poison a product ID.
+            seen_products.insert(product_key);
+            seen_paths.insert(path_key);
             games.push(DetectedGame {
                 platform_id: Some(platform_id.to_owned()),
                 name: name.to_owned(),
@@ -490,10 +495,15 @@ pub fn scan_amazon_games(database: &Path) -> Vec<DetectedGame> {
             continue;
         }
         let install_path = PathBuf::from(install_location);
+        let product_key = platform_id.to_owned();
+        let path_key = install_path_key(&install_path);
         if install_path.is_dir()
-            && seen_products.insert(platform_id.to_owned())
-            && seen_paths.insert(install_path_key(&install_path))
+            && !seen_products.contains(&product_key)
+            && !seen_paths.contains(&path_key)
         {
+            // Do not reserve an ID when its path is rejected as a duplicate.
+            seen_products.insert(product_key);
+            seen_paths.insert(path_key);
             games.push(DetectedGame {
                 platform_id: Some(platform_id.to_owned()),
                 name: name.to_owned(),
