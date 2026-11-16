@@ -1,137 +1,169 @@
 # Contributing to Amethys Launcher
 
-Bug reports and carefully reviewed fixes are welcome. Amethys Launcher is
-proprietary. Read [LICENSE](LICENSE), this document, [CLA.md](CLA.md), and
-[SECURITY.md](SECURITY.md) before submitting anything.
+Amethys Launcher welcomes people who want to help build the software. A
+contribution is voluntary, but it is not an informal transfer of code: the
+project's ownership, review, credit and reward rules below apply. Read
+[LICENSE](LICENSE), this document, [CLA.md](CLA.md), and [SECURITY.md](SECURITY.md)
+before proposing code.
 
-## Notice, acknowledgement, and acceptance
+## 1. Current ownership and purpose of contributions
 
-These policies are published in the repository and linked from the README and
-pull-request template. Before a code contribution is reviewed for integration,
-the contributor must expressly acknowledge the applicable policies in the
-pull request and complete the individual written agreement required by
-[CLA.md](CLA.md).
+Amethys Launcher is currently owned and led by **Likounsee**. Individual code
+contributions are intended to become part of Amethys Launcher under a
+contribution-specific written rights assignment. Contributors should not
+submit code expecting to retain ownership or control of the transferable
+economic rights that they expressly assign for integration into the project.
 
-A contributor's failure to read a clearly presented policy does not, by itself,
-create contractual consent where the law requires that the terms be brought to
-their attention and accepted. For that reason, Amethys requires an explicit
-acknowledgement and a separate signed agreement where rights are being
-transferred. A pull request without the required declarations or agreement
-will not be merged. The maintainer may close or reject it.
+This does not mean that authorship is erased. Accepted contributors are
+credited in [CONTRIBUTORS.md](CONTRIBUTORS.md), with attribution to files or
+features where reasonably practicable. They may describe their participation
+publicly, provided they do not disclose confidential information.
 
-Submitting a pull request does not itself transfer copyright, grant permission
-to incorporate the code, or guarantee acceptance. The contributor remains
-responsible for ensuring they are legally entitled to submit the material.
+## 2. Before starting: identify files or ask questions
 
-## Reporting a bug
+Before writing or submitting a code change:
 
-1. Search existing issues before opening a new one.
-2. Describe the affected operating system, Amethys version/commit and exact steps
-   to reproduce the problem.
-3. Include expected and actual behavior, relevant sanitized logs and test results.
-4. Use a minimal reproduction where possible.
+1. Open an Issue describing the proposed task or problem.
+2. List the exact files you expect to create or modify, if known.
+3. Explain the intended change and its purpose.
+4. If you need specifications, context, architecture details or clarification,
+   ask for them in the Issue before starting.
+5. Wait for maintainer feedback where the change affects project architecture,
+   security, platform integrations or significant functionality.
 
-Do not include passwords, access tokens, API keys, session cookies, personal
-information, private platform data, partner-only documentation, proprietary
-responses, or confidential information from Steam, Epic Games or any other
-platform. Redact local usernames, machine-specific paths and identifiers where
-they are not necessary. If a report may contain a security vulnerability or
-confidential information, do not publish it in an issue; follow SECURITY.md.
+If you do not know which files are involved, say so in the Issue and explain
+what you are trying to achieve. Do not guess at internal requirements or make
+large unrelated changes.
 
-## Pull requests and mandatory review
+## 3. Explicit acceptance and written assignment
 
-Pull requests proposing bug fixes are welcome, but are not automatically trusted
-or accepted.
+Before a code contribution is merged, the contributor must:
 
-Every pull request is subject to maintainer review before merge. Review may
-include, as appropriate:
+- explicitly confirm in the pull request that they have read and accept the
+  contribution rules;
+- identify the exact files, commits and work being contributed;
+- declare the origin of the code and any third-party, generated, AI-assisted,
+  previously published or employer/client-owned material;
+- confirm that they own the rights they propose to assign or have written
+  authority from the actual rights holder;
+- complete and sign the contribution-specific agreement in [CLA.md](CLA.md).
 
-- correctness, maintainability and compatibility;
-- tests and CI on supported operating systems;
-- dependency and supply-chain changes;
-- security implications, input validation and error handling;
-- privacy, data handling and platform terms;
-- source-code provenance, copyright, licenses, and contributor authority;
-- confirmation that the contribution contains no secrets or confidential data.
+The agreement applies only to the specifically identified contribution. It
+must describe the rights assigned, purpose, territory, duration and
+consideration in the manner required by applicable law. It must be signed by
+both parties and stored privately; never publish legal identity documents,
+private contact details or signed agreements in a public Issue or PR.
 
-A passing CI run is necessary where applicable, but is not a security audit and
-does not guarantee that a change is safe. Maintainers may request changes, run
-additional checks, reject or close a pull request, or delay merging until
-concerns are resolved. Do not merge your own contribution unless you have
-explicit maintainer authority.
+A checkbox or a statement in a README alone does not transfer copyright.
+Submitting an Issue or PR does not transfer rights. No individual code will
+be merged or incorporated until the required agreement is validly completed
+and the maintainer explicitly accepts the contribution.
 
-**No third-party code or copyrightable contribution may be merged, distributed,
-or incorporated until the contributor's declarations have been reviewed, the
-specific written assignment agreement has been signed by both parties, and the
-maintainer has explicitly accepted the contribution.** The maintainer records
-the agreement privately; contributors must not publish personal details or
-signed legal documents in public repository discussions.
+## 4. Source-code origin and third-party rights
 
-## Source-code provenance and copyright protection
+For every code contribution, disclose:
 
-For every code contribution, the contributor must:
+- whether you wrote the code yourself;
+- any copied, adapted, generated, AI-assisted or previously published parts;
+- external snippets, examples, templates, dependencies and their licenses;
+- any employer, client, school, government, NDA, prior assignment or
+  collaboration that may affect the rights;
+- any permission needed from another rights holder.
 
-- identify whether the code was written entirely by them;
-- disclose copied, adapted, generated, AI-assisted, third-party, or previously
-  published material and provide its origin and applicable terms;
-- identify dependencies, snippets, examples, templates, and code generated
-  from external tools where relevant;
-- disclose any employer, client, school, government, prior assignment,
-  collaboration, NDA, or confidentiality obligation that may affect ownership
-  or permission to submit;
-- confirm they have authority to grant the rights described in the individual
-  agreement;
-- provide reasonable clarification or provenance evidence when requested.
+Do not submit code if its origin or ownership is uncertain. Code written as
+part of employment, a contract, studies or another organisation's work may
+belong to that organisation rather than to the individual author. Obtain
+written authorization from the actual rights holder before proposing it.
 
-Do not submit code if its origin or rights are uncertain. The maintainer may
-reject it, request that it be rewritten independently, or require written
-permission from the actual rights holder. A contributor's declaration is
-important evidence but does not guarantee that third-party rights do not exist.
+Third-party code is not automatically acceptable because it is public or
+available on GitHub. Its license must be reviewed for compatibility with
+Amethys Launcher's proprietary distribution model. If provenance, permission
+or compatibility cannot be established, the contribution will be rejected or
+asked to be replaced with independently written code.
 
-Code written by an employee, contractor, student, or on behalf of another
-organization may be owned or controlled by that employer, client, institution,
-or other party. The contributor must obtain the necessary written authorization
-from the actual rights holder before offering any assignment to Likounsee.
-Never assume that the person who wrote code personally owns all transferable
-rights.
+## 5. Recognition and contributor credits
 
-Third-party code is not automatically acceptable merely because it is public
-or available on GitHub. Its license must be identified and reviewed for
-compatibility with Amethys Launcher's proprietary distribution model. If
-permission, provenance, or license compatibility cannot be established, the
-code will not be merged.
+Contributors whose work is accepted and incorporated will be listed in
+[CONTRIBUTORS.md](CONTRIBUTORS.md). Where practical, the project will record
+the relevant files, components or features so that the person's work is
+recognised. The project may also include contributor credits in the software
+or its public documentation.
 
-## Contribution rights and contributor credit
+Credit recognises authorship and participation. It does not give ownership
+of the project or reverse any valid assignment of transferable economic
+rights. Rights that cannot legally be transferred remain unaffected.
 
-The required assignment process is described in [CLA.md](CLA.md). It applies
-only to the specific contribution identified in the signed agreement; it does
-not claim all of a person's future work.
+## 6. Planned gift-card rewards
 
-After the contribution is validly assigned and accepted, the contributor will
-be credited in [CONTRIBUTORS.md](CONTRIBUTORS.md), where reasonably practicable.
-Credit recognises authorship and assistance; it does not reverse the transfer
-of transferable economic rights validly assigned to Likounsee. Moral rights
-and other rights that cannot legally be transferred remain unaffected.
+When Amethys Launcher is completed with its Store and integrated wallets, the
+project intends to reward eligible contributors with gift cards. The aim is
+to recognise people who helped build the software, not to treat their work
+as anonymous or unrecognised.
 
-Security-sensitive contributions follow the same assignment process and also
-require enhanced security and confidentiality review. Security-related work
-does not create an automatic or separate loss of ownership.
+The level of reward is intended to reflect each person's involvement. The
+assessment may consider:
 
-## Security and platform boundaries
+- amount of accepted work;
+- technical difficulty and responsibility;
+- quality, reliability and maintainability;
+- consistency and duration of participation;
+- importance and impact of the delivered features;
+- overall contribution to the project.
 
-- Keep platform discovery read-only unless a separately reviewed feature
+Before rewards are assessed, the project will publish the programme's
+eligibility rules, assessment process, available budget, gift-card types,
+values and distribution conditions. A specific amount or date is not
+guaranteed by these contribution rules. Rewards are separate from the
+written rights assignment and do not grant ownership of assigned code.
+
+## 7. Official platform and company collaborations
+
+Work developed or supplied in an official collaboration with Steam, Epic
+Games or another platform/company is not treated as an ordinary individual
+contribution. Its ownership and permitted use are governed by a separate
+written agreement with that organisation. The organisation may retain
+intellectual-property rights in its own code and materials and may impose
+conditions on use, modification, maintenance or withdrawal.
+
+Do not represent yourself as authorised by a platform or submit its
+confidential code, documentation, data or credentials without permission.
+Third-party rights remain with their actual owners.
+
+## 8. Review, quality and rejection
+
+Every pull request is reviewed before merge. Review may cover correctness,
+maintainability, tests, CI, dependencies, security, privacy, platform terms,
+source provenance and intellectual-property rights.
+
+A passing CI run is not a security audit. The maintainer may request changes,
+ask for evidence, delay review or reject/close a proposal. A contribution
+will not be merged if its origin, rights, security or license compatibility
+cannot be established.
+
+## 9. Security, privacy and platform boundaries
+
+- Keep game discovery read-only unless a separately reviewed feature
   explicitly requires otherwise.
 - Never change, move, rename, repair, delete or overwrite a user's game files
   or launcher metadata as part of detection.
 - Do not bypass authentication, DRM, licensing, anti-cheat, access controls,
   rate limits or platform restrictions.
-- Use only public, documented and permitted interfaces, or interfaces for
-  which the project has explicit authorization.
-- Never commit credentials, tokens, private keys, private API responses,
-  partner material, personal data or confidential platform information.
-- Do not add telemetry or transmit user/platform data without explicit,
-  documented design approval.
+- Use only documented and permitted interfaces, or interfaces for which the
+  project has explicit authorization.
+- Never commit credentials, tokens, private keys, personal data, private
+  platform responses or confidential partner material.
+- Report vulnerabilities privately using [SECURITY.md](SECURITY.md).
 
-The maintainer may reject any contribution if its provenance, ownership,
-security, privacy, license compatibility, or legal status cannot be
-satisfactorily established.
+## 10. Future company ownership and project leadership
+
+Likounsee is the current owner and project lead. If a company later acquires
+or takes over Amethys Launcher, the transfer of software rights must be
+documented separately. Likounsee's intention is to lead the project or
+company after such a transition; any formal executive position will depend
+on the company's structure and the agreements made at that time.
+
+## 11. Questions
+
+If you need more information before contributing, open an Issue and describe
+the feature, problem or files involved. Do not include confidential platform
+information or security vulnerabilities in a public Issue.
