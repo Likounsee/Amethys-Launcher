@@ -315,6 +315,35 @@ mod tests {
     }
 
     #[test]
+    fn detected_game_command_round_trips_with_platform_identity() {
+        let command = super::IpcCommand::AddDetectedGame {
+            name: "Dota 2".to_owned(),
+            platform: "Steam".to_owned(),
+            platform_id: Some("570".to_owned()),
+            install_path: "/games/dota2".to_owned(),
+            executable: None,
+        };
+        let encoded = serde_json::to_vec(&command).expect("command serializes");
+        let decoded: super::IpcCommand =
+            serde_json::from_slice(&encoded).expect("command deserializes");
+        assert_eq!(decoded, command);
+    }
+
+    #[test]
+    fn game_entry_accepts_older_payloads_without_platform_id() {
+        let json = r#"{
+            "id":"legacy",
+            "name":"Legacy Game",
+            "platform":"Steam",
+            "install_path":"/games/legacy",
+            "executable":null
+        }"#;
+        let game: super::IpcGameEntry =
+            serde_json::from_str(json).expect("legacy game payload deserializes");
+        assert_eq!(game.platform_id, None);
+    }
+
+    #[test]
     fn dispatch_returns_the_current_core_status() {
         let request = IpcEnvelope::new(super::IpcRequest::new(super::IpcCommand::GetStatus));
         let response = super::dispatch_request(request, super::IpcCoreStatus::Stopping);
