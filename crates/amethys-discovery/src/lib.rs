@@ -890,7 +890,7 @@ pub fn scan_battlenet_product_db(database: &Path) -> Vec<DetectedGame> {
             continue;
         }
         seen_product_codes.insert(product_key);
-        let name = battlenet_product_name(product_code)
+        let name = battlenet_product_name(&product_key)
             .map(str::to_owned)
             .or_else(|| install_path.file_name().and_then(|name| name.to_str()).map(str::to_owned));
         let Some(name) = name.filter(|name| !name.trim().is_empty()) else {
@@ -1977,6 +1977,34 @@ mod tests {
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].platform_id.as_deref(), Some("wow"));
         assert_eq!(games[0].install_path, first_install);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn recognizes_battlenet_product_names_with_uppercase_codes() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-battlenet-uppercase-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let install = root.join("WoW");
+        std::fs::create_dir_all(&install).expect("create install");
+
+        let settings = encode_bytes_field(1, install.to_string_lossy().as_bytes());
+        let base_state = encode_varint(8).into_iter().chain(encode_varint(1)).collect::<Vec<_>>();
+        let cached_state = encode_bytes_field(1, &base_state);
+        let mut product = encode_bytes_field(2, b"WOW");
+        product.extend(encode_bytes_field(3, &settings));
+        product.extend(encode_bytes_field(4, &cached_state));
+        let database = root.join("product.db");
+        std::fs::write(&database, encode_bytes_field(1, &product))
+            .expect("write protobuf fixture");
+
+        let games = super::scan_battlenet_product_db(&database);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform_id.as_deref(), Some("WOW"));
+        assert_eq!(games[0].name, "World of Warcraft");
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
