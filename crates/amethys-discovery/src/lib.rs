@@ -1886,14 +1886,14 @@ mod tests {
         ));
         let ea_install = root.join("EA Game");
         let unrelated_install = root.join("Other Vendor Game");
-        for install in [&ea_install, &unrelated_install] {
-            std::fs::create_dir_all(install.join("__Installer"))
-                .expect("create installer metadata directory");
-            std::fs::write(
-                install.join("__Installer/installerdata.xml"),
-                "<gameTitle>Valid Game</gameTitle><contentID>EA-123</contentID>",
-            ).expect("write EA installer metadata");
-        }
+        std::fs::create_dir_all(ea_install.join("__Installer"))
+            .expect("create EA installer metadata directory");
+        std::fs::write(
+            ea_install.join("__Installer/installerdata.xml"),
+            "<gameTitle>Valid Game</gameTitle><contentID>EA-123</contentID>",
+        ).expect("write EA installer metadata");
+        std::fs::create_dir_all(&unrelated_install)
+            .expect("create unrelated install directory");
         let output = format!(
             "HKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\EA-123\n    Install Dir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\OtherVendor\\Installs\\99\n    Install Dir    REG_SZ    {}\n",
             ea_install.display(), unrelated_install.display()
