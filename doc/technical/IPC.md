@@ -18,6 +18,10 @@ client can verify that a response belongs to its request.
 - `ping`: checks whether the agent responds.
 - `get_status`: returns the core lifecycle state.
 - `games`: lists games saved in the local library.
+- `games search <term>`: searches saved game names, platforms, platform IDs,
+  installation paths and executable paths, case-insensitively. When several
+  words are supplied, every word must match somewhere in the combined metadata.
+  Search is local to the Amethys library and does not query online services.
 - `games add <name> <platform> <install-path> [executable]`: manually adds
   a game without a source-platform identifier.
 - `games remove <id>`: removes a game from the Amethys library only.
