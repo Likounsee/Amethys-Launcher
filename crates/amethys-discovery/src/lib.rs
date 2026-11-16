@@ -1463,32 +1463,22 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
         if let Some(root) = program_files.as_ref() {
             games.extend(scan_ea_games(&[root.join("EA Games")]));
         }
-        // EA app can be installed per-machine or under the 32-bit Program Files
-        // tree. Inspect both conventional game-library roots; each candidate
-        // still requires EA's installerdata.xml and a real directory.
+        // EA app may store games in either Program Files tree. Every candidate
+        // still needs EA's installerdata.xml and an existing absolute directory.
         if let Some(program_files_x86) = std::env::var_os("ProgramFiles(x86)") {
             games.extend(scan_ea_games(&[
                 PathBuf::from(program_files_x86).join("EA Games"),
             ]));
         }
-        #[cfg(windows)]
-        {
-            games.extend(discover_ea_games());
-        }
-        #[cfg(not(windows))]
-        {
-            // Registry discovery is Windows-only.
-        }
-        /* EA registry records are checked separately for custom install paths. */
-        if false {
-            games.extend(discover_ea_games());
-            // GOG is detected from Galaxy's installed-product database rather
-            // than guessed from folders that may contain unrelated files.
-            // Xbox is intentionally not inferred from `XboxGames` folders:
-            // that directory alone does not prove a package is installed.
-            // Add Xbox discovery only when package metadata can identify games
-            // reliably without bypassing Windows package permissions.
-        }
+        // Registry records also cover custom EA game-library locations.
+        games.extend(discover_ea_games());
+
+        // GOG is detected from Galaxy's installed-product database rather
+        // than guessed from folders that may contain unrelated files.
+        // Xbox is intentionally not inferred from XboxGames folders:
+        // that directory alone does not prove a package is installed.
+        // Add Xbox discovery only when package metadata can identify games
+        // reliably without bypassing Windows package permissions.
         // Ubisoft is detected from its registry install records. A generic
         // folder scan could report manually-created or leftover directories.
         games.extend(discover_ubisoft_games());
