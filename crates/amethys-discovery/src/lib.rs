@@ -1876,7 +1876,7 @@ mod tests {
         let install = root.join("Not Ubisoft");
         std::fs::create_dir_all(&install).expect("create unrelated install");
         let output = format!(
-            "HKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\44\\n    InstallDir    REG_SZ    {}\\nHKEY_LOCAL_MACHINE\\SOFTWARE\\OtherVendor\\Installs\\99\\n    InstallDir    REG_SZ    {}\\n",
+            "HKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\44\n    InstallDir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\OtherVendor\\Installs\\99\n    InstallDir    REG_SZ    {}\n",
             install.display(), install.display()
         );
         let games = super::parse_ubisoft_registry_output(&output);
