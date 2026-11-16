@@ -1,8 +1,20 @@
 use std::{
     collections::BTreeSet,
     fs,
+    io::Read,
     path::{Path, PathBuf},
 };
+
+/// Maximum size accepted for a single external launcher metadata file.
+const MAX_METADATA_FILE_SIZE: u64 = 4 * 1024 * 1024;
+
+/// Reads UTF-8 metadata with a strict allocation/read limit.
+fn read_bounded_text(path: &Path) -> Option<String> {
+    let mut contents = String::new();
+    fs::File::open(path).ok()?.take(MAX_METADATA_FILE_SIZE + 1)
+        .read_to_string(&mut contents).ok()?;
+    (contents.len() as u64 <= MAX_METADATA_FILE_SIZE).then_some(contents)
+}
 
 /// A game found in Steam's local installation metadata.
 /// Discovery is read-only: it never changes platform files or the game library.
@@ -143,7 +155,7 @@ pub fn scan_steam_libraries(libraries: &[PathBuf]) -> Vec<DetectedGame> {
                 continue;
             }
 
-            let Ok(contents) = fs::read_to_string(&path) else {
+            let Some(contents) = read_bounded_text(&path) else {
                 continue;
             };
             let Some((app_id, name, install_dir)) = parse_app_manifest(&contents) else {
@@ -259,7 +271,7 @@ pub fn discover_steam_libraries() -> Vec<PathBuf> {
     for root in steam_install_roots() {
         libraries.insert(root.clone());
         let metadata = root.join("steamapps/libraryfolders.vdf");
-        let Ok(contents) = fs::read_to_string(metadata) else {
+        let Some(contents) = read_bounded_text(&metadata) else {
             continue;
         };
         libraries.extend(parse_library_folders(&contents, &root));
@@ -305,7 +317,7 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
         {
             continue;
         }
-        let Ok(contents) = fs::read_to_string(&path) else {
+        let Some(contents) = read_bounded_text(&path) else {
             continue;
         };
         // Epic manifests may be written with a UTF-8 BOM.
@@ -371,7 +383,7 @@ pub fn epic_manifest_roots() -> Vec<PathBuf> {
 /// Only entries with a non-empty app name/title and an existing install directory
 /// are returned; malformed entries and stale paths are ignored.
 pub fn scan_heroic_legendary_installed(installed_json: &Path) -> Vec<DetectedGame> {
-    let Ok(contents) = fs::read_to_string(installed_json) else { return Vec::new(); };
+    let Some(contents) = read_bounded_text(installed_json) else { return Vec::new(); };
     // Some Windows tools export UTF-8 JSON with a BOM. Accept the same
     // harmless prefix already handled by the Epic manifest reader.
     let contents = contents.strip_prefix('\u{feff}').unwrap_or(&contents);
@@ -690,7 +702,7 @@ pub fn parse_ea_registry_output(contents: &str) -> Vec<DetectedGame> {
         if !install_path.is_dir() || !install_path.join("__Installer/installerdata.xml").is_file() {
             continue;
         }
-        let Ok(metadata) = fs::read_to_string(install_path.join("__Installer/installerdata.xml")) else {
+        let Some(metadata) = read_bounded_text(&install_path.join("__Installer/installerdata.xml")) else {
             continue;
         };
         let name = xml_element_text(&metadata, "gameTitle")
@@ -774,7 +786,7 @@ pub fn scan_ea_games(roots: &[PathBuf]) -> Vec<DetectedGame> {
                 continue;
             }
             let metadata = install_path.join("__Installer/installerdata.xml");
-            let Ok(contents) = fs::read_to_string(&metadata) else {
+            let Some(contents) = read_bounded_text(&metadata) else {
                 continue;
             };
             let name = xml_element_text(&contents, "gameTitle")
@@ -1488,6 +1500,25 @@ fn unescape_vdf(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn bounded_metadata_reader_accepts_small_files_and_rejects_oversized_files() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-metadata-limit-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create test directory");
+        let small = root.join("small.json");
+        let oversized = root.join("oversized.json");
+        std::fs::write(&small, br#"{"ok":true}"#).expect("write small metadata");
+        std::fs::write(&oversized, vec![b'x'; (super::MAX_METADATA_FILE_SIZE + 1) as usize])
+            .expect("write oversized metadata");
+        assert_eq!(super::read_bounded_text(&small).as_deref(), Some(r#"{"ok":true}"#));
+        assert!(super::read_bounded_text(&oversized).is_none());
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
     #[test]
     fn rejects_relative_install_paths_even_when_they_could_resolve_from_current_directory() {
         assert!(!super::is_existing_absolute_directory(Path::new("relative/game")));
