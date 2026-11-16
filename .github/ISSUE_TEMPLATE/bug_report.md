@@ -30,4 +30,4 @@ cookies, private platform responses and all confidential information.
 - [ ] I searched for an existing issue.
 - [ ] I removed secrets and personal information.
 - [ ] This report does not contain confidential or non-public platform data.
-- [ ] This is not a security vulnerability report (use the private process in SECURITY.md).
+- [ ] This is not a security vulnerability report (use the private process in ../SECURITY.md).
