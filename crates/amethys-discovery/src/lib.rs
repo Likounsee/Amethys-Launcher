@@ -1394,6 +1394,12 @@ fn find_vdf_value(contents: &str, wanted_key: &str) -> Option<String> {
 }
 
 fn quoted_pair(line: &str) -> Option<(String, String)> {
+    // Valve KeyValues uses // for line comments. Do not treat quoted examples
+    // inside comments as real metadata (for example, an old appid/path).
+    if line.trim_start().starts_with("//") {
+        return None;
+    }
+
     let mut quote_positions = Vec::with_capacity(4);
     let mut escaped = false;
     for (index, character) in line.char_indices() {
@@ -1445,6 +1451,42 @@ mod tests {
         let absolute = std::env::temp_dir();
         assert!(absolute.is_absolute());
         assert!(super::is_existing_absolute_directory(&absolute));
+    }
+
+    #[test]
+    fn ignores_quoted_pairs_inside_vdf_line_comments() {
+        assert_eq!(
+            super::parse_app_manifest(
+                r#"
+                // "appid" "999"
+                "AppState"
+                {
+                    // "name" "Commented Game"
+                    "appid" "123"
+                    "name" "Real Game"
+                    "installdir" "RealGame"
+                }
+                "AppState"
+                "appid" "456"
+                "name" "Another Game"
+                "installdir" "AnotherGame"
+                "#
+            ),
+            Some(("123".to_owned(), "Real Game".to_owned(), "RealGame".to_owned()))
+        );
+
+        let libraries = super::parse_library_folders(
+            r#"
+            "libraryfolders"
+            {
+                // "1" "/ignored/library"
+                "1" "/real/library"
+            }
+            "#,
+            Path::new("/steam"),
+        );
+        assert!(libraries.contains(&PathBuf::from("/real/library")));
+        assert!(!libraries.contains(&PathBuf::from("/ignored/library")));
     }
 
     #[test]
