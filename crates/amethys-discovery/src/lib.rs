@@ -25,7 +25,10 @@ pub fn parse_library_folders(contents: &str, steam_root: &Path) -> Vec<PathBuf> 
     // Only interpret numeric/path entries inside the actual
     // libraryfolders object; unrelated VDF sections can contain numeric keys.
     let has_library_folders = contents.lines().any(|line| {
-        quoted_pair(line).is_some_and(|(key, _)| key.eq_ignore_ascii_case("libraryfolders"))
+        let line = line.trim_start();
+        !line.starts_with("//")
+            && line.split('"').nth(1)
+                .is_some_and(|key| key.eq_ignore_ascii_case("libraryfolders"))
     });
     if !has_library_folders {
         return paths.into_iter().collect();
