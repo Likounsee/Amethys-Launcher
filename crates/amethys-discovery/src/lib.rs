@@ -459,6 +459,80 @@ pub fn scan_amazon_games(database: &Path) -> Vec<DetectedGame> {
     games
 }
 
+/// Parses EA app registry installation records and validates each game's installer metadata.
+///
+/// EA app stores per-game install locations under HKLM\\SOFTWARE\\EA Games.
+/// A registry path alone is not enough: the install directory must exist and
+/// contain EA's installerdata.xml before it is reported.
+pub fn parse_ea_registry_output(contents: &str) -> Vec<DetectedGame> {
+    let mut games = Vec::new();
+    let mut current_id: Option<String> = None;
+    let prefixes = [
+        r"HKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\",
+        r"HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\EA Games\\",
+    ];
+
+    for line in contents.lines() {
+        let trimmed = line.trim();
+        if let Some(id) = prefixes.iter().find_map(|prefix| trimmed.strip_prefix(prefix)) {
+            current_id = Some(id.trim().to_owned());
+            continue;
+        }
+        let Some((name, value)) = trimmed.split_once("REG_SZ")
+            .or_else(|| trimmed.split_once("REG_EXPAND_SZ")) else { continue; };
+        if !matches!(name.trim(), "Install Dir" | "InstallDir") { continue; }
+        let install_path = PathBuf::from(value.trim());
+        if !install_path.is_dir() || !install_path.join("__Installer/installerdata.xml").is_file() {
+            continue;
+        }
+        let Ok(metadata) = fs::read_to_string(install_path.join("__Installer/installerdata.xml")) else {
+            continue;
+        };
+        let name = xml_element_text(&metadata, "gameTitle")
+            .filter(|value| !value.trim().is_empty())
+            .or_else(|| install_path.file_name().and_then(|value| value.to_str()).map(str::to_owned));
+        let Some(name) = name.filter(|value| !value.trim().is_empty()) else { continue; };
+        let platform_id = xml_element_text(&metadata, "contentID")
+            .filter(|value| !value.trim().is_empty())
+            .or_else(|| current_id.clone().filter(|value| !value.is_empty()));
+        games.push(DetectedGame {
+            platform_id,
+            name,
+            install_path,
+            platform: "EA app",
+        });
+    }
+
+    let mut seen_paths = BTreeSet::new();
+    games.retain(|game| insert_unique_install_path(&mut seen_paths, &game.install_path));
+    games.sort_by_key(|game| game.name.to_lowercase());
+    games
+}
+
+/// Reads EA app's machine-wide registry records, including custom game locations.
+#[cfg(windows)]
+pub fn discover_ea_games() -> Vec<DetectedGame> {
+    const INSTALL_KEYS: [&str; 2] = [
+        r"HKLM\\SOFTWARE\\EA Games",
+        r"HKLM\\SOFTWARE\\WOW6432Node\\EA Games",
+    ];
+    let mut games = Vec::new();
+    for key in INSTALL_KEYS {
+        let output = match std::process::Command::new("reg")
+            .args(["query", key, "/s"])
+            .output()
+        {
+            Ok(output) if output.status.success() => output,
+            _ => continue,
+        };
+        games.extend(parse_ea_registry_output(&String::from_utf8_lossy(&output.stdout)));
+    }
+    let mut seen_paths = BTreeSet::new();
+    games.retain(|game| insert_unique_install_path(&mut seen_paths, &game.install_path));
+    games.sort_by_key(|game| game.name.to_lowercase());
+    games
+}
+
 /// Reads EA app installations using the installer metadata shipped with each game.
 pub fn scan_ea_games(roots: &[PathBuf]) -> Vec<DetectedGame> {
     let mut games = Vec::new();
@@ -876,6 +950,7 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
         let program_files = std::env::var_os("ProgramFiles").map(PathBuf::from);
         if let Some(root) = program_files.as_ref() {
             games.extend(scan_ea_games(&[root.join("EA Games")]));
+            games.extend(discover_ea_games());
             // GOG is detected from Galaxy's installed-product database rather
             // than guessed from folders that may contain unrelated files.
             // Xbox is intentionally not inferred from `XboxGames` folders:
@@ -1323,6 +1398,51 @@ mod tests {
         assert_eq!(games[0].platform_id.as_deref(), Some("DR:12345"));
         assert_eq!(games[0].name, "Dead Space");
         assert_eq!(games[0].install_path, install);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn detects_ea_games_from_registry_install_paths_outside_program_files() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-ea-registry-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let install = root.join("Games").join("Custom EA Game");
+        std::fs::create_dir_all(install.join("__Installer")).expect("create EA install metadata");
+        std::fs::write(
+            install.join("__Installer/installerdata.xml"),
+            r#"<DiPManifest><gameTitle>Custom EA Game</gameTitle><contentID>EA:custom-123</contentID></DiPManifest>"#,
+        ).expect("write EA metadata");
+        let output = format!(
+            "HKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\CustomGame\\n    Install Dir    REG_SZ    {}\\n",
+            install.display()
+        );
+
+        let games = super::parse_ea_registry_output(&output);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform, "EA app");
+        assert_eq!(games[0].platform_id.as_deref(), Some("EA:custom-123"));
+        assert_eq!(games[0].name, "Custom EA Game");
+        assert_eq!(games[0].install_path, install);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn ignores_ea_registry_paths_without_valid_game_metadata() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-ea-registry-invalid-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create unrelated directory");
+        let output = format!(
+            "HKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\Fake\\n    Install Dir    REG_SZ    {}\\n",
+            root.display()
+        );
+        assert!(super::parse_ea_registry_output(&output).is_empty());
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
