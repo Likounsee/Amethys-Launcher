@@ -710,6 +710,8 @@ pub fn amazon_games_database() -> Option<PathBuf> {
 pub fn parse_ubisoft_registry_output(contents: &str) -> Vec<DetectedGame> {
     let mut games = Vec::new();
     let mut current_id: Option<String> = None;
+    let mut seen_ids = BTreeSet::new();
+    let mut seen_paths = BTreeSet::new();
     for line in contents.lines() {
         let trimmed = line.trim();
         let install_key_prefixes = [
@@ -739,12 +741,16 @@ pub fn parse_ubisoft_registry_output(contents: &str) -> Vec<DetectedGame> {
                 continue;
             };
             if let Some(platform_id) = current_id.as_ref().filter(|id| !id.is_empty()) {
-                games.push(DetectedGame {
-                    platform_id: Some(platform_id.clone()),
-                    name: name.to_owned(),
-                    install_path,
-                    platform: "Ubisoft Connect",
-                });
+                if seen_ids.insert(platform_id.clone())
+                    && insert_unique_install_path(&mut seen_paths, &install_path)
+                {
+                    games.push(DetectedGame {
+                        platform_id: Some(platform_id.clone()),
+                        name: name.to_owned(),
+                        install_path,
+                        platform: "Ubisoft Connect",
+                    });
+                }
             }
         }
     }
@@ -1882,6 +1888,29 @@ mod tests {
         let games = super::parse_ubisoft_registry_output(&output);
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].platform_id.as_deref(), Some("44"));
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn deduplicates_ubisoft_registry_records_by_game_id_and_install_path() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-ubisoft-duplicates-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let first_install = root.join("Game");
+        let duplicate_install = root.join("Game-copy");
+        std::fs::create_dir_all(&first_install).expect("create first install");
+        std::fs::create_dir_all(&duplicate_install).expect("create duplicate install");
+        let output = format!(
+            "HKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\44\\n    InstallDir    REG_SZ    {}\\nHKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Ubisoft\\Launcher\\Installs\\44\\n    InstallDir    REG_SZ    {}\\n",
+            first_install.display(), duplicate_install.display()
+        );
+        let games = super::parse_ubisoft_registry_output(&output);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform_id.as_deref(), Some("44"));
+        assert_eq!(games[0].install_path, first_install);
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
