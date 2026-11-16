@@ -235,6 +235,28 @@ mod tests {
         assert_eq!(path, Path::new(r"C:\Users\tester\AppData\Roaming\Amethys"));
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn data_directory_falls_back_to_local_app_data() {
+        let path = resolve_data_directory(
+            None,
+            None,
+            Some(OsString::from(r"C:\Users\tester\AppData\Local")),
+            None,
+            None,
+        )
+        .expect("LOCALAPPDATA fallback resolves");
+        assert_eq!(path, Path::new(r"C:\Users\tester\AppData\Local\Amethys"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn data_directory_requires_an_app_data_root() {
+        let error = resolve_data_directory(None, None, None, None, None)
+            .expect_err("missing app data variables must fail");
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+    }
+
     #[cfg(target_os = "macos")]
     #[test]
     fn data_directory_uses_application_support() {
