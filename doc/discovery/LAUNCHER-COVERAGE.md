@@ -11,7 +11,7 @@ Amethys performs read-only discovery from local launcher metadata. A launcher be
 | Heroic / Legendary | installed.json | Implemented |
 | GOG Galaxy | Local installed-product database, opened read-only | Implemented |
 | Amazon Games | Local launcher database, opened read-only | Implemented |
-| EA app | Installer metadata in both Program Files game-library roots, plus Windows registry install records for custom paths | Implemented |
+| EA app | Installer metadata in both Program Files game-library roots, optional custom roots via `AMETHYS_EA_LIBRARY_ROOTS`, plus Windows registry install records | Implemented |
 | Ubisoft Connect | Windows registry install records | Implemented |
 | Battle.net | Local Agent product metadata | Implemented |
 | Riot Games | Riot Client JSON and per-product product_settings.yaml metadata (VALORANT, League of Legends, LoR, 2XKO) | Initial adapter; validate against real installations |
