@@ -66,6 +66,7 @@ where
                         id: game.id,
                         name: game.name,
                         platform: game.platform,
+                        platform_id: game.platform_id,
                         install_path: game.install_path,
                         executable: game.executable,
                     },
