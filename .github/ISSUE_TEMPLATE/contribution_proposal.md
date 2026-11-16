@@ -1,42 +1,40 @@
 ---
-name: Contribution proposal
-about: Propose work or ask for details before coding
-title: "[Contribution] "
+name: Feature or technical proposal
+about: Suggest an improvement, feature or possible technical resolution
+title: "[Proposal] "
 labels: enhancement
 assignees: ""
 ---
 
-## What would you like to improve?
+## Problem or need
 
-Describe the bug, feature or task you would like to help with.
+What should be improved? Why is it useful?
 
-## Files concerned
+## Desired result
 
-List the exact files you expect to create or modify, if known.
+Describe the behaviour or outcome you would like to see.
 
-If you do not know which files are involved, explain what you want to achieve
-and ask for the technical information you need before starting.
+## Suggested means of resolution
 
-## Questions / information needed
+If you have an idea, describe a possible approach, relevant subsystem,
+algorithm, workflow, investigation steps or alternatives. Explain trade-offs
+or risks if known. A suggestion is welcome but not required.
 
-List any missing specifications, architecture details, examples or guidance
-you need from the maintainer.
+**Do not submit code, patches, commits or Pull Requests.** The maintainer
+will handle implementation in the repository.
 
-## Proposed approach
+## Context and references
 
-Briefly describe how you intend to work on this.
+Add examples, screenshots, public documentation or other non-confidential
+references that help explain the proposal.
+
+## Questions / missing information
+
+What would you like the maintainer to clarify?
 
 ## Acknowledgement
 
-- [ ] I have read README.md, LICENSE, CONTRIBUTING.md and CLA.md.
-- [ ] I understand that Amethys Launcher is currently owned by Likounsee.
-- [ ] I understand that code contributions require source/rights review and a
-      contribution-specific written assignment signed before integration.
-- [ ] I understand that accepted contributors are credited, and that the
-      project intends to establish gift-card rewards after completion of the
-      Store and integrated wallets, under separately published terms.
-- [ ] I have not included credentials, personal data, confidential platform
-      information or security vulnerability details.
-
-> Opening this Issue does not transfer copyright or authorise use of code.
-> Do not post private legal documents or confidential information here.
+- [ ] I have searched for an existing Issue.
+- [ ] I understand that community participation is through Issues only.
+- [ ] I understand that the maintainer decides whether and how to implement a proposal.
+- [ ] I have not included code, credentials, personal data or confidential information.
