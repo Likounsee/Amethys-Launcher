@@ -18,6 +18,8 @@ pub enum IpcCommand {
     ListGames,
     /// Adds a game to the local library.
     AddGame { name: String, platform: String, install_path: String, executable: Option<String> },
+    /// Adds a detected game while retaining its source-platform identifier.
+    AddDetectedGame { name: String, platform: String, platform_id: Option<String>, install_path: String, executable: Option<String> },
     /// Removes a game by its identifier.
     RemoveGame { id: String },
 }
@@ -62,6 +64,8 @@ pub struct IpcGameEntry {
     pub id: String,
     pub name: String,
     pub platform: String,
+    #[serde(default)]
+    pub platform_id: Option<String>,
     pub install_path: String,
     pub executable: Option<String>,
 }
@@ -155,7 +159,7 @@ pub fn dispatch_request_with_games(
         IpcCommand::Ping => IpcResponsePayload::Pong,
         IpcCommand::GetStatus => IpcResponsePayload::CoreStatus { state },
         IpcCommand::ListGames => IpcResponsePayload::Games { games: games.to_vec() },
-        IpcCommand::AddGame { .. } | IpcCommand::RemoveGame { .. } => {
+        IpcCommand::AddGame { .. } | IpcCommand::AddDetectedGame { .. } | IpcCommand::RemoveGame { .. } => {
             return IpcResponse::failure(
                 request.request_id,
                 IpcRemoteError::new(
@@ -295,6 +299,7 @@ mod tests {
             id: "game-1".to_owned(),
             name: "Example Game".to_owned(),
             platform: "Steam".to_owned(),
+            platform_id: Some("570".to_owned()),
             install_path: "/games/example".to_owned(),
             executable: Some("game.exe".to_owned()),
         }];
