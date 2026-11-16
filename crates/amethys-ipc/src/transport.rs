@@ -224,6 +224,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn dropping_listener_does_not_remove_a_replacement_path() {
+        let path = std::env::temp_dir().join(format!(
+            "amethys-ipc-replaced-{}.sock",
+            uuid::Uuid::new_v4()
+        ));
+        let moved_path = path.with_extension("original.sock");
+        let listener = IpcListener::bind(&path).await.expect("listener binds");
+
+        std::fs::rename(&path, &moved_path).expect("move original socket path");
+        std::fs::write(&path, b"replacement sentinel").expect("create replacement file");
+        drop(listener);
+
+        assert_eq!(
+            std::fs::read(&path).expect("replacement file remains"),
+            b"replacement sentinel"
+        );
+        std::fs::remove_file(path).expect("remove replacement file");
+        std::fs::remove_file(moved_path).expect("remove moved socket");
+    }
+
+    #[tokio::test]
     async fn listener_refuses_to_replace_a_regular_file() {
         let path = std::env::temp_dir().join(format!(
             "amethys-ipc-file-{}.sock",
