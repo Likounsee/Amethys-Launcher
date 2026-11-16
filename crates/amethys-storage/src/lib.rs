@@ -296,7 +296,7 @@ mod tests {
             Ok(_) => panic!("newer schema must be rejected"),
         };
         assert_eq!(error.code(), amethys_errors::ErrorCode::StorageMigration);
-        assert!(error.message().contains("newer than the supported version 2"));
+        assert!(error.message().contains("newer than the supported version 3"));
 
         let connection = rusqlite::Connection::open(&path).expect("fixture database reopens");
         let games_exists: i64 = connection.query_row(
