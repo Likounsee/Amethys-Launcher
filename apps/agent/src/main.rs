@@ -53,6 +53,7 @@ where
                     id: game.id,
                     name: game.name,
                     platform: game.platform,
+                    platform_id: game.platform_id,
                     install_path: game.install_path,
                     executable: game.executable,
                 }).collect(),
@@ -65,6 +66,26 @@ where
                         id: game.id,
                         name: game.name,
                         platform: game.platform,
+                        install_path: game.install_path,
+                        executable: game.executable,
+                    },
+                }
+            })
+        },
+        IpcCommand::AddDetectedGame { name, platform, platform_id, install_path, executable } => {
+            database.add_game_with_platform_id(
+                &name,
+                &platform,
+                platform_id.as_deref(),
+                &install_path,
+                executable.as_deref(),
+            ).map(|game| {
+                IpcResponsePayload::GameAdded {
+                    game: IpcGameEntry {
+                        id: game.id,
+                        name: game.name,
+                        platform: game.platform,
+                        platform_id: game.platform_id,
                         install_path: game.install_path,
                         executable: game.executable,
                     },
