@@ -1882,6 +1882,40 @@ mod tests {
     }
 
     #[test]
+    fn skips_malformed_amazon_rows_without_losing_valid_games() {
+        use rusqlite::{params, Connection};
+
+        let root = std::env::temp_dir().join(format!(
+            "amethys-amazon-malformed-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let installed = root.join("Valid Game");
+        std::fs::create_dir_all(&installed).expect("create install");
+        let database = root.join("GameInstallInfo.sqlite");
+        let connection = Connection::open(&database).expect("create database");
+        connection.execute_batch(
+            "CREATE TABLE DbSet (Id, InstallDirectory, ProductTitle);"
+        ).expect("create metadata table");
+        connection.execute(
+            "INSERT INTO DbSet VALUES (?1, ?2, ?3)",
+            params![42_i64, installed.to_string_lossy(), "Malformed ID"],
+        ).expect("insert malformed ID row");
+        connection.execute(
+            "INSERT INTO DbSet VALUES (?1, ?2, ?3)",
+            params!["amzn.valid", installed.to_string_lossy(), "Valid Game"],
+        ).expect("insert valid row");
+        drop(connection);
+
+        let games = super::scan_amazon_games(&database);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform_id.as_deref(), Some("amzn.valid"));
+        assert_eq!(games[0].name, "Valid Game");
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
     fn keeps_amazon_product_id_available_after_rejecting_duplicate_path() {
         use rusqlite::{params, Connection};
 
