@@ -253,6 +253,13 @@ pub fn discover_steam_games() -> Vec<DetectedGame> {
 }
 
 
+/// Returns true only for an existing absolute directory reported by launcher metadata.
+/// Relative paths are rejected rather than being resolved against the launcher's
+/// current working directory, which could otherwise create false detections.
+fn is_existing_absolute_directory(path: &Path) -> bool {
+    path.is_absolute() && path.is_dir()
+}
+
 /// Reads Epic Games Launcher manifests. Invalid or incomplete manifests are ignored.
 pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
     let entries = match fs::read_dir(manifests_dir) {
@@ -290,7 +297,7 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
             continue;
         };
         let install_path = PathBuf::from(install_location);
-        if !install_path.is_dir() {
+        if !is_existing_absolute_directory(&install_path) {
             continue;
         }
         let Some(name) = manifest.get("DisplayName").and_then(|v| v.as_str())
@@ -369,7 +376,7 @@ pub fn scan_heroic_legendary_installed(installed_json: &Path) -> Vec<DetectedGam
         let Some(install_location) = record.get("install_path").and_then(|value| value.as_str())
             .map(str::trim).filter(|value| !value.is_empty()) else { continue; };
         let install_path = PathBuf::from(install_location);
-        if !install_path.is_dir() { continue; }
+        if !is_existing_absolute_directory(&install_path) { continue; }
         if !insert_unique_install_path(&mut seen_paths, &install_path) { continue; }
         seen_app_ids.insert(app_name.to_owned());
         games.push(DetectedGame {
@@ -477,6 +484,7 @@ pub fn scan_gog_galaxy(database: &Path) -> Vec<DetectedGame> {
             continue;
         };
         let install_path = PathBuf::from(install_location);
+        if !install_path.is_absolute() { continue; }
         let Ok(path_key) = fs::canonicalize(&install_path) else {
             continue;
         };
@@ -560,7 +568,7 @@ pub fn scan_amazon_games(database: &Path) -> Vec<DetectedGame> {
         let install_path = PathBuf::from(install_location);
         let product_key = platform_id.to_owned();
         let path_key = install_path_key(&install_path);
-        if install_path.is_dir()
+        if is_existing_absolute_directory(&install_path)
             && !seen_products.contains(&product_key)
             && !seen_paths.contains(&path_key)
         {
@@ -1111,7 +1119,7 @@ pub fn scan_battlenet_product_db(database: &Path) -> Vec<DetectedGame> {
             continue;
         }
         let install_path = PathBuf::from(path_text);
-        if !install_path.is_dir() {
+        if !is_existing_absolute_directory(&install_path) {
             continue;
         }
         if !insert_unique_install_path(&mut seen_paths, &install_path) {
@@ -1419,6 +1427,14 @@ fn unescape_vdf(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn rejects_relative_install_paths_even_when_they_could_resolve_from_current_directory() {
+        assert!(!super::is_existing_absolute_directory(Path::new("relative/game")));
+        let absolute = std::env::temp_dir();
+        assert!(absolute.is_absolute());
+        assert!(super::is_existing_absolute_directory(&absolute));
+    }
+
     #[test]
     fn unescapes_vdf_sequences_without_consuming_adjacent_backslashes() {
         assert_eq!(super::unescape_vdf(r#"C:\\Games\\Example"#), r#"C:\Games\Example"#);
