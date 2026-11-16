@@ -22,7 +22,7 @@ A clear description of the problem.
 
 ## Actual behavior
 
-## Logs and evidence
+## Suggested means of resolution (optional)\n\nIf you have an idea, describe possible causes, areas to investigate, diagnostic steps or a potential fix. Do not submit code or patches; the maintainer handles implementation.\n\n## Logs and evidence
 Paste only sanitized logs. Remove usernames, personal data, tokens, keys,
 cookies, private platform responses and all confidential information.
 
