@@ -1577,7 +1577,7 @@ mod tests {
         let install = root.join("The Crew");
         std::fs::create_dir_all(&install).expect("create game install");
         let output = format!(
-            "HKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\55\n    InstallDir    REG_SZ    {}\n",
+            "HKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\55\n    installdir    REG_SZ    \"{}\"\n",
             install.display()
         );
         let games = super::parse_ubisoft_registry_output(&output);
