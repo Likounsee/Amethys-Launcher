@@ -1028,12 +1028,23 @@ fn find_vdf_value(contents: &str, wanted_key: &str) -> Option<String> {
 }
 
 fn quoted_pair(line: &str) -> Option<(String, String)> {
-    let mut quoted = line.match_indices('"');
-    let (key_start, _) = quoted.next()?;
-    let (key_end, _) = quoted.next()?;
-    let (value_start, _) = quoted.next()?;
-    let (value_end, _) = quoted.next()?;
+    let mut quote_positions = Vec::with_capacity(4);
+    let mut escaped = false;
+    for (index, character) in line.char_indices() {
+        if character == '"' && !escaped {
+            quote_positions.push(index);
+        }
+        if character == '\\' {
+            escaped = !escaped;
+        } else {
+            escaped = false;
+        }
+    }
 
+    let key_start = *quote_positions.first()?;
+    let key_end = *quote_positions.get(1)?;
+    let value_start = *quote_positions.get(2)?;
+    let value_end = *quote_positions.get(3)?;
     let key = line.get(key_start + 1..key_end)?;
     let value = line.get(value_start + 1..value_end)?;
     Some((key.to_owned(), value.to_owned()))
@@ -1089,6 +1100,14 @@ mod tests {
             &mut seen, "Epic Games", Path::new("/games/shared")
         ));
         assert_eq!(seen.len(), 3);
+    }
+
+    #[test]
+    fn quoted_vdf_pairs_ignore_escaped_quotes_inside_values() {
+        assert_eq!(
+            super::quoted_pair(r#""path" "C:\\Games\\A \\"Quoted\\" Game""#),
+            Some(("path".to_owned(), r#"C:\\Games\\A \\"Quoted\\" Game"#.to_owned())),
+        );
     }
 
     #[test]
