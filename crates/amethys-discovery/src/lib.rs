@@ -1269,7 +1269,7 @@ fn same_install_path(left: &Path, right: &Path) -> bool {
 fn find_vdf_value(contents: &str, wanted_key: &str) -> Option<String> {
     contents.lines().find_map(|line| {
         let (key, value) = quoted_pair(line)?;
-        (key == wanted_key).then(|| unescape_vdf(&value))
+        key.eq_ignore_ascii_case(wanted_key).then(|| unescape_vdf(&value))
     })
 }
 
@@ -1420,6 +1420,19 @@ mod tests {
         assert_eq!(seen.len(), 1);
 
         std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn parses_steam_manifest_keys_case_insensitively() {
+        let manifest = r#"
+            "AppID" "570"
+            "Name" "Dota 2"
+            "InstallDir" "dota 2"
+        "#;
+        assert_eq!(
+            super::parse_app_manifest(manifest),
+            Some(("570".to_owned(), "Dota 2".to_owned(), "dota 2".to_owned())),
+        );
     }
 
     #[test]
