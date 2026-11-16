@@ -4,7 +4,7 @@ use std::{
     io,
     path::{Path, PathBuf},
 };
-use tokio::fs;
+use tokio::{fs, io::AsyncWriteExt};
 
 /// Resolves the shared per-user data directory used by both the agent and CLI.
 ///
@@ -181,19 +181,56 @@ impl AppConfig {
         // A unique sibling avoids collisions between concurrent saves and keeps the
         // final rename on the same filesystem.
         let temporary = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
-        if let Err(error) = fs::write(&temporary, bytes).await {
+        let mut file = match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+            .await
+        {
+            Ok(file) => file,
+            Err(error) => {
+                return Err(AmethysError::new(
+                    ErrorCode::ConfigurationWrite,
+                    format!("Could not create {}: {error}", temporary.display()),
+                ));
+            }
+        };
+        if let Err(error) = file.write_all(&bytes).await {
+            drop(file);
             let _cleanup_result = fs::remove_file(&temporary).await;
             return Err(AmethysError::new(
                 ErrorCode::ConfigurationWrite,
                 format!("Could not write {}: {error}", temporary.display()),
             ));
         }
+        if let Err(error) = file.sync_all().await {
+            drop(file);
+            let _cleanup_result = fs::remove_file(&temporary).await;
+            return Err(AmethysError::new(
+                ErrorCode::ConfigurationWrite,
+                format!("Could not sync {}: {error}", temporary.display()),
+            ));
+        }
+        drop(file);
+
         if let Err(error) = fs::rename(&temporary, path).await {
             let _cleanup_result = fs::remove_file(&temporary).await;
             return Err(AmethysError::new(
                 ErrorCode::ConfigurationWrite,
                 format!("Could not replace {}: {error}", path.display()),
             ));
+        }
+
+        // Persist the directory entry update on Unix as well as the file
+        // contents. Without this, a power loss can lose the rename itself.
+        #[cfg(unix)]
+        if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+            std::fs::File::open(parent)
+                .and_then(|directory| directory.sync_all())
+                .map_err(|error| AmethysError::new(
+                    ErrorCode::ConfigurationWrite,
+                    format!("Could not sync configuration directory {}: {error}", parent.display()),
+                ))?;
         }
         Ok(())
     }
