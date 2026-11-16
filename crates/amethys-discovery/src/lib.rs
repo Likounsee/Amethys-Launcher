@@ -1034,13 +1034,19 @@ fn insert_unique_install_path(seen: &mut BTreeSet<PathBuf>, candidate: &Path) ->
 
 /// Builds an ordered key using the host filesystem's case rules.
 fn install_path_key(path: &Path) -> PathBuf {
+    // Existing installations can be referenced through junctions/symlinks or
+    // through different relative path spellings. Canonicalize when possible so
+    // those aliases do not appear as separate installs. Keep the original path
+    // as a fallback: callers may also use this helper with synthetic paths.
+    let normalized = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+
     #[cfg(windows)]
     {
-        PathBuf::from(path.to_string_lossy().to_lowercase())
+        PathBuf::from(normalized.to_string_lossy().to_lowercase())
     }
     #[cfg(not(windows))]
     {
-        path.to_path_buf()
+        normalized
     }
 }
 
@@ -1137,6 +1143,34 @@ mod tests {
             &mut seen, "Epic Games", Path::new("/games/shared")
         ));
         assert_eq!(seen.len(), 3);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn global_deduplication_collapses_symlink_aliases_to_same_install() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-discovery-symlink-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let actual = root.join("actual");
+        let alias = root.join("alias");
+        std::fs::create_dir_all(&actual).expect("create install directory");
+        std::os::unix::fs::symlink(&actual, &alias).expect("create install alias");
+
+        let mut seen = BTreeSet::new();
+        assert!(super::insert_unique_platform_install_path(
+            &mut seen, "Steam", &actual
+        ));
+        assert!(!super::insert_unique_platform_install_path(
+            &mut seen, "Steam", &alias
+        ));
+        assert_eq!(seen.len(), 1);
+
+        std::fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]
