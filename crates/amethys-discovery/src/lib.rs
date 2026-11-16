@@ -296,7 +296,7 @@ pub fn scan_heroic_legendary_installed(installed_json: &Path) -> Vec<DetectedGam
     // serde_json map ordering depends on enabled features; sort explicitly so
     // duplicate app IDs always resolve to the same record on every build.
     let mut entries: Vec<_> = entries.iter().collect();
-    entries.sort_by(|(left, _), (right, _)| left.cmp(right));
+    entries.sort_by_key(|(key, _)| *key);
     for (key, value) in entries {
         let Some(record) = value.as_object() else { continue; };
         let app_name = record.get("app_name").and_then(|value| value.as_str())
