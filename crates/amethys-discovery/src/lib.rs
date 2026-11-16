@@ -1,3 +1,6 @@
+mod xbox;
+pub use xbox::{discover_xbox_games, scan_xbox_game_roots};
+
 use std::{
     collections::BTreeSet,
     fs,
@@ -1516,6 +1519,7 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
         if let Some(database) = battlenet_product_database() {
             games.extend(scan_battlenet_product_db(&database));
         }
+        games.extend(discover_xbox_games());
     }
 
     // Do not infer installed games from generic `GOG Games` directories.
