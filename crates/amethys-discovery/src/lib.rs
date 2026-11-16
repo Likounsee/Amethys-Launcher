@@ -1274,15 +1274,15 @@ fn unescape_vdf(value: &str) -> String {
     let mut decoded = String::with_capacity(value.len());
     let mut characters = value.chars();
     while let Some(character) = characters.next() {
-        if character == '\\\\' {
+        if character == '\\' {
             match characters.next() {
-                Some('\\\\') => decoded.push('\\\\'),
+                Some('\\') => decoded.push('\\'),
                 Some('"') => decoded.push('"'),
                 Some(next) => {
-                    decoded.push('\\\\');
+                    decoded.push('\\');
                     decoded.push(next);
                 }
-                None => decoded.push('\\\\'),
+                None => decoded.push('\\'),
             }
         } else {
             decoded.push(character);
