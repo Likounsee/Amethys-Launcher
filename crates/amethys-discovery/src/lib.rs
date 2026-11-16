@@ -31,47 +31,68 @@ pub fn parse_library_folders(contents: &str, steam_root: &Path) -> Vec<PathBuf> 
     let mut paths = BTreeSet::new();
     // VDF metadata is external input. Never let a relative library entry (or
     // relative root supplied by a caller) resolve against the launcher's CWD.
-    if steam_root.is_absolute() {
+    if is_absolute_metadata_path(steam_root) {
         paths.insert(steam_root.to_path_buf());
-    }
-    // Only interpret numeric/path entries inside the actual
-    // libraryfolders object; unrelated VDF sections can contain numeric keys.
-    let has_library_folders = contents.lines().any(|line| {
-        let line = line.trim_start();
-        !line.starts_with("//")
-            && line.split('"').nth(1)
-                .is_some_and(|key| key.eq_ignore_ascii_case("libraryfolders"))
-    });
-    if !has_library_folders {
-        return paths.into_iter().collect();
     }
 
     let mut depth = 0usize;
+    let mut awaiting_library_open = false;
+    let mut library_folders_depth = None;
 
     for line in contents.lines() {
-        if let Some((key, value)) = quoted_pair(line) {
-            // Legacy entries are numeric key/value pairs directly inside the
-            // libraryfolders object. Modern entries store their path one level
-            // deeper; numeric keys inside their nested "apps" map are app IDs,
-            // not library paths.
-            let is_legacy_library = depth == 1 && key.parse::<u32>().is_ok();
-            let is_modern_library_path = depth == 2 && key.eq_ignore_ascii_case("path");
-            if is_legacy_library || is_modern_library_path {
-                let path = unescape_vdf(&value);
-                let path = path.trim();
-                if !path.is_empty() {
-                    let path = PathBuf::from(path);
-                    if path.is_absolute() {
-                        paths.insert(path);
+        let trimmed = line.trim_start();
+        if !trimmed.starts_with("//") {
+            if trimmed.split('"').nth(1)
+                .is_some_and(|key| key.eq_ignore_ascii_case("libraryfolders"))
+            {
+                awaiting_library_open = true;
+            }
+        }
+
+        // Process entries only after entering the actual libraryfolders block.
+        if let Some(root_depth) = library_folders_depth {
+            if depth < root_depth {
+                library_folders_depth = None;
+            } else if let Some((key, value)) = quoted_pair(line) {
+                let is_legacy_library = depth == root_depth && key.parse::<u32>().is_ok();
+                let is_modern_library_path = depth == root_depth + 1
+                    && key.eq_ignore_ascii_case("path");
+                if is_legacy_library || is_modern_library_path {
+                    let value = unescape_vdf(&value);
+                    let value = value.trim();
+                    if !value.is_empty() {
+                        let path = PathBuf::from(value);
+                        if is_absolute_metadata_path(&path) {
+                            paths.insert(path);
+                        }
                     }
                 }
             }
         }
 
-        depth = vdf_update_depth(depth, line);
+        let next_depth = vdf_update_depth(depth, line);
+        if awaiting_library_open && next_depth > depth {
+            library_folders_depth = Some(next_depth);
+            awaiting_library_open = false;
+        }
+        depth = next_depth;
     }
 
     paths.into_iter().collect()
+}
+
+/// Recognizes absolute paths from Windows and Unix launcher metadata even when
+/// fixtures are parsed on a host with a different path syntax.
+fn is_absolute_metadata_path(path: &Path) -> bool {
+    let value = path.to_string_lossy();
+    let bytes = value.as_bytes();
+    path.is_absolute()
+        || value.starts_with('/')
+        || value.starts_with(r"\\\\")
+        || (bytes.len() >= 3
+            && bytes[0].is_ascii_alphabetic()
+            && bytes[1] == b':'
+            && matches!(bytes[2], b'/' | b'\\\\'))
 }
 
 /// Counts VDF braces outside quoted strings so braces in paths do not affect nesting.
@@ -432,9 +453,9 @@ pub fn scan_heroic_legendary_installed(installed_json: &Path) -> Vec<DetectedGam
 #[cfg(any(target_os = "linux", test))]
 fn linux_heroic_config_home(xdg_config_home: Option<&Path>, home: Option<&Path>) -> Option<PathBuf> {
     xdg_config_home
-        .filter(|path| path.is_absolute())
+        .filter(|path| is_absolute_metadata_path(path))
         .map(Path::to_path_buf)
-        .or_else(|| home.filter(|path| path.is_absolute()).map(|path| path.join(".config")))
+        .or_else(|| home.filter(|path| is_absolute_metadata_path(path)).map(|path| path.join(".config")))
 }
 
 /// Returns known Heroic and standalone Legendary installed.json locations.
