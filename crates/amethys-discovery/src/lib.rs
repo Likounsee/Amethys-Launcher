@@ -480,7 +480,7 @@ pub fn parse_ea_registry_output(contents: &str) -> Vec<DetectedGame> {
         }
         let Some((name, value)) = trimmed.split_once("REG_SZ")
             .or_else(|| trimmed.split_once("REG_EXPAND_SZ")) else { continue; };
-        if !matches!(name.trim(), "Install Dir" | "InstallDir") { continue; }
+        if !["Install Dir", "InstallDir"].iter().any(|candidate| name.trim().eq_ignore_ascii_case(candidate)) { continue; }
         let install_path = PathBuf::from(value.trim());
         if !install_path.is_dir() || !install_path.join("__Installer/installerdata.xml").is_file() {
             continue;
@@ -1426,6 +1426,32 @@ mod tests {
         assert_eq!(games[0].platform_id.as_deref(), Some("EA:custom-123"));
         assert_eq!(games[0].name, "Custom EA Game");
         assert_eq!(games[0].install_path, install);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn detects_ea_games_from_32_bit_registry_key_and_installdir_value() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-ea-registry-wow-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let install = root.join("Games").join("Another EA Game");
+        std::fs::create_dir_all(install.join("__Installer")).expect("create EA install metadata");
+        std::fs::write(
+            install.join("__Installer/installerdata.xml"),
+            r#"<DiPManifest><gameTitle>Another EA Game</gameTitle></DiPManifest>"#,
+        ).expect("write EA metadata");
+        let output = format!(
+            "HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\EA Games\\legacy-id\n    installdir    REG_SZ    {}\n",
+            install.display()
+        );
+
+        let games = super::parse_ea_registry_output(&output);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform_id.as_deref(), Some("legacy-id"));
+        assert_eq!(games[0].name, "Another EA Game");
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
