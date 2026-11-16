@@ -1389,10 +1389,32 @@ fn same_install_path(left: &Path, right: &Path) -> bool {
 }
 
 fn find_vdf_value(contents: &str, wanted_key: &str) -> Option<String> {
-    contents.lines().find_map(|line| {
-        let (key, value) = quoted_pair(line)?;
-        key.eq_ignore_ascii_case(wanted_key).then(|| unescape_vdf(&value))
-    })
+    // Real Steam app manifests place their fields directly inside AppState.
+    // Restrict lookups to that object so nested UserConfig/SharedConfig values
+    // cannot shadow the actual game name or install directory. Keep accepting
+    // the flat form used by older exports and small standalone fixtures.
+    let has_app_state = contents.lines().any(|line| {
+        let line = line.trim_start();
+        if line.starts_with("//") {
+            return false;
+        }
+        line.split('"').nth(1)
+            .is_some_and(|key| key.eq_ignore_ascii_case("AppState"))
+    });
+    let target_depth = usize::from(has_app_state);
+    let mut depth = 0usize;
+
+    for line in contents.lines() {
+        if depth == target_depth {
+            if let Some((key, value)) = quoted_pair(line) {
+                if key.eq_ignore_ascii_case(wanted_key) {
+                    return Some(unescape_vdf(&value));
+                }
+            }
+        }
+        depth = vdf_update_depth(depth, line);
+    }
+    None
 }
 
 fn quoted_pair(line: &str) -> Option<(String, String)> {
@@ -1646,6 +1668,28 @@ mod tests {
         assert_eq!(
             super::parse_app_manifest(manifest),
             Some(("570".to_owned(), "Dota 2".to_owned(), "dota 2".to_owned())),
+        );
+    }
+
+    #[test]
+    fn steam_manifest_fields_are_read_only_from_the_app_state_object() {
+        let manifest = r#"
+            "AppState"
+            {
+                "appid" "570"
+                "name" "Dota 2"
+                "installdir" "dota2"
+                "UserConfig"
+                {
+                    "name" "Incorrect Nested Name"
+                    "installdir" "incorrect-folder"
+                }
+            }
+        "#;
+
+        assert_eq!(
+            super::parse_app_manifest(manifest),
+            Some(("570".to_owned(), "Dota 2".to_owned(), "dota2".to_owned()))
         );
     }
 
