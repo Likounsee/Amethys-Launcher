@@ -200,9 +200,9 @@ impl Database {
         // them at the persistence boundary rather than storing unusable data.
         if [name, platform, install_path]
             .iter()
-            .any(|value| value.contains('\\0'))
-            || platform_id.is_some_and(|value| value.contains('\\0'))
-            || executable.is_some_and(|value| value.contains('\\0'))
+            .any(|value| value.contains('\0'))
+            || platform_id.is_some_and(|value| value.contains('\0'))
+            || executable.is_some_and(|value| value.contains('\0'))
         {
             return Err(storage_error("Game metadata must not contain NUL characters."));
         }
