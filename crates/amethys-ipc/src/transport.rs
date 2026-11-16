@@ -35,12 +35,49 @@ impl Drop for IpcListener {
 }
 
 #[cfg(unix)]
+async fn remove_stale_socket(path: &std::path::Path) -> Result<(), AmethysError> {
+    use std::os::unix::fs::FileTypeExt;
+
+    let metadata = match std::fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(io_error(error)),
+    };
+
+    if !metadata.file_type().is_socket() {
+        return Err(io_error(std::io::Error::new(
+            std::io::ErrorKind::AddrInUse,
+            format!("IPC endpoint {} exists and is not a Unix socket", path.display()),
+        )));
+    }
+
+    match tokio::net::UnixStream::connect(path).await {
+        Ok(stream) => {
+            drop(stream);
+            Err(io_error(std::io::Error::new(
+                std::io::ErrorKind::AddrInUse,
+                format!("Another Amethys process is already listening on {}", path.display()),
+            )))
+        }
+        Err(error) if matches!(
+            error.kind(),
+            std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::NotFound
+        ) => {
+            std::fs::remove_file(path).map_err(io_error)?;
+            Ok(())
+        }
+        Err(error) => Err(io_error(error)),
+    }
+}
+
+#[cfg(unix)]
 impl IpcListener {
     /// Binds a local socket and restricts its filesystem permissions to 0600.
     pub async fn bind(endpoint: impl AsRef<std::path::Path>) -> Result<Self, AmethysError> {
         use std::os::unix::fs::PermissionsExt;
 
         let socket_path = endpoint.as_ref().to_path_buf();
+        remove_stale_socket(&socket_path).await?;
         let listener = tokio::net::UnixListener::bind(&socket_path)
             .map_err(io_error)?;
         if let Err(error) = std::fs::set_permissions(
@@ -138,6 +175,45 @@ fn unsupported_platform() -> AmethysError {
 mod tests {
     use super::{IpcListener, connect};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    #[tokio::test]
+    async fn listener_removes_a_stale_socket_before_binding() {
+        let path = std::env::temp_dir().join(format!(
+            "amethys-ipc-stale-{}.sock",
+            uuid::Uuid::new_v4()
+        ));
+        {
+            let stale = std::os::unix::net::UnixListener::bind(&path)
+                .expect("create stale socket");
+            drop(stale);
+        }
+
+        let listener = IpcListener::bind(&path).await.expect("replace stale socket");
+        assert!(std::fs::symlink_metadata(&path).expect("new socket exists").file_type().is_socket());
+        drop(listener);
+        assert!(!path.exists());
+    }
+
+    #[tokio::test]
+    async fn listener_does_not_replace_an_active_socket() {
+        let path = std::env::temp_dir().join(format!(
+            "amethys-ipc-active-{}.sock",
+            uuid::Uuid::new_v4()
+        ));
+        let mut first = IpcListener::bind(&path).await.expect("first listener binds");
+        let error = match IpcListener::bind(&path).await {
+            Ok(_) => panic!("second listener must not replace the active socket"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code(), crate::ErrorCode::IpcIo);
+
+        let client_path = path.clone();
+        let client_task = tokio::spawn(async move {
+            let _client = connect(client_path).await.expect("first listener remains reachable");
+        });
+        let _accepted = first.accept().await.expect("first listener accepts client");
+        client_task.await.expect("client task");
+    }
 
     #[tokio::test]
     async fn listener_accepts_multiple_clients_without_rebinding() {
