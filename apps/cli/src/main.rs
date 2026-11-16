@@ -919,25 +919,26 @@ mod tests {
     }
 
     #[test]
-    fn scan_summary_includes_every_discovery_adapter() {
+    fn scan_summary_includes_platforms_supported_on_current_os() {
         let platforms = super::supported_platforms();
-        for platform in [
-            "Steam",
-            "Epic Games",
-            "Heroic",
-            "GOG Galaxy",
-            "Amazon Games",
-            "EA app",
-            "Ubisoft Connect",
-            "Battle.net",
-            "Riot Games",
-            "Xbox app",
-        ] {
+
+        #[cfg(windows)]
+        let expected: &[&str] = &[
+            "Steam", "Epic Games", "Heroic", "GOG Galaxy", "Amazon Games",
+            "EA app", "Ubisoft Connect", "Battle.net", "Riot Games", "Xbox app",
+        ];
+        #[cfg(target_os = "macos")]
+        let expected: &[&str] = &["Steam", "Heroic", "GOG Galaxy"];
+        #[cfg(target_os = "linux")]
+        let expected: &[&str] = &["Steam", "Heroic"];
+
+        for platform in expected {
             assert!(
                 platforms.iter().any(|supported| supported.eq_ignore_ascii_case(platform)),
-                "scan summary must include the {platform} adapter"
+                "scan summary must include {platform} on this operating system"
             );
         }
+        assert_eq!(platforms.len(), expected.len());
     }
 
     #[test]
