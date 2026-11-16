@@ -641,9 +641,9 @@ pub fn parse_ubisoft_registry_output(contents: &str) -> Vec<DetectedGame> {
         }
         if let Some((_, value)) = trimmed.split_once("REG_SZ")
             .or_else(|| trimmed.split_once("REG_EXPAND_SZ"))
-            .filter(|(name, _)| name.trim() == "InstallDir")
+            .filter(|(name, _)| name.trim().eq_ignore_ascii_case("InstallDir"))
         {
-            let install_path = PathBuf::from(value.trim());
+            let install_path = PathBuf::from(value.trim().trim_matches('"'));
             if !install_path.is_dir() {
                 continue;
             }
