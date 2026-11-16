@@ -22,6 +22,15 @@ pub fn parse_library_folders(contents: &str, steam_root: &Path) -> Vec<PathBuf> 
     if steam_root.is_absolute() {
         paths.insert(steam_root.to_path_buf());
     }
+    // Only interpret numeric/path entries inside the actual
+    // libraryfolders object; unrelated VDF sections can contain numeric keys.
+    let has_library_folders = contents.lines().any(|line| {
+        quoted_pair(line).is_some_and(|(key, _)| key.eq_ignore_ascii_case("libraryfolders"))
+    });
+    if !has_library_folders {
+        return paths.into_iter().collect();
+    }
+
     let mut depth = 0usize;
 
     for line in contents.lines() {
@@ -1801,6 +1810,29 @@ HKEY_CURRENT_USER\Software\Valve\Steam
                 Path::new(r"D:\SteamLibrary").to_path_buf(),
             ]
         );
+    }
+
+    #[test]
+    fn ignores_numeric_paths_outside_the_libraryfolders_object() {
+        let contents = r#"
+            "other_metadata"
+            {
+                "1" "/not/a/steam/library"
+            }
+            "libraryfolders"
+            {
+                "0" "/real/steam/library"
+            }
+        "#;
+        let paths = parse_library_folders(contents, Path::new("/default/steam"));
+        assert_eq!(
+            paths,
+            vec![
+                PathBuf::from("/default/steam"),
+                PathBuf::from("/real/steam/library"),
+            ]
+        );
+        assert!(!paths.contains(&PathBuf::from("/not/a/steam/library")));
     }
 
     #[test]
