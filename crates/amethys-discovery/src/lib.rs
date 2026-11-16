@@ -2733,7 +2733,7 @@ mod tests {
             "RemovedApp": { "app_name": "RemovedApp", "title": "Removed Game", "install_path": root.join("Removed Game").to_string_lossy() },
             "BrokenApp": { "app_name": "BrokenApp", "title": "Broken Game" }
         });
-        std::fs::write(&database, format!("\\u{feff}{}", contents)).expect("write BOM-prefixed Legendary metadata");
+        std::fs::write(&database, format!("\u{feff}{}", contents)).expect("write BOM-prefixed Legendary metadata");
 
         let games = super::scan_heroic_legendary_installed(&database);
         assert_eq!(games.len(), 2);
