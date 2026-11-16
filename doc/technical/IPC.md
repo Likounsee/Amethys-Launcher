@@ -60,11 +60,12 @@ Use `transport::IpcListener::bind()` to create a server endpoint and
 The agent runs a persistent accept loop and handles each local request.
 
 On Unix, the socket path is restricted to mode `0600` and is unlinked when the
-listener is dropped. On Windows, remote named-pipe clients are explicitly
-rejected. The pipe still uses the default security descriptor associated with
-the creating process, so local-user access follows that inherited DACL; an
-explicit restrictive DACL remains required before claiming isolation between
-multiple local Windows users.
+listener is dropped. On Windows, remote named-pipe clients are explicitly rejected, the first
+instance is exclusive, and the server caps the pipe at 32 instances. The pipe
+still uses the default security descriptor associated with the creating
+process, so local-user access follows that inherited DACL; an explicit
+restrictive DACL remains required before claiming isolation between multiple
+local Windows users.
 
 ## Security requirements
 
@@ -75,6 +76,8 @@ limits. Do not expose these endpoints over TCP or forward them outside the
 local machine.
 
 The current protocol is intended for local communication between the Amethys
-CLI and agent. Peer authentication and explicit per-command authorization
-remain hardening work before treating the IPC boundary as a security boundary
-against other local processes.
+CLI and agent. The agent rejects library mutations unless its lifecycle state
+is `running`; storage validates metadata lengths, empty values and NUL bytes.
+Peer authentication and an explicit restrictive Windows pipe DACL remain
+hardening work before treating the IPC boundary as a security boundary against
+other local processes.

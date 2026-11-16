@@ -798,6 +798,7 @@ pub fn discover_ea_games() -> Vec<DetectedGame> {
 
 /// Parses optional custom EA game-library roots from
 /// AMETHYS_EA_LIBRARY_ROOTS (semicolon-separated on every platform).
+#[cfg(any(windows, test))]
 fn parse_ea_library_roots(value: &str) -> Vec<PathBuf> {
     let mut roots = BTreeSet::new();
     for entry in value.split(';') {
@@ -815,6 +816,7 @@ fn parse_ea_library_roots(value: &str) -> Vec<PathBuf> {
 
 /// Returns user-configured EA library roots without probing arbitrary drives.
 /// This supports libraries outside EA's default Program Files locations.
+#[cfg(windows)]
 fn configured_ea_library_roots() -> Vec<PathBuf> {
     std::env::var("AMETHYS_EA_LIBRARY_ROOTS")
         .map(|value| parse_ea_library_roots(&value))

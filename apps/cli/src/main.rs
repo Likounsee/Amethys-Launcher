@@ -437,7 +437,7 @@ fn is_safe_relative_executable(executable: &str) -> bool {
 
     // Check both separator styles so Windows metadata is validated consistently
     // even when fixtures are evaluated on a non-Windows CI runner.
-    let mut components = trimmed.split(|character| character == '/' || character == '\\');
+    let mut components = trimmed.split(['/', '\\']);
     let Some(first) = components.next() else { return false; };
     !first.contains(':')
         && !components

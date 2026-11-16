@@ -19,6 +19,10 @@ const STATE_RUNNING: u8 = 1;
 const STATE_STOPPING: u8 = 2;
 const STATE_STOPPED: u8 = 3;
 
+fn mutation_allowed(state: IpcCoreStatus) -> bool {
+    state == IpcCoreStatus::Running
+}
+
 fn ipc_status(state: &AtomicU8) -> IpcCoreStatus {
     match state.load(Ordering::Acquire) {
         STATE_RUNNING => IpcCoreStatus::Running,
@@ -40,6 +44,24 @@ where
     // Read the lifecycle state when the request is handled, not when its
     // socket was accepted: a client may connect and then stall before sending.
     let state = ipc_status(shared_state);
+    if !mutation_allowed(state)
+        && matches!(
+            &request.payload.command,
+            IpcCommand::AddGame { .. }
+                | IpcCommand::AddDetectedGame { .. }
+                | IpcCommand::RemoveGame { .. }
+        )
+    {
+        let response = IpcResponse::failure(
+            request.request_id,
+            IpcRemoteError::new(
+                "AM-CORE-0002",
+                "Game-library changes are unavailable while the core is not running.",
+            ),
+        );
+        write_message(stream, &response).await?;
+        return Ok(());
+    }
     let result = match request.payload.command {
         IpcCommand::Ping => Ok(IpcResponsePayload::Pong),
         IpcCommand::GetStatus => Ok(IpcResponsePayload::CoreStatus { state }),
@@ -132,6 +154,20 @@ fn store_runtime_state(shared: &AtomicU8, state: RuntimeState) {
         RuntimeState::Stopped => STATE_STOPPED,
     };
     shared.store(value, Ordering::Release);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::mutation_allowed;
+    use amethys_ipc::IpcCoreStatus;
+
+    #[test]
+    fn library_mutations_are_only_allowed_while_core_is_running() {
+        assert!(mutation_allowed(IpcCoreStatus::Running));
+        assert!(!mutation_allowed(IpcCoreStatus::Created));
+        assert!(!mutation_allowed(IpcCoreStatus::Stopping));
+        assert!(!mutation_allowed(IpcCoreStatus::Stopped));
+    }
 }
 
 #[tokio::main]
