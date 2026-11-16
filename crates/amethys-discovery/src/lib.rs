@@ -1939,7 +1939,7 @@ mod tests {
         std::fs::create_dir_all(&first_install).expect("create first install");
         std::fs::create_dir_all(&valid_install).expect("create valid install");
         let output = format!(
-            "HKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\first\\n    InstallDir    REG_SZ    {}\\nHKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\target\\n    InstallDir    REG_SZ    {}\\nHKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\target\\n    InstallDir    REG_SZ    {}\\n",
+            "HKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\first\n    InstallDir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\target\n    InstallDir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\target\n    InstallDir    REG_SZ    {}\n",
             first_install.display(),
             first_install.display(),
             valid_install.display(),
