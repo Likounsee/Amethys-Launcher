@@ -13,7 +13,7 @@ Amethys discovery is read-only. A scan reports installed games; it does not add 
 
 | Platform | Current method | Notes |
 | --- | --- | --- |
-| Steam | `libraryfolders.vdf` and `appmanifest_*.acf` | Metadata-based detection; checks install directories, filters known Steam runtimes/redistributables, validates numeric AppIDs against manifest filenames, and parses escaped quotes in VDF values. |
+| Steam | `libraryfolders.vdf` and `appmanifest_*.acf`; Windows `HKCU\\Software\\Valve\\Steam\\SteamPath` | Metadata-based detection; checks install directories, filters known Steam runtimes/redistributables, validates numeric AppIDs against manifest filenames, parses escaped quotes in VDF values, and discovers custom Windows Steam roots from the current user's registry without elevation. |
 | Epic Games | Launcher `.item` JSON manifests | Metadata-based on Windows. Heroic/Legendary is handled by its own adapter on supported OSes. |
 | EA app | `__Installer/installerdata.xml` plus Windows `HKLM\\SOFTWARE\\EA Games` install records | Reads title and content ID when present; registry paths allow custom game locations outside `Program Files/EA Games`. Quoted paths and known `%NAME%` environment references are normalized without invoking a shell; unknown variables remain unresolved. A registry record is accepted only when the install directory and EA installer metadata exist. |
 | GOG | Galaxy `galaxy-2.0.db` | Reads installed product IDs, original titles and installation paths from Galaxy metadata; opens the database read-only, skips malformed titles and stale paths, and de-duplicates canonical install paths without folding case on case-sensitive filesystems. Generic `GOG Games` folders are deliberately not scanned because folder names alone can produce false positives. |
@@ -27,7 +27,7 @@ Amethys discovery is read-only. A scan reports installed games; it does not add 
 
 1. Keep discovery read-only and require launcher metadata or another reliable installation record; do not infer games from generic folder names.
 2. Implement Xbox package-aware detection and expand Battle.net product-name coverage. Battle.net, EA app, GOG Galaxy, Ubisoft Connect, Amazon Games and Heroic/Legendary have metadata-based adapters.
-3. Expand custom install-location discovery for launchers where reliable metadata is available; EA registry locations are now covered on Windows.
+3. Expand custom install-location discovery for launchers where reliable metadata is available; Steam's per-user Windows registry root and EA registry locations are now covered.
 4. Add Linux/macOS coverage for launchers available on those systems.
 5. Only after detection is dependable, add explicit import/selection into the Amethys library.
 6. Build the future Amethys catalogue with its own stable IDs, independent of platform IDs.
