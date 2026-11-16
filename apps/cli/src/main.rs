@@ -232,7 +232,7 @@ async fn import_detected_games(
 fn supported_platforms() -> &'static [&'static str] {
     #[cfg(windows)]
     {
-        &["Steam", "Epic Games", "Heroic", "GOG Galaxy", "Amazon Games", "EA app", "Ubisoft Connect", "Battle.net"]
+        &["Steam", "Epic Games", "Heroic", "GOG Galaxy", "Amazon Games", "EA app", "Ubisoft Connect", "Battle.net", "Riot Games"]
     }
     #[cfg(target_os = "macos")]
     {
