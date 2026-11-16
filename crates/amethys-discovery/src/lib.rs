@@ -556,8 +556,13 @@ pub fn parse_ea_registry_output(contents: &str) -> Vec<DetectedGame> {
 
     for line in contents.lines() {
         let trimmed = line.trim();
-        if let Some(id) = prefixes.iter().find_map(|prefix| trimmed.strip_prefix(prefix)) {
-            current_id = Some(id.trim().to_owned());
+        if trimmed.starts_with("HKEY_") {
+            // Recursive registry output can contain unrelated vendors between
+            // EA keys. Clear the current ID so their Install Dir values cannot
+            // inherit the previous EA product identifier.
+            current_id = prefixes.iter()
+                .find_map(|prefix| trimmed.strip_prefix(prefix))
+                .map(|id| id.trim().to_owned());
             continue;
         }
         let Some((name, value)) = trimmed.split_once("REG_SZ")
@@ -1868,6 +1873,34 @@ mod tests {
         assert_eq!(games[0].platform_id.as_deref(), Some("44"));
         assert_eq!(games[0].name, "Assassins Creed");
         assert_eq!(games[0].install_path, install);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn does_not_attribute_unrelated_registry_install_values_to_previous_ea_game() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-ea-unrelated-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let ea_install = root.join("EA Game");
+        let unrelated_install = root.join("Other Vendor Game");
+        for install in [&ea_install, &unrelated_install] {
+            std::fs::create_dir_all(install.join("__Installer"))
+                .expect("create installer metadata directory");
+            std::fs::write(
+                install.join("__Installer/installerdata.xml"),
+                "<gameTitle>Valid Game</gameTitle><contentID>EA-123</contentID>",
+            ).expect("write EA installer metadata");
+        }
+        let output = format!(
+            "HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\EA Games\\\\EA-123\\n    Install Dir    REG_SZ    {}\\nHKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\OtherVendor\\\\Installs\\\\99\\n    Install Dir    REG_SZ    {}\\n",
+            ea_install.display(), unrelated_install.display()
+        );
+        let games = super::parse_ea_registry_output(&output);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].install_path, ea_install);
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
