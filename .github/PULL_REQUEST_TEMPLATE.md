@@ -7,27 +7,41 @@ Describe the change and the problem it solves.
 - [ ] Documentation
 - [ ] Other
 
-## Contribution origin and rights — required for every code contribution
-- [ ] I have read [LICENSE](../LICENSE), [CONTRIBUTING.md](../CONTRIBUTING.md), and [CLA.md](../CLA.md).
-- [ ] I confirm that I have the right to submit every part of this contribution.
-- [ ] I wrote the submitted code myself, OR I have identified every third-party / generated / employer-owned part below and disclosed its source, license, and permission.
-- [ ] To the best of my knowledge, this contribution does not infringe another person's copyright, patent, trade secret, or other rights.
-- [ ] I have disclosed any employer, client, school, prior assignment, confidentiality, or other obligation that could affect these rights.
-- [ ] I understand that this PR is not accepted automatically and that no code may be merged or incorporated before the required individual written assignment agreement for this specific contribution is signed by both parties and accepted by the maintainer.
-- [ ] I understand that accepted contributions will be credited in CONTRIBUTORS.md, while transferable economic rights validly assigned under the signed agreement will belong to Likounsee; non-transferable rights under applicable law remain unaffected.
+## Files and contribution scope
+List every file added or changed and explain what you contributed. If the
+scope was discussed in an Issue, link it here.
 
-**Sources, licenses, generated code, prior publication, employer/client restrictions, or other relevant details (write "None" if none):**
+## Contribution origin and rights — required for code contributions
+- [ ] I have read and expressly accept LICENSE, CONTRIBUTING.md and CLA.md.
+- [ ] I understand that Amethys Launcher is currently owned by Likounsee.
+- [ ] I understand that accepted individual code contributions are intended
+      to become part of Amethys Launcher and that I must sign a specific
+      written assignment of the transferable economic rights identified
+      in that agreement before the code can be merged.
+- [ ] I have identified whether I wrote the code myself and disclosed all
+      third-party, generated, AI-assisted, previously published,
+      employer/client-owned or otherwise restricted material.
+- [ ] I have authority to submit the work and grant the rights specified in
+      the individual agreement, or I have disclosed who the actual rights
+      holder is and supplied the required authorisation.
+- [ ] I understand that accepted contributors are credited in
+      CONTRIBUTORS.md, with file/feature attribution where practical.
+- [ ] I understand the planned gift-card reward programme and that its
+      criteria and terms will be published separately; this PR does not
+      promise a specific reward or amount.
+
+**Sources, licenses, generated code, prior publication, employer/client
+restrictions, or other relevant details (write "None" if none):**
 
 [Provide details here.]
 
 **Individual agreement status (maintainer completes):**
-- [ ] Not applicable (documentation-only / no copyrightable contribution)
+- [ ] Not applicable (no copyrightable contribution)
 - [ ] Signed agreement received privately and verified
 - [ ] Contribution explicitly accepted by maintainer
 
-> Do not upload a signed agreement, legal identity documents, private contact details,
-> credentials, or confidential information to this public pull request. Send required
-> agreement material through the private channel designated by the maintainer.
+> Never upload a signed agreement, legal identity documents, private contact
+> details, credentials or confidential information to this public PR.
 
 ## Validation
 - [ ] Tests added or updated
