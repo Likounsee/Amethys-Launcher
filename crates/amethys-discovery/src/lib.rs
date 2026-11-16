@@ -835,11 +835,11 @@ pub fn parse_ubisoft_registry_output(contents: &str) -> Vec<DetectedGame> {
             r"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs\",
             r"HKEY_LOCAL_MACHINE\SOFTWARE\Ubisoft\Launcher\Installs\",
         ];
-        if trimmed.starts_with("HKEY_") {
+        if trimmed.get(..5).is_some_and(|prefix| prefix.eq_ignore_ascii_case("HKEY_")) {
             // reg.exe /s emits unrelated subkeys as well. Never let an
             // InstallDir value under another key inherit the previous game ID.
             current_id = install_key_prefixes.iter()
-                .find_map(|prefix| trimmed.strip_prefix(prefix))
+                .find_map(|prefix| strip_prefix_ignore_ascii_case(trimmed, prefix))
                 .map(|id| id.trim().to_owned());
             continue;
         }
