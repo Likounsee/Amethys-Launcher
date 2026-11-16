@@ -38,20 +38,28 @@ The project is at **Core Foundation 0.1**. The Rust foundation is being built al
 
 The desktop GUI, Amethys online store/catalogue, downloads, save synchronization and account system are intentionally out of scope for this foundation stage. Local game discovery is a separate feature and is part of the current development.
 
-## Repository
+## Repository structure
 
-This repository is currently named `Amethys-Launcher`. The project/product name is **Amethys Launcher**; the repository name can be changed separately later if desired.
+- `apps/` — executable applications (CLI and agent).
+- `crates/` — reusable Rust components.
+- `doc/` — project documentation, technical references and assets.
+- `.github/workflows/` — GitHub Actions CI workflows.
+- `.github/ISSUE_TEMPLATE/` — community Issue templates.
+
+The files kept at the repository root are the essential entry points and build configuration: `README.md`, `LICENSE`, `Cargo.toml`, `rust-toolchain.toml` and `.gitignore`.
+
+See [the documentation index](doc/README.md) for the full guide.
 
 ## Ownership, contributions and rewards
 
 Amethys Launcher and the original project materials are currently owned by **Likounsee**. The project is proprietary; public repository visibility does not grant permission to reuse its code. See [LICENSE](LICENSE).
 
-Community participation is handled through **GitHub Issues only**. Anyone can report bugs, propose features, provide technical analysis or suggest possible means of resolution. Community members must not submit code, patches or Pull Requests; the maintainer is responsible for implementing accepted Issues. People whose reports or proposals materially help the project may be credited in [CONTRIBUTORS.md](CONTRIBUTORS.md). See [CONTRIBUTING.md](CONTRIBUTING.md) for the full policy.
+Community participation is handled through **GitHub Issues only**. Anyone can report bugs, propose features, provide technical analysis or suggest possible means of resolution. Community members must not submit code, patches or Pull Requests; the maintainer is responsible for implementing accepted Issues. People whose reports or proposals materially help the project may be credited in [community contributors](doc/community/CONTRIBUTORS.md). See [contribution policy](.github/CONTRIBUTING.md) for the full policy.
 
 The project intends to establish a **gift-card reward programme** when Amethys Launcher is completed with its Store and integrated wallets. Rewards are intended to reflect meaningful community involvement, such as useful bug reports, technical investigations and accepted proposals. Eligibility, assessment criteria, available budget, gift-card types and distribution terms will be published before awards are determined. See [CONTRIBUTING.md](CONTRIBUTING.md). This programme is a project intention, not a promise of a specific amount or payment date.
 
 Official collaborations with Steam, Epic Games and other platform companies are handled under separate written agreements. Those companies may retain intellectual-property rights in code or materials they provide, as set out in those agreements.
 
-Community members should use Issues rather than Pull Requests. Code implementation and repository changes are handled by the maintainer. See [CONTRIBUTING.md](CONTRIBUTING.md) for details and [SECURITY.md](SECURITY.md) for private vulnerability reporting.
+Community members should use Issues rather than Pull Requests. Code implementation and repository changes are handled by the maintainer. See [CONTRIBUTING.md](CONTRIBUTING.md) for details and [security policy](.github/SECURITY.md) for private vulnerability reporting.
 
 Never publish credentials, personal data, private platform responses or confidential information from Steam, Epic Games or other services in this repository.
