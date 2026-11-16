@@ -1399,7 +1399,7 @@ mod tests {
             r#"{{"AppName":"ExampleApp","DisplayName":"Example Game","InstallLocation":{}}}"#,
             serde_json::to_string(&installed.to_string_lossy()).expect("encode path")
         )).expect("write manifest");
-        std::fs::write(manifests.join("duplicate.item"), format!(
+        std::fs::write(manifests.join("z-duplicate.item"), format!(
             r#"{{"AppName":"ExampleApp","DisplayName":"Duplicate Example","InstallLocation":{}}}"#,
             serde_json::to_string(&duplicate_install.to_string_lossy()).expect("encode duplicate path")
         )).expect("write duplicate app manifest");
@@ -1982,7 +1982,7 @@ mod tests {
         let database = root.join("installed.json");
         let contents = serde_json::json!({
             "HadesApp": { "app_name": " HadesApp ", "title": " Hades ", "install_path": format!(" {} ", installed.display()) },
-            "DuplicateHades": { "app_name": "HadesApp", "title": "Duplicate Hades", "install_path": duplicate_install.to_string_lossy() },
+            "ZDuplicateHades": { "app_name": "HadesApp", "title": "Duplicate Hades", "install_path": duplicate_install.to_string_lossy() },
             "CelesteApp": { "app_name": " CelesteApp ", "title": " Celeste ", "install_path": format!(" {} ", whitespace_install.display()) },
             "RemovedApp": { "app_name": "RemovedApp", "title": "Removed Game", "install_path": root.join("Removed Game").to_string_lossy() },
             "BrokenApp": { "app_name": "BrokenApp", "title": "Broken Game" }
