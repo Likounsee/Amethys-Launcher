@@ -84,6 +84,21 @@ fn resolve_data_directory(
     }
 }
 
+/// Creates the application data directory and applies private Unix permissions.
+///
+/// On Unix, the directory is restricted to its owner (0700), protecting the
+/// SQLite database and local IPC socket stored inside it.
+pub fn prepare_data_directory() -> io::Result<PathBuf> {
+    let path = data_directory()?;
+    std::fs::create_dir_all(&path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700))?;
+    }
+    Ok(path)
+}
+
 /// User-level application settings.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
