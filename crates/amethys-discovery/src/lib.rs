@@ -292,17 +292,22 @@ pub fn scan_heroic_legendary_installed(installed_json: &Path) -> Vec<DetectedGam
 
     let mut games = Vec::new();
     let mut seen_paths = BTreeSet::new();
+    let mut seen_app_ids = BTreeSet::new();
     for (key, value) in entries {
         let Some(record) = value.as_object() else { continue; };
         let app_name = record.get("app_name").and_then(|value| value.as_str())
-            .filter(|value| !value.trim().is_empty()).unwrap_or(key);
+            .map(str::trim).filter(|value| !value.is_empty()).unwrap_or(key.trim());
+        if app_name.is_empty() || seen_app_ids.contains(app_name) {
+            continue;
+        }
         let Some(title) = record.get("title").and_then(|value| value.as_str())
-            .filter(|value| !value.trim().is_empty()) else { continue; };
+            .map(str::trim).filter(|value| !value.is_empty()) else { continue; };
         let Some(install_location) = record.get("install_path").and_then(|value| value.as_str())
-            .filter(|value| !value.trim().is_empty()) else { continue; };
+            .map(str::trim).filter(|value| !value.is_empty()) else { continue; };
         let install_path = PathBuf::from(install_location);
         if !install_path.is_dir() { continue; }
         if !insert_unique_install_path(&mut seen_paths, &install_path) { continue; }
+        seen_app_ids.insert(app_name.to_owned());
         games.push(DetectedGame {
             platform_id: Some(app_name.to_owned()),
             name: title.to_owned(),
