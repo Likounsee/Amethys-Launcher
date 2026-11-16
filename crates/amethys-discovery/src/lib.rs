@@ -2025,13 +2025,13 @@ mod tests {
             std::fs::create_dir_all(install.join("__Installer"))
                 .expect("create installer metadata directory");
         }
-        for (install, title, id) in [
-            (&first_install, "First Game", "EA-FIRST"),
-            (&valid_second_install, "Second Game", "EA-SECOND"),
+        for (install, title) in [
+            (&first_install, "First Game"),
+            (&valid_second_install, "Second Game"),
         ] {
             std::fs::write(
                 install.join("__Installer/installerdata.xml"),
-                format!("<gameTitle>{title}</gameTitle><contentID>{id}</contentID>"),
+                format!("<gameTitle>{title}</gameTitle>"),
             ).expect("write EA installer metadata");
         }
         let output = format!(
@@ -2040,7 +2040,7 @@ mod tests {
         );
         let games = super::parse_ea_registry_output(&output);
         assert_eq!(games.len(), 2);
-        assert!(games.iter().any(|game| game.platform_id.as_deref() == Some("EA-SECOND")
+        assert!(games.iter().any(|game| game.platform_id.as_deref() == Some("Second")
             && game.install_path == valid_second_install));
         std::fs::remove_dir_all(root).expect("cleanup");
     }
