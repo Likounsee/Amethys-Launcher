@@ -523,4 +523,43 @@ mod tests {
         send.await.expect("writer task");
         assert_eq!(error.code(), ErrorCode::IpcFrameTooLarge);
     }
+
+    #[tokio::test]
+    async fn reader_rejects_empty_frame_before_allocating_payload() {
+        let (mut writer, mut reader) = duplex(8);
+        use tokio::io::AsyncWriteExt;
+        writer.write_u32(0).await.expect("write empty frame header");
+
+        let error = super::read_message::<_, Payload>(&mut reader)
+            .await
+            .expect_err("empty frame must be rejected");
+        assert_eq!(error.code(), ErrorCode::IpcInvalidLength);
+    }
+
+    #[tokio::test]
+    async fn reader_rejects_oversized_frame_from_header_alone() {
+        let (mut writer, mut reader) = duplex(8);
+        use tokio::io::AsyncWriteExt;
+        writer
+            .write_u32((super::MAX_FRAME_SIZE as u32) + 1)
+            .await
+            .expect("write oversized frame header");
+
+        let error = super::read_message::<_, Payload>(&mut reader)
+            .await
+            .expect_err("oversized frame must be rejected");
+        assert_eq!(error.code(), ErrorCode::IpcFrameTooLarge);
+    }
+
+    #[tokio::test]
+    async fn writer_rejects_oversized_serialized_payload() {
+        let payload = "x".repeat(super::MAX_FRAME_SIZE + 1);
+        let (mut writer, _reader) = duplex(8);
+
+        let error = super::write_message(&mut writer, &payload)
+            .await
+            .expect_err("oversized payload must be rejected");
+        assert_eq!(error.code(), ErrorCode::IpcFrameTooLarge);
+    }
+
 }
