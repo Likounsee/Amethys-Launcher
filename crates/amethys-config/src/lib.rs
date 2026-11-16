@@ -48,6 +48,16 @@ impl AppConfig {
 
     /// Saves through a temporary file so an interrupted write cannot truncate the previous file.
     pub async fn save(&self, path: impl AsRef<Path>) -> Result<(), AmethysError> {
+        if self.schema_version != 1 {
+            return Err(AmethysError::new(
+                ErrorCode::ConfigurationWrite,
+                format!(
+                    "Unsupported configuration schema version {} (supported: 1).",
+                    self.schema_version
+                ),
+            ));
+        }
+
         let path = path.as_ref();
         if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
             fs::create_dir_all(parent).await.map_err(|error| AmethysError::new(
@@ -96,6 +106,25 @@ mod tests {
         let error = AppConfig::load(&path).await.expect_err("unsupported schema must fail");
         assert_eq!(error.code(), amethys_errors::ErrorCode::ConfigurationRead);
         assert!(error.message().contains("Unsupported configuration schema version 2"));
+        tokio::fs::remove_file(path).await.expect("fixture is removed");
+    }
+
+    #[tokio::test]
+    async fn save_rejects_unsupported_schema_versions_without_touching_file() {
+        let path = std::env::temp_dir().join(format!("amethys-{}.json", uuid::Uuid::new_v4()));
+        let original = r#"{"schema_version":1,"start_agent_with_session":false,"offline_reminder_days":21}"#;
+        tokio::fs::write(&path, original).await.expect("original config is written");
+
+        let unsupported = AppConfig {
+            schema_version: 2,
+            start_agent_with_session: true,
+            offline_reminder_days: 30,
+        };
+        let error = unsupported.save(&path).await.expect_err("unsupported schema must fail");
+        assert_eq!(error.code(), amethys_errors::ErrorCode::ConfigurationWrite);
+        assert!(error.message().contains("Unsupported configuration schema version 2"));
+        assert_eq!(tokio::fs::read_to_string(&path).await.expect("original remains"), original);
+
         tokio::fs::remove_file(path).await.expect("fixture is removed");
     }
 
