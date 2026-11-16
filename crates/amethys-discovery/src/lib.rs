@@ -560,6 +560,7 @@ pub fn parse_ea_registry_output(contents: &str) -> Vec<DetectedGame> {
     let mut games = Vec::new();
     let mut current_id: Option<String> = None;
     let mut seen_ids = BTreeSet::new();
+    let mut seen_paths = BTreeSet::new();
     let prefixes = [
         r"HKEY_LOCAL_MACHINE\SOFTWARE\EA Games\",
         r"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\EA Games\",
@@ -594,9 +595,18 @@ pub fn parse_ea_registry_output(contents: &str) -> Vec<DetectedGame> {
         let platform_id = xml_element_text(&metadata, "contentID")
             .filter(|value| !value.trim().is_empty())
             .or_else(|| current_id.clone().filter(|value| !value.is_empty()));
-        if platform_id.as_ref().is_some_and(|id| !seen_ids.insert(id.clone())) {
+        let path_key = install_path_key(&install_path);
+        if platform_id.as_ref().is_some_and(|id| seen_ids.contains(id))
+            || seen_paths.contains(&path_key)
+        {
             continue;
         }
+        // Reserve identifiers and paths only after the record passes both
+        // deduplication checks, so a rejected alias cannot hide a later install.
+        if let Some(id) = &platform_id {
+            seen_ids.insert(id.clone());
+        }
+        seen_paths.insert(path_key);
         games.push(DetectedGame {
             platform_id,
             name,
@@ -1998,6 +2008,40 @@ mod tests {
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].platform_id.as_deref(), Some("EA-123"));
         assert_eq!(games[0].install_path, first_install);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn keeps_ea_content_id_available_after_rejecting_duplicate_install_path() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-ea-dedup-order-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let first_install = root.join("First Game");
+        let valid_second_install = root.join("Second Game");
+        for install in [&first_install, &valid_second_install] {
+            std::fs::create_dir_all(install.join("__Installer"))
+                .expect("create installer metadata directory");
+        }
+        for (install, title, id) in [
+            (&first_install, "First Game", "EA-FIRST"),
+            (&valid_second_install, "Second Game", "EA-SECOND"),
+        ] {
+            std::fs::write(
+                install.join("__Installer/installerdata.xml"),
+                format!("<gameTitle>{title}</gameTitle><contentID>{id}</contentID>"),
+            ).expect("write EA installer metadata");
+        }
+        let output = format!(
+            "HKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\First\n    Install Dir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\DuplicatePath\n    Install Dir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\Second\n    Install Dir    REG_SZ    {}\n",
+            first_install.display(), first_install.display(), valid_second_install.display()
+        );
+        let games = super::parse_ea_registry_output(&output);
+        assert_eq!(games.len(), 2);
+        assert!(games.iter().any(|game| game.platform_id.as_deref() == Some("EA-SECOND")
+            && game.install_path == valid_second_install));
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
