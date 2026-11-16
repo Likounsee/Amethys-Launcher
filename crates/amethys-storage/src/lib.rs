@@ -183,7 +183,10 @@ mod tests {
                 .expect("incompatible migration table is created");
         }
 
-        let error = Database::open(&path).expect_err("incompatible schema must fail");
+        let error = match Database::open(&path) {
+            Err(error) => error,
+            Ok(_) => panic!("incompatible schema must fail"),
+        };
         assert_eq!(error.code(), amethys_errors::ErrorCode::StorageMigration);
 
         let connection = rusqlite::Connection::open(&path).expect("fixture database reopens");
