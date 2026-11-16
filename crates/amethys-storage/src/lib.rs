@@ -28,14 +28,26 @@ impl Database {
                 format!("Could not create {}: {error}", parent.display()),
             ))?;
         }
-        let connection = Connection::open(path).map_err(|error| AmethysError::new(
+        let mut connection = Connection::open(path).map_err(|error| AmethysError::new(
             ErrorCode::StorageOpen,
             format!("Could not open {}: {error}", path.display()),
         ))?;
         connection.execute_batch(
             "PRAGMA foreign_keys = ON;
-             PRAGMA journal_mode = WAL;
-             CREATE TABLE IF NOT EXISTS schema_migrations (
+             PRAGMA journal_mode = WAL;"
+        ).map_err(|error| AmethysError::new(
+            ErrorCode::StorageOpen,
+            format!("Could not configure database: {error}"),
+        ))?;
+
+        // Keep schema creation and migration markers in one transaction. A
+        // failed statement must not leave a partially initialized database.
+        let transaction = connection.transaction().map_err(|error| AmethysError::new(
+            ErrorCode::StorageMigration,
+            format!("Could not begin database migration: {error}"),
+        ))?;
+        transaction.execute_batch(
+            "CREATE TABLE IF NOT EXISTS schema_migrations (
                  version INTEGER PRIMARY KEY NOT NULL,
                  applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
              );
@@ -57,6 +69,10 @@ impl Database {
         ).map_err(|error| AmethysError::new(
             ErrorCode::StorageMigration,
             format!("Could not initialize database schema: {error}"),
+        ))?;
+        transaction.commit().map_err(|error| AmethysError::new(
+            ErrorCode::StorageMigration,
+            format!("Could not commit database migration: {error}"),
         ))?;
         Ok(Self { connection })
     }
@@ -156,6 +172,31 @@ mod tests {
         let _ = std::fs::remove_file(path);
         let _ = std::fs::remove_file(format!("{filename}-wal"));
         let _ = std::fs::remove_file(format!("{filename}-shm"));
+    }
+
+    #[test]
+    fn failed_schema_migration_rolls_back_partial_tables() {
+        let path = std::env::temp_dir().join(format!("amethys-{}.sqlite", uuid::Uuid::new_v4()));
+        {
+            let connection = rusqlite::Connection::open(&path).expect("fixture database opens");
+            connection.execute_batch("CREATE TABLE schema_migrations (wrong TEXT);")
+                .expect("incompatible migration table is created");
+        }
+
+        let error = Database::open(&path).expect_err("incompatible schema must fail");
+        assert_eq!(error.code(), amethys_errors::ErrorCode::StorageMigration);
+
+        let connection = rusqlite::Connection::open(&path).expect("fixture database reopens");
+        let app_settings_exists: i64 = connection.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'app_settings'",
+            [],
+            |row| row.get(0),
+        ).expect("schema catalog is readable");
+        assert_eq!(app_settings_exists, 0, "partial table creation must be rolled back");
+        drop(connection);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
     }
 
     #[test]
