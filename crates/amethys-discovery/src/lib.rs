@@ -27,7 +27,7 @@ pub fn parse_library_folders(contents: &str, steam_root: &Path) -> Vec<PathBuf> 
             // deeper; numeric keys inside their nested "apps" map are app IDs,
             // not library paths.
             let is_legacy_library = depth == 1 && key.parse::<u32>().is_ok();
-            let is_modern_library_path = depth == 2 && key == "path";
+            let is_modern_library_path = depth == 2 && key.eq_ignore_ascii_case("path");
             if (is_legacy_library || is_modern_library_path) && !value.is_empty() {
                 paths.insert(PathBuf::from(unescape_vdf(&value)));
             }
@@ -1460,6 +1460,21 @@ mod tests {
         "#;
         let paths = parse_library_folders(contents, Path::new("C:/Steam"));
         assert!(paths.contains(&Path::new("C:/Steam").to_path_buf()));
+        assert!(paths.contains(&Path::new(r"D:\SteamLibrary").to_path_buf()));
+    }
+
+    #[test]
+    fn parses_steam_library_path_keys_case_insensitively() {
+        let contents = r#"
+            "libraryfolders"
+            {
+                "0"
+                {
+                    "Path" "D:\\SteamLibrary"
+                }
+            }
+        "#;
+        let paths = parse_library_folders(contents, Path::new("C:/Steam"));
         assert!(paths.contains(&Path::new(r"D:\SteamLibrary").to_path_buf()));
     }
 
