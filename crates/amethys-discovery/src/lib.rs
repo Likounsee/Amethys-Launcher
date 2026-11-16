@@ -1895,7 +1895,7 @@ mod tests {
             ).expect("write EA installer metadata");
         }
         let output = format!(
-            "HKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\EA Games\\\\EA-123\\n    Install Dir    REG_SZ    {}\\nHKEY_LOCAL_MACHINE\\\\SOFTWARE\\\\OtherVendor\\\\Installs\\\\99\\n    Install Dir    REG_SZ    {}\\n",
+            "HKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\EA-123\n    Install Dir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\OtherVendor\\Installs\\99\n    Install Dir    REG_SZ    {}\n",
             ea_install.display(), unrelated_install.display()
         );
         let games = super::parse_ea_registry_output(&output);
