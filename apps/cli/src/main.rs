@@ -4,6 +4,34 @@ use std::error::Error;
 #[cfg(any(unix, windows))]
 use amethys_ipc::transport::{self, BoxedIpcStream};
 
+fn print_help() {
+    println!(
+        "Amethys Launcher — contrôle en ligne de commande
+
+USAGE:
+    amethysctl <COMMANDE>
+
+COMMANDES:
+    ping                              Vérifie que le cœur Amethys répond
+    status                            Affiche l'état du cœur
+    games                             Liste la bibliothèque Amethys
+    games scan                        Détecte les jeux sans les importer
+    games import <appid>              Importe un jeu Steam par son App ID
+    games import <plateforme> <id>    Importe un jeu détecté par plateforme et ID
+    games import-all                  Importe les jeux détectés non encore enregistrés
+    games verify                      Vérifie les chemins sans modifier les installations
+    games add <nom> <plateforme> <dossier> [exécutable]
+    games remove <id>                 Retire un jeu de la bibliothèque Amethys
+
+OPTIONS:
+    -h, --help                        Affiche cette aide
+    -V, --version                     Affiche la version
+
+ENVIRONNEMENT:
+    AMETHYS_DATA_DIR                  Remplace le dossier de données par défaut"
+    );
+}
+
 fn parse_command(argument: Option<&str>) -> Result<IpcCommand, &'static str> {
     match argument {
         Some("ping") => Ok(IpcCommand::Ping),
@@ -239,6 +267,14 @@ async fn import_detected_game(platform: &str, platform_id: &str) -> Result<(), B
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if arguments.is_empty() || arguments.as_slice() == ["--help"] || arguments.as_slice() == ["-h"] {
+        print_help();
+        return Ok(());
+    }
+    if arguments.as_slice() == ["--version"] || arguments.as_slice() == ["-V"] {
+        println!("Amethys Launcher {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
     if arguments.as_slice() == ["games", "import-all"] {
         return import_detected_games(amethys_discovery::discover_all_games()).await;
     }
