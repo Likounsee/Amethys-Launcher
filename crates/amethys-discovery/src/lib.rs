@@ -214,7 +214,7 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
     // Filesystem directory iteration order is unspecified. Sort manifests so
     // duplicate metadata always produces the same result across scans.
     let mut entries: Vec<_> = entries.flatten().collect();
-    entries.sort_by_key(|entry| entry.file_name());
+    entries.sort_by_key(|entry| entry.file_name().to_string_lossy().to_ascii_lowercase());
     let mut games = Vec::new();
     let mut seen_paths = BTreeSet::new();
     let mut seen_app_ids = BTreeSet::new();
@@ -293,6 +293,10 @@ pub fn scan_heroic_legendary_installed(installed_json: &Path) -> Vec<DetectedGam
     let mut games = Vec::new();
     let mut seen_paths = BTreeSet::new();
     let mut seen_app_ids = BTreeSet::new();
+    // serde_json map ordering depends on enabled features; sort explicitly so
+    // duplicate app IDs always resolve to the same record on every build.
+    let mut entries: Vec<_> = entries.iter().collect();
+    entries.sort_by(|(left, _), (right, _)| left.cmp(right));
     for (key, value) in entries {
         let Some(record) = value.as_object() else { continue; };
         let app_name = record.get("app_name").and_then(|value| value.as_str())
