@@ -281,6 +281,57 @@ impl Database {
         Ok(changed != 0)
     }
 
+    /// Reads one application setting without changing the database.
+    pub fn get_setting(&self, key: &str) -> Result<Option<String>, AmethysError> {
+        let key = validate_setting_key(key)?;
+        self.connection.query_row(
+            "SELECT value FROM app_settings WHERE key = ?1",
+            [key],
+            |row| row.get(0),
+        ).optional().map_err(|error| storage_error(format!("Could not read setting: {error}")))
+    }
+
+    /// Inserts or replaces one application setting atomically.
+    pub fn set_setting(&self, key: &str, value: &str) -> Result<(), AmethysError> {
+        let key = validate_setting_key(key)?;
+        if value.contains('\\0') {
+            return Err(storage_error("Setting values must not contain NUL characters."));
+        }
+        const MAX_SETTING_VALUE_BYTES: usize = 64 * 1024;
+        if value.len() > MAX_SETTING_VALUE_BYTES {
+            return Err(storage_error(format!(
+                "Setting value exceeds the {MAX_SETTING_VALUE_BYTES}-byte limit."
+            )));
+        }
+        self.connection.execute(
+            "INSERT INTO app_settings (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            params![key, value],
+        ).map_err(|error| storage_error(format!("Could not save setting: {error}")))?;
+        Ok(())
+    }
+
+    /// Removes one setting. Returns false when the key was not present.
+    pub fn remove_setting(&self, key: &str) -> Result<bool, AmethysError> {
+        let key = validate_setting_key(key)?;
+        let changed = self.connection.execute(
+            "DELETE FROM app_settings WHERE key = ?1",
+            [key],
+        ).map_err(|error| storage_error(format!("Could not remove setting: {error}")))?;
+        Ok(changed != 0)
+    }
+
+    /// Returns all settings in deterministic key order.
+    pub fn list_settings(&self) -> Result<Vec<(String, String)>, AmethysError> {
+        let mut statement = self.connection.prepare(
+            "SELECT key, value FROM app_settings ORDER BY key COLLATE NOCASE, key"
+        ).map_err(|error| storage_error(format!("Could not prepare settings list: {error}")))?;
+        let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .map_err(|error| storage_error(format!("Could not list settings: {error}")))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| storage_error(format!("Could not read settings: {error}")))
+    }
+
     #[must_use]
     pub const fn connection(&self) -> &Connection { &self.connection }
 }
@@ -295,6 +346,23 @@ fn game_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GameEntry> {
         executable: row.get(5)?,
         added_at: row.get(6)?,
     })
+}
+
+fn validate_setting_key(key: &str) -> Result<&str, AmethysError> {
+    let key = key.trim();
+    const MAX_SETTING_KEY_BYTES: usize = 256;
+    if key.is_empty() {
+        return Err(storage_error("Setting keys must not be empty."));
+    }
+    if key.contains('\\0') {
+        return Err(storage_error("Setting keys must not contain NUL characters."));
+    }
+    if key.len() > MAX_SETTING_KEY_BYTES {
+        return Err(storage_error(format!(
+            "Setting key exceeds the {MAX_SETTING_KEY_BYTES}-byte limit."
+        )));
+    }
+    Ok(key)
 }
 
 fn storage_error(message: impl Into<String>) -> AmethysError {
@@ -593,6 +661,69 @@ mod tests {
         assert!(database.add_game("Example", "Steam", " ", None).is_err());
         drop(database);
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn application_settings_can_be_created_updated_listed_and_removed() {
+        let (database, path) = temporary_database();
+        assert_eq!(database.get_setting("theme").expect("lookup works"), None);
+        database.set_setting(" theme ", "dark").expect("setting is inserted");
+        assert_eq!(
+            database.get_setting("theme").expect("lookup works").as_deref(),
+            Some("dark")
+        );
+        database.set_setting("theme", "light").expect("setting is updated");
+        database.set_setting("language", "fr-FR").expect("second setting is inserted");
+        assert_eq!(
+            database.list_settings().expect("settings list works"),
+            vec![
+                ("language".to_owned(), "fr-FR".to_owned()),
+                ("theme".to_owned(), "light".to_owned()),
+            ]
+        );
+        assert!(database.remove_setting("theme").expect("setting is removed"));
+        assert!(!database.remove_setting("theme").expect("missing setting is ignored"));
+        assert_eq!(database.get_setting("theme").expect("lookup works"), None);
+        drop(database);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[test]
+    fn application_settings_reject_invalid_keys_and_values() {
+        let (database, path) = temporary_database();
+        assert!(database.set_setting("", "value").is_err());
+        assert!(database.set_setting("   ", "value").is_err());
+        assert!(database.set_setting("bad\\0key", "value").is_err());
+        assert!(database.set_setting("valid", "bad\\0value").is_err());
+        assert!(database.get_setting("bad\\0key").is_err());
+        assert!(database.remove_setting("bad\\0key").is_err());
+        assert!(database.set_setting(&"k".repeat(257), "value").is_err());
+        assert!(database.set_setting("valid", &"v".repeat(64 * 1024 + 1)).is_err());
+        assert!(database.list_settings().expect("settings remain readable").is_empty());
+        drop(database);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[test]
+    fn application_settings_persist_after_reopening_database() {
+        let path = std::env::temp_dir().join(format!("amethys-settings-{}.sqlite", uuid::Uuid::new_v4()));
+        {
+            let database = Database::open(&path).expect("database opens");
+            database.set_setting("startup.auto_start", "true").expect("setting is saved");
+        }
+        let database = Database::open(&path).expect("database reopens");
+        assert_eq!(
+            database.get_setting("startup.auto_start").expect("setting is readable").as_deref(),
+            Some("true")
+        );
+        drop(database);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
     }
 
     #[test]
