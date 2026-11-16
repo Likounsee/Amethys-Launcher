@@ -8,6 +8,7 @@ pub struct GameEntry {
     pub id: String,
     pub name: String,
     pub platform: String,
+    pub platform_id: Option<String>,
     pub install_path: String,
     pub executable: Option<String>,
     pub added_at: String,
@@ -72,11 +73,11 @@ impl Database {
             ErrorCode::StorageMigration,
             format!("Could not read migration history: {error}"),
         ))?;
-        if current_version > 2 {
+        if current_version > 3 {
             return Err(AmethysError::new(
                 ErrorCode::StorageMigration,
                 format!(
-                    "Database schema version {current_version} is newer than the supported version 2."
+                    "Database schema version {current_version} is newer than the supported version 3."
                 ),
             ));
         }
@@ -101,6 +102,18 @@ impl Database {
             ErrorCode::StorageMigration,
             format!("Could not initialize database schema: {error}"),
         ))?;
+        if current_version < 3 {
+            transaction.execute_batch(
+                "ALTER TABLE games ADD COLUMN platform_id TEXT;
+                 CREATE UNIQUE INDEX IF NOT EXISTS idx_games_platform_identity
+                     ON games(platform, platform_id)
+                     WHERE platform_id IS NOT NULL;
+                 INSERT OR IGNORE INTO schema_migrations (version) VALUES (3);"
+            ).map_err(|error| AmethysError::new(
+                ErrorCode::StorageMigration,
+                format!("Could not apply game platform-ID migration: {error}"),
+            ))?;
+        }
         transaction.commit().map_err(|error| AmethysError::new(
             ErrorCode::StorageMigration,
             format!("Could not commit database migration: {error}"),
@@ -108,7 +121,7 @@ impl Database {
         Ok(Self { connection })
     }
 
-    /// Adds a game to the local library and returns its generated identifier.
+    /// Adds a game without a platform-specific identifier.
     pub fn add_game(
         &self,
         name: &str,
@@ -116,26 +129,56 @@ impl Database {
         install_path: &str,
         executable: Option<&str>,
     ) -> Result<GameEntry, AmethysError> {
+        self.add_game_with_platform_id(name, platform, None, install_path, executable)
+    }
+
+    /// Adds a game while preserving its identifier in the source platform.
+    pub fn add_game_with_platform_id(
+        &self,
+        name: &str,
+        platform: &str,
+        platform_id: Option<&str>,
+        install_path: &str,
+        executable: Option<&str>,
+    ) -> Result<GameEntry, AmethysError> {
         let name = name.trim();
         let platform = platform.trim();
         let install_path = install_path.trim();
+        let platform_id = platform_id.map(str::trim);
         if name.is_empty() || platform.is_empty() || install_path.is_empty() {
             return Err(storage_error("Game name, platform and install path must not be empty."));
+        }
+        if platform_id.is_some_and(str::is_empty) {
+            return Err(storage_error("Platform game ID must not be empty when provided."));
         }
 
         let id = uuid::Uuid::new_v4().to_string();
         self.connection.execute(
-            "INSERT INTO games (id, name, platform, install_path, executable)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![id, name, platform, install_path, executable],
+            "INSERT INTO games (id, name, platform, platform_id, install_path, executable)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![id, name, platform, platform_id, install_path, executable],
         ).map_err(|error| storage_error(format!("Could not add game: {error}")))?;
         self.get_game(&id)?.ok_or_else(|| storage_error("Added game could not be read back."))
+    }
+
+    /// Finds a game using the identifier assigned by its source platform.
+    pub fn get_game_by_platform_id(
+        &self,
+        platform: &str,
+        platform_id: &str,
+    ) -> Result<Option<GameEntry>, AmethysError> {
+        self.connection.query_row(
+            "SELECT id, name, platform, platform_id, install_path, executable, added_at
+             FROM games WHERE platform = ?1 COLLATE NOCASE AND platform_id = ?2",
+            params![platform.trim(), platform_id.trim()],
+            game_from_row,
+        ).optional().map_err(|error| storage_error(format!("Could not find game by platform ID: {error}")))
     }
 
     /// Finds one game by its stable identifier.
     pub fn get_game(&self, id: &str) -> Result<Option<GameEntry>, AmethysError> {
         self.connection.query_row(
-            "SELECT id, name, platform, install_path, executable, added_at
+            "SELECT id, name, platform, platform_id, install_path, executable, added_at
              FROM games WHERE id = ?1",
             [id],
             game_from_row,
@@ -145,7 +188,7 @@ impl Database {
     /// Returns the library ordered by name, without depending on a platform client.
     pub fn list_games(&self) -> Result<Vec<GameEntry>, AmethysError> {
         let mut statement = self.connection.prepare(
-            "SELECT id, name, platform, install_path, executable, added_at
+            "SELECT id, name, platform, platform_id, install_path, executable, added_at
              FROM games ORDER BY name COLLATE NOCASE, id"
         ).map_err(|error| storage_error(format!("Could not prepare game list: {error}")))?;
         let rows = statement.query_map([], game_from_row)
@@ -170,9 +213,10 @@ fn game_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GameEntry> {
         id: row.get(0)?,
         name: row.get(1)?,
         platform: row.get(2)?,
-        install_path: row.get(3)?,
-        executable: row.get(4)?,
-        added_at: row.get(5)?,
+        platform_id: row.get(3)?,
+        install_path: row.get(4)?,
+        executable: row.get(5)?,
+        added_at: row.get(6)?,
     })
 }
 
@@ -198,7 +242,7 @@ mod tests {
         let count: i64 = database.connection()
             .query_row("SELECT COUNT(*) FROM schema_migrations", [], |row| row.get(0))
             .expect("migration table readable");
-        assert_eq!(count, 2);
+        assert_eq!(count, 3);
         drop(database);
         let _ = std::fs::remove_file(path);
         let _ = std::fs::remove_file(format!("{filename}-wal"));
@@ -243,7 +287,7 @@ mod tests {
                     version INTEGER PRIMARY KEY NOT NULL,
                     applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
-                INSERT INTO schema_migrations (version) VALUES (3);"
+                INSERT INTO schema_migrations (version) VALUES (4);"
             ).expect("future schema is created");
         }
 
@@ -262,6 +306,68 @@ mod tests {
         ).expect("schema catalog is readable");
         assert_eq!(games_exists, 0, "future database must remain untouched");
         drop(connection);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[test]
+    fn version_two_database_migrates_without_losing_existing_games() {
+        let path = std::env::temp_dir().join(format!("amethys-v2-{}.sqlite", uuid::Uuid::new_v4()));
+        {
+            let connection = rusqlite::Connection::open(&path).expect("fixture database opens");
+            connection.execute_batch(
+                "CREATE TABLE schema_migrations (
+                    version INTEGER PRIMARY KEY NOT NULL,
+                    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                INSERT INTO schema_migrations (version) VALUES (1), (2);
+                CREATE TABLE games (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    name TEXT NOT NULL,
+                    platform TEXT NOT NULL,
+                    install_path TEXT NOT NULL,
+                    executable TEXT,
+                    added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                INSERT INTO games (id, name, platform, install_path)
+                VALUES ('legacy-id', 'Legacy Game', 'Steam', '/games/legacy');"
+            ).expect("version two fixture is created");
+        }
+
+        let database = Database::open(&path).expect("version two database migrates");
+        let game = database.get_game("legacy-id").expect("legacy lookup works").expect("legacy game remains");
+        assert_eq!(game.name, "Legacy Game");
+        assert_eq!(game.platform_id, None);
+        let version: i64 = database.connection().query_row(
+            "SELECT MAX(version) FROM schema_migrations", [], |row| row.get(0)
+        ).expect("version is readable");
+        assert_eq!(version, 3);
+        drop(database);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[test]
+    fn platform_ids_are_saved_and_unique_per_platform() {
+        let (database, path) = temporary_database();
+        let game = database.add_game_with_platform_id(
+            "Example Game", "Steam", Some("570"), "/games/example", None
+        ).expect("game with platform ID is added");
+        assert_eq!(game.platform_id.as_deref(), Some("570"));
+        assert_eq!(
+            database.get_game_by_platform_id("steam", "570").expect("lookup works"),
+            Some(game)
+        );
+        assert!(database.add_game_with_platform_id(
+            "Duplicate", "Steam", Some("570"), "/games/duplicate", None
+        ).is_err());
+        // The same identifier may exist on a different platform.
+        assert!(database.add_game_with_platform_id(
+            "Other Platform Game", "Epic Games", Some("570"), "/games/other", None
+        ).is_ok());
+        drop(database);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
         let _ = std::fs::remove_file(format!("{}-shm", path.display()));
