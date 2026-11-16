@@ -852,9 +852,13 @@ pub fn parse_ubisoft_registry_output(contents: &str) -> Vec<DetectedGame> {
                 continue;
             };
             if let Some(platform_id) = current_id.as_ref().filter(|id| !id.is_empty()) {
-                if seen_ids.insert(platform_id.clone())
+                // Do not reserve an ID until its installation path is accepted.
+                // A duplicate path may belong to another registry record; a later
+                // valid path for this same ID must still be eligible for discovery.
+                if !seen_ids.contains(platform_id)
                     && insert_unique_install_path(&mut seen_paths, &install_path)
                 {
+                    seen_ids.insert(platform_id.clone());
                     games.push(DetectedGame {
                         platform_id: Some(platform_id.clone()),
                         name: name.to_owned(),
@@ -1913,6 +1917,34 @@ mod tests {
             root.display()
         );
         assert!(super::parse_ea_registry_output(&output).is_empty());
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn keeps_ubisoft_id_available_after_rejecting_duplicate_install_path() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-ubisoft-dedup-order-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let first_install = root.join("First Game");
+        let valid_install = root.join("Valid Game");
+        std::fs::create_dir_all(&first_install).expect("create first install");
+        std::fs::create_dir_all(&valid_install).expect("create valid install");
+        let output = format!(
+            "HKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\first\\n    InstallDir    REG_SZ    {}\\nHKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\target\\n    InstallDir    REG_SZ    {}\\nHKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\target\\n    InstallDir    REG_SZ    {}\\n",
+            first_install.display(),
+            first_install.display(),
+            valid_install.display(),
+        );
+
+        let games = super::parse_ubisoft_registry_output(&output);
+        assert_eq!(games.len(), 2);
+        assert!(games.iter().any(|game| {
+            game.platform_id.as_deref() == Some("target")
+                && game.install_path == valid_install
+        }));
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
