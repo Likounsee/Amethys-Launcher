@@ -2035,7 +2035,7 @@ mod tests {
             ).expect("write EA installer metadata");
         }
         let output = format!(
-            "HKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\First\n    Install Dir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\DuplicatePath\n    Install Dir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\Second\n    Install Dir    REG_SZ    {}\n",
+            "HKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\First\n    Install Dir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\Second\n    Install Dir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\Second\n    Install Dir    REG_SZ    {}\n",
             first_install.display(), first_install.display(), valid_second_install.display()
         );
         let games = super::parse_ea_registry_output(&output);
