@@ -41,12 +41,14 @@ pub fn parse_library_folders(contents: &str, steam_root: &Path) -> Vec<PathBuf> 
 
     for line in contents.lines() {
         let trimmed = line.trim_start();
-        if !trimmed.starts_with("//") {
-            if depth == 0 && trimmed.split('"').nth(1)
+        if !trimmed.starts_with("//")
+            && depth == 0
+            && trimmed
+                .split('"')
+                .nth(1)
                 .is_some_and(|key| key.eq_ignore_ascii_case("libraryfolders"))
-            {
-                awaiting_library_open = true;
-            }
+        {
+            awaiting_library_open = true;
         }
 
         // Process entries only after entering the actual libraryfolders block.
