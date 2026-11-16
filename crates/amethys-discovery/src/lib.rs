@@ -1105,8 +1105,8 @@ mod tests {
     #[test]
     fn quoted_vdf_pairs_ignore_escaped_quotes_inside_values() {
         assert_eq!(
-            super::quoted_pair(r#""path" "C:\\Games\\A \\"Quoted\\" Game""#),
-            Some(("path".to_owned(), r#"C:\\Games\\A \\"Quoted\\" Game"#.to_owned())),
+            super::quoted_pair(r#""path" "C:\\Games\\A \"Quoted\" Game""#),
+            Some(("path".to_owned(), r#"C:\\Games\\A \"Quoted\" Game"#.to_owned())),
         );
     }
 
