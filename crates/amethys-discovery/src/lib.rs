@@ -1484,9 +1484,9 @@ mod tests {
     #[test]
     fn parses_registered_steam_root_without_matching_unrelated_registry_values() {
         let output = r#"
-HKEY_CURRENT_USER\\Software\\Valve\\Steam
-    InstallPath    REG_SZ    D:\\Games\\Steam
-    SteamPath      REG_SZ    "E:\\Custom Steam"
+HKEY_CURRENT_USER\Software\Valve\Steam
+    InstallPath    REG_SZ    D:\Games\Steam
+    SteamPath      REG_SZ    "E:\Custom Steam"
 "#;
         assert_eq!(
             super::parse_steam_registry_output(output),
