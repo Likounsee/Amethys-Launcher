@@ -1373,8 +1373,10 @@ mod tests {
         ));
         let manifests = root.join("Manifests");
         let installed = root.join("Installed").join("Example Game");
+        let whitespace_install = root.join("Installed").join("Whitespace Game");
         std::fs::create_dir_all(&manifests).expect("create manifests");
         std::fs::create_dir_all(&installed).expect("create game folder");
+        std::fs::create_dir_all(&whitespace_install).expect("create whitespace game folder");
         std::fs::write(manifests.join("installed.item"), format!(
             r#"{{"AppName":"ExampleApp","DisplayName":"Example Game","InstallLocation":{}}}"#,
             serde_json::to_string(&installed.to_string_lossy()).expect("encode path")
@@ -1387,16 +1389,17 @@ mod tests {
             manifests.join("whitespace.item"),
             format!(
                 r#"{{"AppName":"  ","DisplayName":"  Example Game  ","InstallLocation":"  {}  "}}"#,
-                installed.display()
+                whitespace_install.display()
             ),
         ).expect("write manifest with surrounding whitespace");
 
         let games = scan_epic_manifests(&manifests);
-        assert_eq!(games.len(), 1);
+        assert_eq!(games.len(), 2);
         assert_eq!(games[0].platform, "Epic Games");
-        assert_eq!(games[0].platform_id.as_deref(), Some("ExampleApp"));
-        assert_eq!(games[0].name, "Example Game");
-        assert_eq!(games[0].install_path, installed);
+        assert_eq!(games.iter().find(|game| game.install_path == installed).unwrap().platform_id.as_deref(), Some("ExampleApp"));
+        let whitespace_game = games.iter().find(|game| game.install_path == whitespace_install).unwrap();
+        assert_eq!(whitespace_game.name, "Example Game");
+        assert_eq!(whitespace_game.platform_id, None);
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
