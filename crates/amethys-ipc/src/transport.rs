@@ -19,6 +19,8 @@ pub type BoxedIpcStream = Box<dyn IpcStream>;
 pub struct IpcListener {
     listener: tokio::net::UnixListener,
     socket_path: std::path::PathBuf,
+    socket_device: u64,
+    socket_inode: u64,
 }
 
 #[cfg(windows)]
@@ -30,7 +32,20 @@ pub struct IpcListener {
 #[cfg(unix)]
 impl Drop for IpcListener {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.socket_path);
+        use std::os::unix::fs::{FileTypeExt, MetadataExt};
+
+        // Only unlink the socket inode created by this listener. If the path
+        // was replaced while the listener was alive, leave the replacement
+        // untouched rather than deleting an unrelated file or symlink.
+        let Ok(metadata) = std::fs::symlink_metadata(&self.socket_path) else {
+            return;
+        };
+        if metadata.file_type().is_socket()
+            && metadata.dev() == self.socket_device
+            && metadata.ino() == self.socket_inode
+        {
+            let _ = std::fs::remove_file(&self.socket_path);
+        }
     }
 }
 
@@ -80,15 +95,29 @@ impl IpcListener {
         remove_stale_socket(&socket_path).await?;
         let listener = tokio::net::UnixListener::bind(&socket_path)
             .map_err(io_error)?;
+        let metadata = std::fs::symlink_metadata(&socket_path).map_err(io_error)?;
         if let Err(error) = std::fs::set_permissions(
             &socket_path,
             std::fs::Permissions::from_mode(0o600),
         ) {
-            drop(listener);
-            let _ = std::fs::remove_file(&socket_path);
+            // The listener is still local to this function. Remove only the
+            // inode we just bound, never a path that may have been replaced.
+            use std::os::unix::fs::MetadataExt;
+            if let Ok(current) = std::fs::symlink_metadata(&socket_path) {
+                if current.dev() == metadata.dev() && current.ino() == metadata.ino() {
+                    drop(listener);
+                    let _ = std::fs::remove_file(&socket_path);
+                }
+            }
             return Err(io_error(error));
         }
-        Ok(Self { listener, socket_path })
+        use std::os::unix::fs::MetadataExt;
+        Ok(Self {
+            listener,
+            socket_path,
+            socket_device: metadata.dev(),
+            socket_inode: metadata.ino(),
+        })
     }
 
     /// Accepts the next client connection. The same listener can be reused.
