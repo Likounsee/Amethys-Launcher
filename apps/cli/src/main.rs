@@ -229,7 +229,7 @@ async fn import_detected_games(
 }
 
 fn installation_path_exists(path: &str) -> bool {
-    std::path::Path::new(path).exists()
+    std::path::Path::new(path).is_dir()
 }
 
 async fn verify_saved_games() -> Result<(), Box<dyn Error>> {
@@ -437,6 +437,24 @@ mod tests {
         assert!(root.is_dir(), "verification must leave the installation untouched");
 
         std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn verification_rejects_a_file_where_an_installation_directory_is_expected() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-verify-file-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create test root");
+        let file = root.join("not-a-game-folder.exe");
+        std::fs::write(&file, b"sentinel").expect("create regular file");
+
+        assert!(!installation_path_exists(file.to_str().expect("UTF-8 test path")));
+        assert_eq!(std::fs::read(&file).expect("file remains"), b"sentinel");
+
+        std::fs::remove_dir_all(root).expect("remove test root");
     }
 
     #[test]
