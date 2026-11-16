@@ -568,12 +568,12 @@ pub fn parse_ea_registry_output(contents: &str) -> Vec<DetectedGame> {
 
     for line in contents.lines() {
         let trimmed = line.trim();
-        if trimmed.starts_with("HKEY_") {
+        if trimmed.get(..5).is_some_and(|prefix| prefix.eq_ignore_ascii_case("HKEY_")) {
             // Recursive registry output can contain unrelated vendors between
             // EA keys. Clear the current ID so their Install Dir values cannot
             // inherit the previous EA product identifier.
             current_id = prefixes.iter()
-                .find_map(|prefix| trimmed.strip_prefix(prefix))
+                .find_map(|prefix| strip_prefix_ignore_ascii_case(trimmed, prefix))
                 .map(|id| id.trim().to_owned());
             continue;
         }
@@ -1215,6 +1215,12 @@ fn insert_unique_platform_install_path(
 }
 
 /// Adds an install path once, respecting the host filesystem's case rules.
+/// Matches Windows registry key prefixes without relying on their displayed casing.
+fn strip_prefix_ignore_ascii_case<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
+    let candidate = value.get(..prefix.len())?;
+    candidate.eq_ignore_ascii_case(prefix).then(|| &value[prefix.len()..])
+}
+
 fn insert_unique_install_path(seen: &mut BTreeSet<PathBuf>, candidate: &Path) -> bool {
     seen.insert(install_path_key(candidate))
 }
@@ -2707,5 +2713,52 @@ mod tests {
         assert_eq!(games[0].install_path, install);
         std::fs::remove_dir_all(root).expect("cleanup");
     }
+
+    #[test]
+    fn parses_ubisoft_registry_keys_case_insensitively() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-ubisoft-registry-case-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let install = root.join("Ubisoft Game");
+        std::fs::create_dir_all(&install).expect("create Ubisoft install");
+        let output = format!(
+            "hkey_local_machine\\software\\ubisoft\\launcher\\installs\\Game123\\n    installdir    REG_SZ    {}\\n",
+            install.display()
+        ).replace("\\n", "\n");
+        let games = super::parse_ubisoft_registry_output(&output);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform_id.as_deref(), Some("Game123"));
+        assert_eq!(games[0].name, "Ubisoft Game");
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn parses_ea_registry_keys_case_insensitively() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-ea-registry-case-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let install = root.join("EA Game");
+        std::fs::create_dir_all(install.join("__Installer")).expect("create EA metadata");
+        std::fs::write(
+            install.join("__Installer/installerdata.xml"),
+            "<DiPManifest><gameTitle>EA Game</gameTitle><contentID>EA:case-123</contentID></DiPManifest>",
+        ).expect("write EA metadata");
+        let output = format!(
+            "hkey_local_machine\\software\\ea games\\CaseGame\\n    install dir    REG_SZ    {}\\n",
+            install.display()
+        ).replace("\\n", "\n");
+        let games = super::parse_ea_registry_output(&output);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform_id.as_deref(), Some("EA:case-123"));
+        assert_eq!(games[0].name, "EA Game");
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
 
 }
