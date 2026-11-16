@@ -1,12 +1,13 @@
 AMETHYS LAUNCHER — PROPRIETARY LICENSE
 Copyright (c) 2026 Likounsee. All rights reserved.
 
-1. OWNERSHIP
+1. CURRENT RIGHTS HOLDER
 
-The original source code, documentation, designs, architecture, assets and other
-original materials in this repository (the "Project Materials") are the
-exclusive property of Likounsee, except for third-party materials that are
-identified as such and remain subject to their own applicable licenses.
+The Amethys Launcher project and the original source code, documentation,
+designs, architecture, assets and other original materials in this repository
+(the "Project Materials") are currently owned by Likounsee, except for
+third-party materials and contributions governed by separate rights or
+agreements.
 
 No ownership or other intellectual-property right is transferred by making
 this repository publicly viewable or by allowing access to it.
@@ -19,75 +20,75 @@ sell, commercially exploit, incorporate into another product, or create
 derivative works from the Project Materials, in whole or in part.
 
 Viewing the repository, opening an issue, submitting a pull request, or
-contributing code does not grant permission to reuse the Project Materials.
-No patent, trademark, or other license is granted by implication, exhaustion,
-estoppel, or otherwise.
+contributing code does not by itself grant permission to reuse the Project
+Materials. No patent, trademark, or other license is granted by implication.
 
 Unauthorized use may infringe intellectual-property rights. Likounsee
-reserves the right to seek any remedies available under applicable law,
-including injunctive relief and damages where available. Nothing in this
-paragraph guarantees a particular legal outcome; that depends on the facts
-and applicable law.
+reserves the right to seek remedies available under applicable law. No
+particular legal outcome is guaranteed.
 
-3. CONTRIBUTIONS AND ASSIGNMENT REQUIREMENT
+3. INDIVIDUAL CONTRIBUTIONS
 
-Bug reports and proposed fixes are welcome under the repository's
-CONTRIBUTING.md rules. Submitting a pull request does not guarantee acceptance
-or merging. Every proposed change must be reviewed and explicitly approved by
-the project maintainer before it can be incorporated.
+Amethys Launcher welcomes voluntary contributions from individuals. A person
+who proposes code must understand that the purpose of the contribution is to
+help build Amethys Launcher, not to obtain individual ownership of the
+integrated project code.
 
-A contribution is NOT transferred to Likounsee merely because it is submitted,
-reviewed, discussed, or mentioned in a pull request. Before any third-party
-code or other copyrightable contribution is merged, distributed, or otherwise
-incorporated into Amethys Launcher, its contributor must sign a separate
-written contribution and intellectual-property assignment agreement covering
-that specific contribution. The agreement must identify the contribution and
-clearly specify the rights assigned and the permitted scope of exploitation,
-in accordance with applicable law.
+Submission, review, discussion, or a public acknowledgement does NOT by itself
+transfer copyright or grant permission to incorporate a contribution. Before
+any copyrightable individual contribution is merged, distributed, or
+incorporated, the contributor must expressly accept and sign a separate
+written agreement identifying that specific contribution.
 
-Subject to that signed agreement and applicable law, the contributor assigns
-to Likounsee the agreed transferable economic rights in the accepted
-contribution, including the expressly identified rights to reproduce, modify,
-adapt, translate, integrate, distribute, make available, and commercially or
-otherwise exploit it as part of Amethys Launcher and its related releases,
-in source-code and object-code form. The assignment's territory, duration,
-purposes, and any compensation must be stated in the individual agreement.
-No assignment of all of a person's future works is intended.
+Under that agreement, and only to the extent the contributor owns or is
+authorized to transfer the rights, the contributor assigns to Likounsee the
+specified transferable economic rights needed to maintain, modify, integrate,
+distribute and exploit the accepted contribution as part of Amethys Launcher.
+The agreement must specify the contribution and the rights, purpose,
+territory, duration and consideration as required by applicable law. It does
+not cover future work that is not specifically identified.
 
-The contributor will be credited in CONTRIBUTORS.md where reasonably
-practicable and as specified in the contribution process. Credit does not
-give the contributor ownership or control over the Project Materials or the
-assigned economic rights. Nothing here purports to transfer or waive moral
-rights that cannot legally be transferred or waived. In particular, mandatory
-rights under applicable law remain unaffected.
+Once a valid assignment takes effect, the contributor may not claim ownership
+or control of the economic rights assigned. The contributor will be credited
+in CONTRIBUTORS.md, with file or feature attribution where reasonably
+practicable. Credit recognises the person's work; it does not reverse a valid
+assignment. Moral rights and other rights that cannot legally be transferred
+or waived remain unaffected.
 
-Security-sensitive contributions are subject to the same prior written
-assignment requirement and must additionally pass the project's security and
-confidentiality review. Access to, possession of, or authorship of security
-code does not by itself create any special ownership transfer. Any assignment
-must be made through the same specific written agreement described above.
-Security reports and confidential information must follow SECURITY.md and
-must not be disclosed in public issues or pull requests.
+No contribution may be merged before the agreement is signed by both parties,
+the source and rights declarations have been reviewed, and the maintainer has
+accepted the contribution. Until then, the contributor retains their rights
+and the project may use the material only as needed to review the proposal.
 
-A contributor must not submit code or materials they do not have the right to
-contribute, or that violate another party's rights, confidentiality
-obligations, contractual restrictions, or applicable law. Until the required
-written agreement is signed and the contribution is accepted, the contributor
-retains their rights and Likounsee has no right to incorporate or exploit the
-contribution beyond what is strictly necessary to review it.
+4. CONTRIBUTOR RECOGNITION AND PLANNED REWARDS
 
-4. THIRD-PARTY MATERIALS AND PLATFORMS
+The project intends, after completion of Amethys Launcher including its Store
+and integrated wallets, to operate a gift-card reward programme for eligible
+contributors. The intention is to recognise accepted work and involvement.
+Assessment may take account of the amount, complexity, quality, reliability,
+regularity and project impact of contributions.
 
-Third-party libraries, tools, trademarks, names, APIs, services and platform
-materials are not owned by Likounsee. They remain subject to their respective
-owners' terms, licenses and policies. This license does not grant permission
-to use Steam, Epic Games, EA, Ubisoft, GOG, Microsoft, Amazon, Battle.net or
-any other third party's intellectual property, APIs, credentials or services.
+The programme's eligibility rules, assessment process, available budget,
+gift-card types, values and distribution conditions must be published before
+awards are determined. This statement does not promise a specific value,
+recipient, payment date or unconditional reward. Any award is separate from
+the rights assignment and does not change ownership of assigned code.
 
-Amethys Launcher is not endorsed by, affiliated with, or an official product
-of those platforms unless a separate, verifiable agreement expressly says so.
+5. PLATFORM AND BUSINESS COLLABORATIONS
 
-5. CONFIDENTIAL AND SENSITIVE INFORMATION
+Code or materials supplied or developed in an official collaboration with
+Steam, Epic Games or another platform/company are governed by the specific
+written agreement with that organisation. Such an organisation may retain
+ownership or other intellectual-property rights in its own code and materials
+and may set conditions for their use, modification, maintenance or withdrawal.
+
+This license does not transfer to Likounsee any third-party rights that the
+third party has retained. Third-party libraries, tools, trademarks, names,
+APIs, services and platform materials remain subject to their owners' terms,
+licenses and policies. Amethys Launcher is not endorsed by or affiliated with
+any platform unless a separate, verifiable agreement expressly says so.
+
+6. CONFIDENTIAL AND SENSITIVE INFORMATION
 
 Credentials, access tokens, API keys, private endpoints, partner documentation,
 non-public platform data, user data, personal data, security details and any
@@ -96,24 +97,27 @@ public repository, issues, pull requests, commits, logs, screenshots or test
 fixtures.
 
 Do not access, collect, copy, alter, disclose, publish or otherwise handle
-confidential platform information unless the project owner has expressly
-authorized the specific handling and it is permitted by the relevant platform
-and applicable law. Never attempt to bypass platform access controls,
-authentication, DRM, anti-cheat, rate limits or contractual restrictions.
+confidential platform information unless expressly authorized and permitted
+by the relevant platform and applicable law. Never bypass platform access
+controls, authentication, DRM, anti-cheat, rate limits or contractual
+restrictions.
 
-6. DISCLAIMER
+7. FUTURE CORPORATE OWNERSHIP
+
+Likounsee is the current owner and project lead. Any future transfer of the
+software or its rights to a company must be made through a separate valid
+transaction and written documentation. Likounsee intends to lead the project
+or the company if such a transition occurs, but any corporate office or
+management role will depend on the company's legal structure and agreements.
+This clause does not itself transfer ownership or guarantee a future position.
+
+8. DISCLAIMER AND APPLICABLE LAW
 
 The Project Materials are provided "AS IS", to the maximum extent permitted
-by applicable law, without warranties of any kind. Likounsee is not liable
-for damages arising from use of the Project Materials, except where such
-limitation is prohibited by law.
-
-7. GOVERNING LAW
-
-This license is subject to applicable intellectual-property and other
-mandatory laws. No choice of governing law or jurisdiction is made here;
-that must be determined with qualified legal advice for the rights holder
-and relevant circumstances.
+by applicable law. Nothing in this license excludes rights or remedies that
+cannot legally be excluded. Applicable mandatory intellectual-property laws
+remain controlling. Governing law and jurisdiction should be set with
+qualified legal advice for the rights holder and relevant contributors.
 
 For written permission or licensing inquiries, contact the repository owner
-through the official GitHub profile: https://github.com/Likounsee
+through: https://github.com/Likounsee
