@@ -2,8 +2,10 @@
 //!
 //! Unix-domain sockets are used on Linux/macOS and named pipes on Windows.
 //! Unix sockets are restricted to the owning user (0600). Windows named-pipe
-//! access is governed by the process token's default security descriptor.
-//! Callers must still validate the peer's protocol and authorize every command.
+//! access uses the process token's default security descriptor. Remote pipe
+//! clients are explicitly rejected; local-user access still depends on the
+//! inherited Windows DACL and must be reviewed before a multi-user deployment.
+//! Callers must validate the peer's protocol and authorize every command.
 
 use crate::{AmethysError, ErrorCode};
 use tokio::io::{AsyncRead, AsyncWrite};
@@ -65,6 +67,7 @@ impl IpcListener {
     pub async fn bind(endpoint: impl AsRef<str>) -> Result<Self, AmethysError> {
         let server = tokio::net::windows::named_pipe::ServerOptions::new()
             .first_pipe_instance(true)
+            .reject_remote_clients(true)
             .create(endpoint.as_ref())
             .map_err(io_error)?;
         Ok(Self { server, endpoint: endpoint.as_ref().to_owned() })
@@ -74,6 +77,7 @@ impl IpcListener {
     pub async fn accept(&mut self) -> Result<BoxedIpcStream, AmethysError> {
         self.server.connect().await.map_err(io_error)?;
         let next_server = tokio::net::windows::named_pipe::ServerOptions::new()
+            .reject_remote_clients(true)
             .create(&self.endpoint)
             .map_err(io_error)?;
         let connected_server = std::mem::replace(&mut self.server, next_server);
