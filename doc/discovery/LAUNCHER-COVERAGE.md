@@ -15,6 +15,7 @@ Amethys performs read-only discovery from local launcher metadata. A launcher be
 | Ubisoft Connect | Windows registry install records | Implemented |
 | Battle.net | Local Agent product metadata | Implemented |
 | Riot Games | Riot Client JSON and per-product product_settings.yaml metadata (VALORANT, League of Legends, LoR, 2XKO) | Initial adapter; validate against real installations |
+| Xbox app (GDK titles) | Xbox library marker, `XboxGames` directory, and each game's `MicrosoftGame.config` identity plus declared executable | Initial adapter; validate against real installations |
 
 ## Game-specific coverage notes
 
@@ -26,7 +27,7 @@ Amethys performs read-only discovery from local launcher metadata. A launcher be
 
 | Service | Next work |
 |---|---|
-| Xbox app / Microsoft Store | Read package registration metadata using supported Windows APIs; never infer games from XboxGames folders alone |
+| Microsoft Store / non-GDK packaged games | Investigate per-user package registration and a reliable way to distinguish games from ordinary apps; do not enumerate all apps as games |
 | Rockstar Games Launcher | Find a reliable local installed-product manifest or registry source |
 | itch.io | Inspect Butler/itch install metadata and validate paths |
 | HoYoPlay / HoYoverse | Identify a stable local game installation manifest |
@@ -39,6 +40,7 @@ Amethys performs read-only discovery from local launcher metadata. A launcher be
 - Only absolute, existing installation directories are accepted.
 - Launcher runtimes, anti-cheat components and shared dependencies must not be reported as games.
 - Avoid guessing from generic folders. A folder name alone is not sufficient evidence of an installed game.
+- The Xbox adapter currently targets GDK installs with a valid `MicrosoftGame.config` and an existing declared executable. It does not yet cover every Microsoft Store/UWP title.
 - Keep each adapter independently testable with synthetic metadata fixtures.
 - Do not bypass DRM, account checks, licensing, authentication, anti-cheat or Windows package permissions.
 
