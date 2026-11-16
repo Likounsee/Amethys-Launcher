@@ -740,7 +740,7 @@ pub fn scan_ea_games(roots: &[PathBuf]) -> Vec<DetectedGame> {
         };
         for entry in entries.flatten() {
             let install_path = entry.path();
-            if !install_path.is_dir() {
+            if !is_existing_absolute_directory(&install_path) {
                 continue;
             }
             let metadata = install_path.join("__Installer/installerdata.xml");
@@ -940,7 +940,7 @@ pub fn parse_ubisoft_registry_output(contents: &str) -> Vec<DetectedGame> {
         {
             let expanded_path = expand_windows_environment_variables(value.trim().trim_matches('"'));
             let install_path = PathBuf::from(expanded_path);
-            if !install_path.is_dir() {
+            if !is_existing_absolute_directory(&install_path) {
                 continue;
             }
             let Some(name) = install_path.file_name().and_then(|value| value.to_str())
@@ -1012,6 +1012,9 @@ pub fn scan_game_folders(platform: &'static str, roots: &[PathBuf]) -> Vec<Detec
     let mut roots = roots.to_vec();
     roots.sort();
     for root in &roots {
+        if !is_existing_absolute_directory(root) {
+            continue;
+        }
         let entries = match fs::read_dir(root) {
             Ok(entries) => entries,
             Err(_) => continue,
