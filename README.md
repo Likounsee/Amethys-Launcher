@@ -42,6 +42,17 @@ The desktop GUI, Amethys online store/catalogue, downloads, save synchronization
 
 This repository is currently named `Amethys-Launcher`. The project/product name is **Amethys Launcher**; the repository name can be changed separately later if desired.
 
-## License
+## License and contributions
 
-To be decided before the first public release.
+Amethys Launcher is proprietary software. All rights are reserved by Likounsee,
+except for third-party materials governed by their own licenses. Public
+visibility does not grant permission to copy, reuse, modify or redistribute
+project materials. See [LICENSE](LICENSE) for the terms.
+
+Bug reports and proposed fixes are welcome. Pull requests are reviewed before
+any merge, including checks for correctness, security, privacy and platform
+compliance. See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
+
+Never publish credentials, personal data, private platform responses or
+confidential information from Steam, Epic Games or other services in this
+repository.
