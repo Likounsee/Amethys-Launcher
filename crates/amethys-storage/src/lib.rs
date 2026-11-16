@@ -438,16 +438,16 @@ mod tests {
     fn game_metadata_rejects_embedded_nul_characters() {
         let (database, path) = temporary_database();
         assert!(database.add_game(
-            "Bad\\0Name", "Steam", "/games/example", None
+            "Bad\0Name", "Steam", "/games/example", None
         ).is_err());
         assert!(database.add_game(
-            "Example", "Steam", "/games/\\0example", None
+            "Example", "Steam", "/games/\0example", None
         ).is_err());
         assert!(database.add_game(
-            "Example", "Steam", "/games/example", Some("game\\0.exe")
+            "Example", "Steam", "/games/example", Some("game\0.exe")
         ).is_err());
         assert!(database.add_game_with_platform_id(
-            "Example", "Steam", Some("57\\0"), "/games/example", None
+            "Example", "Steam", Some("57\0"), "/games/example", None
         ).is_err());
         assert!(database.list_games().expect("list remains readable").is_empty());
         drop(database);
