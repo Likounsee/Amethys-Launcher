@@ -43,6 +43,34 @@ null platform ID; they remain addressable by their Amethys library ID and
 installation path. Detection remains read-only: importing changes only the
 Amethys database and never modifies the original launcher or game installation.
 
+## Read-only installation verification
+
+Run `amethysctl games verify` to inspect every game already saved in the
+Amethys library. The command does not launch games, hash or read game contents,
+repair installations, or modify game/launcher files.
+
+For each entry it reports the installation-directory state:
+
+- `available`: the path resolves to a directory.
+- `missing`: the path does not exist.
+- `wrong_type`: the path exists but is not the expected filesystem object.
+- `inaccessible`: the operating system denied metadata access.
+- `error`: another filesystem metadata error occurred.
+
+When an executable path is configured on a library entry, verification also
+checks it. Relative executable paths are resolved beneath the saved installation
+directory; absolute paths are checked as supplied. Executable states use
+`available`, `missing`, `wrong_type`, `inaccessible`, or `error`.
+Entries without a configured executable report `not_configured` and are not
+penalized.
+
+Use `amethysctl games verify --json` for the versioned JSON report
+(`schema_version: 2`). It includes `directory_status`,
+`executable_status`, per-entry `healthy`, and aggregate `available`,
+`missing`, `healthy`, and `issues` counts. A directory being available
+does not prove that all game files are intact or that the game can start; this
+check validates only path metadata and any explicitly configured executable.
+
 ## Development priorities
 
 1. Keep discovery read-only and require launcher metadata or another reliable installation record; do not infer games from generic folder names.
