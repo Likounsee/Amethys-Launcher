@@ -468,8 +468,8 @@ pub fn parse_ea_registry_output(contents: &str) -> Vec<DetectedGame> {
     let mut games = Vec::new();
     let mut current_id: Option<String> = None;
     let prefixes = [
-        r"HKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\",
-        r"HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\EA Games\\",
+        r"HKEY_LOCAL_MACHINE\SOFTWARE\EA Games\",
+        r"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\EA Games\",
     ];
 
     for line in contents.lines() {
@@ -513,8 +513,8 @@ pub fn parse_ea_registry_output(contents: &str) -> Vec<DetectedGame> {
 #[cfg(windows)]
 pub fn discover_ea_games() -> Vec<DetectedGame> {
     const INSTALL_KEYS: [&str; 2] = [
-        r"HKLM\\SOFTWARE\\EA Games",
-        r"HKLM\\SOFTWARE\\WOW6432Node\\EA Games",
+        r"HKLM\SOFTWARE\EA Games",
+        r"HKLM\SOFTWARE\WOW6432Node\EA Games",
     ];
     let mut games = Vec::new();
     for key in INSTALL_KEYS {
@@ -1416,7 +1416,7 @@ mod tests {
             r#"<DiPManifest><gameTitle>Custom EA Game</gameTitle><contentID>EA:custom-123</contentID></DiPManifest>"#,
         ).expect("write EA metadata");
         let output = format!(
-            "HKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\CustomGame\\n    Install Dir    REG_SZ    {}\\n",
+            "HKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\CustomGame\n    Install Dir    REG_SZ    {}\n",
             install.display()
         );
 
