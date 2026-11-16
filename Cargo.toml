@@ -14,7 +14,6 @@ amethys-errors = { path = "crates/amethys-errors" }
 amethys-events = { path = "crates/amethys-events" }
 amethys-ipc = { path = "crates/amethys-ipc" }
 amethys-logging = { path = "crates/amethys-logging" }
-amethys-orchestration = { path = "crates/amethys-orchestration" }
 amethys-runtime = { path = "crates/amethys-runtime" }
 amethys-storage = { path = "crates/amethys-storage" }
 rusqlite = { version = "0.32", features = ["bundled"] }
