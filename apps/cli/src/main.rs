@@ -127,15 +127,19 @@ async fn import_detected_game(platform: &str, platform_id: &str) -> Result<(), B
     let install_path = game.install_path.to_string_lossy().into_owned();
     if saved_games.iter().any(|saved| {
         saved.platform.eq_ignore_ascii_case(game.platform)
-            && same_install_location(&saved.install_path, &game.install_path)
+            && match (&saved.platform_id, &game.platform_id) {
+                (Some(saved_id), Some(detected_id)) => saved_id == detected_id,
+                _ => same_install_location(&saved.install_path, &game.install_path),
+            }
     }) {
         println!("{} est déjà présent dans la bibliothèque Amethys.", game.name);
         return Ok(());
     }
 
-    let command = IpcCommand::AddGame {
+    let command = IpcCommand::AddDetectedGame {
         name: game.name.clone(),
         platform: game.platform.to_owned(),
+        platform_id: game.platform_id.clone(),
         install_path,
         executable: None,
     };
@@ -209,7 +213,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
             } else {
                 println!("Jeux enregistrés :");
                 for game in games {
-                    println!("- {} ({}) — {}", game.name, game.platform, game.install_path);
+                    println!(
+                    "- {} ({}){} — {}",
+                    game.name,
+                    game.platform,
+                    game.platform_id.as_deref().map(|id| format!(" — ID {id}")).unwrap_or_default(),
+                    game.install_path
+                );
                 }
             }
             Ok(())
