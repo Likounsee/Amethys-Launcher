@@ -711,13 +711,50 @@ fn xml_element_text(contents: &str, element: &str) -> Option<String> {
     if raw.is_empty() {
         return None;
     }
-    // Decode named XML entities in one pass. Decode ampersands last so
-    // escaped entity text such as "&amp;lt;" remains "&lt;".
-    Some(raw.replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&apos;", "'")
-        .replace("&amp;", "&"))
+    Some(decode_xml_entities(raw))
+}
+
+/// Decodes the five predefined XML entities and valid numeric character references.
+/// Unknown or invalid entities are preserved rather than silently corrupted.
+fn decode_xml_entities(raw: &str) -> String {
+    let mut decoded = String::with_capacity(raw.len());
+    let mut remaining = raw;
+
+    while let Some(start) = remaining.find('&') {
+        decoded.push_str(&remaining[..start]);
+        let after_ampersand = &remaining[start + 1..];
+        let Some(end) = after_ampersand.find(';') else {
+            decoded.push_str(&remaining[start..]);
+            return decoded;
+        };
+        let entity = &after_ampersand[..end];
+        let character = match entity {
+            "lt" => Some('<'),
+            "gt" => Some('>'),
+            "quot" => Some('"'),
+            "apos" => Some('\''),
+            "amp" => Some('&'),
+            _ => {
+                let numeric = entity.strip_prefix("#x")
+                    .or_else(|| entity.strip_prefix("#X"))
+                    .and_then(|value| u32::from_str_radix(value, 16).ok())
+                    .or_else(|| entity.strip_prefix('#').and_then(|value| value.parse::<u32>().ok()));
+                numeric.and_then(char::from_u32)
+            }
+        };
+
+        if let Some(character) = character {
+            decoded.push(character);
+        } else {
+            decoded.push('&');
+            decoded.push_str(entity);
+            decoded.push(';');
+        }
+        remaining = &after_ampersand[end + 1..];
+    }
+
+    decoded.push_str(remaining);
+    decoded
 }
 
 /// Returns the standard Amazon Games install metadata database on Windows.
@@ -1194,6 +1231,15 @@ fn unescape_vdf(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn decodes_numeric_xml_entities_without_redecoding_escaped_text() {
+        assert_eq!(
+            super::decode_xml_entities("Rock &#38; Roll &#x1F680; &amp;lt; &unknown;"),
+            "Rock & Roll 🚀 &lt; &unknown;"
+        );
+        assert_eq!(super::decode_xml_entities("Bad &#xZZ; ref"), "Bad &#xZZ; ref");
+    }
+
     use super::{
         parse_app_manifest, parse_library_folders, scan_epic_manifests, scan_game_folders,
         scan_steam_libraries,
