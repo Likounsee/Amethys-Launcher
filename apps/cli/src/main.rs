@@ -307,6 +307,7 @@ enum PathCheck {
     Missing,
     WrongType,
     Inaccessible,
+    InvalidPath,
     Error,
 }
 
@@ -317,6 +318,7 @@ impl PathCheck {
             Self::Missing => "missing",
             Self::WrongType => "wrong_type",
             Self::Inaccessible => "inaccessible",
+            Self::InvalidPath => "invalid_path",
             Self::Error => "error",
         }
     }
@@ -339,12 +341,32 @@ fn inspect_path(path: &std::path::Path, expect_directory: bool) -> PathCheck {
 }
 
 
+/// Rejects relative executable paths that could escape the registered game directory.
+fn is_safe_relative_executable(executable: &str) -> bool {
+    let trimmed = executable.trim();
+    if trimmed.is_empty() || trimmed.starts_with(['/', '\\\\']) {
+        return false;
+    }
+
+    // Check both separator styles so Windows metadata is validated consistently
+    // even when fixtures are evaluated on a non-Windows CI runner.
+    let mut components = trimmed.split(['/', '\\\\']);
+    let Some(first) = components.next() else { return false; };
+    !first.contains(':')
+        && !components
+            .chain(std::iter::once(first))
+            .any(|component| component == "." || component == "..")
+}
+
 fn inspect_game_executable(game: &amethys_ipc::IpcGameEntry) -> Option<PathCheck> {
     let executable = game.executable.as_deref()?;
     let executable_path = std::path::Path::new(executable);
     let resolved = if executable_path.is_absolute() {
         executable_path.to_path_buf()
     } else {
+        if !is_safe_relative_executable(executable) {
+            return Some(PathCheck::InvalidPath);
+        }
         std::path::Path::new(&game.install_path).join(executable_path)
     };
     Some(inspect_path(&resolved, false))
@@ -728,6 +750,27 @@ mod tests {
         assert_eq!(missing["games"][0]["healthy"], false);
         assert_eq!(std::fs::read(root.join("bin/game.exe")).expect("fixture remains"), b"sentinel");
         std::fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn verification_rejects_relative_executable_path_traversal() {
+        let game = |executable: &str| amethys_ipc::IpcGameEntry {
+            id: "game-path".to_owned(),
+            name: "Example".to_owned(),
+            platform: "Test".to_owned(),
+            platform_id: None,
+            install_path: "C:/Games/Example".to_owned(),
+            executable: Some(executable.to_owned()),
+        };
+
+        for unsafe_path in ["../outside.exe", r"..\\outside.exe", "bin/../../outside.exe", r"C:outside.exe"] {
+            assert_eq!(
+                super::inspect_game_executable(&game(unsafe_path)),
+                Some(super::PathCheck::InvalidPath),
+                "must reject {unsafe_path}"
+            );
+        }
+        assert!(super::is_safe_relative_executable("bin/game.exe"));
     }
 
     #[test]
