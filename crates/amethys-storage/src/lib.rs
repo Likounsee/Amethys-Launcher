@@ -183,11 +183,23 @@ impl Database {
         let platform = platform.trim();
         let install_path = install_path.trim();
         let platform_id = platform_id.map(str::trim);
+        let executable = executable.map(str::trim).filter(|value| !value.is_empty());
         if name.is_empty() || platform.is_empty() || install_path.is_empty() {
             return Err(storage_error("Game name, platform and install path must not be empty."));
         }
         if platform_id.is_some_and(str::is_empty) {
             return Err(storage_error("Platform game ID must not be empty when provided."));
+        }
+        // SQLite accepts embedded NUL bytes in TEXT values, but downstream
+        // filesystem and process APIs cannot use such paths safely. Reject
+        // them at the persistence boundary rather than storing unusable data.
+        if [name, platform, install_path]
+            .iter()
+            .any(|value| value.contains('\\0'))
+            || platform_id.is_some_and(|value| value.contains('\\0'))
+            || executable.is_some_and(|value| value.contains('\\0'))
+        {
+            return Err(storage_error("Game metadata must not contain NUL characters."));
         }
 
         let id = uuid::Uuid::new_v4().to_string();
@@ -389,6 +401,48 @@ mod tests {
             "SELECT MAX(version) FROM schema_migrations", [], |row| row.get(0)
         ).expect("version is readable");
         assert_eq!(version, 3);
+        drop(database);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[test]
+    fn game_metadata_rejects_embedded_nul_characters() {
+        let (database, path) = temporary_database();
+        assert!(database.add_game(
+            "Bad\\0Name", "Steam", "/games/example", None
+        ).is_err());
+        assert!(database.add_game(
+            "Example", "Steam", "/games/\\0example", None
+        ).is_err());
+        assert!(database.add_game(
+            "Example", "Steam", "/games/example", Some("game\\0.exe")
+        ).is_err());
+        assert!(database.add_game_with_platform_id(
+            "Example", "Steam", Some("57\\0"), "/games/example", None
+        ).is_err());
+        assert!(database.list_games().expect("list remains readable").is_empty());
+        drop(database);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[test]
+    fn optional_executable_is_trimmed_and_empty_values_become_none() {
+        let (database, path) = temporary_database();
+        let game = database.add_game(
+            " Example ", " Steam ", "/games/example", Some("  bin/game.exe  ")
+        ).expect("valid game is added");
+        assert_eq!(game.name, "Example");
+        assert_eq!(game.platform, "Steam");
+        assert_eq!(game.executable.as_deref(), Some("bin/game.exe"));
+
+        let without_executable = database.add_game(
+            "Another", "Steam", "/games/another", Some("   ")
+        ).expect("blank optional executable is accepted");
+        assert_eq!(without_executable.executable, None);
         drop(database);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
