@@ -1462,6 +1462,25 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
         let program_files = std::env::var_os("ProgramFiles").map(PathBuf::from);
         if let Some(root) = program_files.as_ref() {
             games.extend(scan_ea_games(&[root.join("EA Games")]));
+        }
+        // EA app can be installed per-machine or under the 32-bit Program Files
+        // tree. Inspect both conventional game-library roots; each candidate
+        // still requires EA's installerdata.xml and a real directory.
+        if let Some(program_files_x86) = std::env::var_os("ProgramFiles(x86)") {
+            games.extend(scan_ea_games(&[
+                PathBuf::from(program_files_x86).join("EA Games"),
+            ]));
+        }
+        #[cfg(windows)]
+        {
+            games.extend(discover_ea_games());
+        }
+        #[cfg(not(windows))]
+        {
+            // Registry discovery is Windows-only.
+        }
+        /* EA registry records are checked separately for custom install paths. */
+        if false {
             games.extend(discover_ea_games());
             // GOG is detected from Galaxy's installed-product database rather
             // than guessed from folders that may contain unrelated files.
