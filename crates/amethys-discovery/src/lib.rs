@@ -695,6 +695,12 @@ fn xml_element_text(contents: &str, element: &str) -> Option<String> {
     // EA metadata may contain tag-looking text in comments or CDATA.
     let open_start = find_xml_tag(contents, element, false, 0)?;
     let open_end = find_xml_tag_end(contents, open_start)?;
+    // A self-closing element has no text content; do not accidentally pair it
+    // with a later closing tag belonging to another element.
+    let opening_tag = contents.get(open_start..open_end)?.trim_end();
+    if opening_tag.strip_suffix('>')?.trim_end().ends_with('/') {
+        return None;
+    }
     let close_start = find_xml_tag(contents, element, true, open_end)?;
     let raw = contents[open_end..close_start].trim();
     if raw.is_empty() {
@@ -1958,6 +1964,15 @@ mod tests {
         assert_eq!(
             super::expand_windows_environment_variables_with("100%% complete", |_| None),
             "100%% complete",
+        );
+    }
+
+    #[test]
+    fn ignores_self_closing_ea_metadata_elements() {
+        let metadata = "<gameTitle/><gameTitle>Actual Game</gameTitle>";
+        assert_eq!(
+            super::xml_element_text(metadata, "gameTitle").as_deref(),
+            None
         );
     }
 
