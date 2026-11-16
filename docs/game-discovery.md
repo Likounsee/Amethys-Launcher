@@ -26,7 +26,12 @@ Amethys discovery is read-only. A scan reports installed games; it does not add 
 ## Importing into the Amethys library
 
 Detected games are imported only when the user explicitly requests
-`amethysctl games import <platform> <platform-id>`. The import stores the
+`amethysctl games import <platform> <platform-id>` or
+`amethysctl games import-all`. The bulk command imports each detected game
+sequentially, skips entries already present using the platform-scoped ID (or
+installation path for legacy entries), and reports added, skipped and failed
+counts. A failed item does not prevent later detected games from being tried.
+The import stores the
 source platform's identifier separately from Amethys' own local library ID.
 This preserves the identifier namespace: the same platform ID may identify
 different products on different stores.
