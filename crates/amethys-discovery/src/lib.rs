@@ -121,7 +121,11 @@ pub fn scan_steam_libraries(libraries: &[PathBuf]) -> Vec<DetectedGame> {
             let filename_app_id = filename
                 .strip_prefix("appmanifest_")
                 .and_then(|value| value.strip_suffix(".acf"));
-            if filename_app_id != Some(app_id.as_str()) {
+            // Steam AppIDs are decimal identifiers. Reject arbitrary filenames
+            // that merely happen to repeat a non-numeric value in the payload.
+            if filename_app_id.and_then(|value| value.parse::<u32>().ok()).is_none()
+                || filename_app_id != Some(app_id.as_str())
+            {
                 continue;
             }
             let install_path = manifests.join("common").join(install_dir);
@@ -1321,6 +1325,28 @@ mod tests {
             steamapps.join("appmanifest_570.acf"),
             "\n                \"appid\" \"730\"\n                \"name\" \"Wrong attribution\"\n                \"installdir\" \"Example\"\n            ",
         ).expect("write mismatched manifest");
+
+        assert!(scan_steam_libraries(std::slice::from_ref(&root)).is_empty());
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn steam_manifest_rejects_non_numeric_filename_identifiers() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-steam-nonnumeric-id-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let steamapps = root.join("steamapps");
+        let install = steamapps.join("common").join("Example");
+        std::fs::create_dir_all(&install).expect("create game install");
+        std::fs::write(
+            steamapps.join("appmanifest_example.acf"),
+            "\n                \"appid\" \"example\"\n                \"name\" \"Example\"\n                \"installdir\" \"Example\"\n            ",
+        ).expect("write non-numeric manifest");
 
         assert!(scan_steam_libraries(std::slice::from_ref(&root)).is_empty());
         std::fs::remove_dir_all(root).expect("cleanup");
