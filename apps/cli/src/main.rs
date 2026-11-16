@@ -28,7 +28,8 @@ OPTIONS:
     -V, --version                     Affiche la version
 
 ENVIRONNEMENT:
-    AMETHYS_DATA_DIR                  Remplace le dossier de données par défaut"
+    AMETHYS_DATA_DIR                  Remplace le dossier de données par défaut
+    AMETHYS_EA_LIBRARY_ROOTS          Racines EA personnalisées séparées par des points-virgules"
     );
 }
 
