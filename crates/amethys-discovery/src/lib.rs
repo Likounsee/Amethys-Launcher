@@ -837,6 +837,7 @@ pub fn scan_battlenet_product_db(database: &Path) -> Vec<DetectedGame> {
 
     let mut games = Vec::new();
     let mut seen_paths = BTreeSet::new();
+    let mut seen_product_codes = BTreeSet::new();
     for install in installs {
         let Some(code_bytes) = protobuf_length_delimited_fields(install, 2)
             .and_then(|fields| fields.into_iter().next())
@@ -848,6 +849,13 @@ pub fn scan_battlenet_product_db(database: &Path) -> Vec<DetectedGame> {
         };
         let product_code = product_code.trim();
         if product_code.is_empty() || matches!(product_code, "agent" | "bna") {
+            continue;
+        }
+        // A product code identifies one Battle.net product. Stale or duplicated
+        // Agent records must not surface the same game more than once merely
+        // because they point at different installation directories.
+        let product_key = product_code.to_ascii_lowercase();
+        if seen_product_codes.contains(&product_key) {
             continue;
         }
         let Some(settings) = protobuf_length_delimited_fields(install, 3)
@@ -881,6 +889,7 @@ pub fn scan_battlenet_product_db(database: &Path) -> Vec<DetectedGame> {
         if !insert_unique_install_path(&mut seen_paths, &install_path) {
             continue;
         }
+        seen_product_codes.insert(product_key);
         let name = battlenet_product_name(product_code)
             .map(str::to_owned)
             .or_else(|| install_path.file_name().and_then(|name| name.to_str()).map(str::to_owned));
@@ -1934,6 +1943,40 @@ mod tests {
         assert_eq!(games[0].platform_id.as_deref(), Some("wow"));
         assert_eq!(games[0].name, "World of Warcraft");
         assert_eq!(games[0].install_path, install);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn deduplicates_battlenet_records_by_product_code() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-battlenet-duplicates-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let first_install = root.join("WoW");
+        let second_install = root.join("WoW-copy");
+        std::fs::create_dir_all(&first_install).expect("create first install");
+        std::fs::create_dir_all(&second_install).expect("create second install");
+
+        let make_product = |code: &[u8], install: &Path| {
+            let settings = encode_bytes_field(1, install.to_string_lossy().as_bytes());
+            let base_state = encode_varint(8).into_iter().chain(encode_varint(1)).collect::<Vec<_>>();
+            let cached_state = encode_bytes_field(1, &base_state);
+            let mut product = encode_bytes_field(2, code);
+            product.extend(encode_bytes_field(3, &settings));
+            product.extend(encode_bytes_field(4, &cached_state));
+            product
+        };
+        let mut database_bytes = encode_bytes_field(1, &make_product(b"wow", &first_install));
+        database_bytes.extend(encode_bytes_field(1, &make_product(b"WOW", &second_install)));
+        let database = root.join("product.db");
+        std::fs::write(&database, database_bytes).expect("write protobuf fixture");
+
+        let games = super::scan_battlenet_product_db(&database);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform_id.as_deref(), Some("wow"));
+        assert_eq!(games[0].install_path, first_install);
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
