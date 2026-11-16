@@ -195,6 +195,24 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn listener_refuses_to_replace_a_regular_file() {
+        let path = std::env::temp_dir().join(format!(
+            "amethys-ipc-file-{}.sock",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::write(&path, b"keep this file").expect("create sentinel file");
+
+        let result = IpcListener::bind(&path).await;
+        assert!(result.is_err(), "regular files must not be treated as stale sockets");
+        assert_eq!(
+            std::fs::read(&path).expect("sentinel file remains"),
+            b"keep this file"
+        );
+
+        std::fs::remove_file(path).expect("remove sentinel file");
+    }
+
+    #[tokio::test]
     async fn listener_does_not_replace_an_active_socket() {
         let path = std::env::temp_dir().join(format!(
             "amethys-ipc-active-{}.sock",
