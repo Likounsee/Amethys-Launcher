@@ -222,7 +222,9 @@ pub fn steam_install_roots() -> Vec<PathBuf> {
         roots.insert(home.join(".local/share/Steam"));
     }
 
-    roots.into_iter().filter(|path| path.is_dir()).collect()
+    // Never interpret a relative registry/config value against the launcher current directory.
+    // Every supported Steam root is expected to be an absolute existing directory.
+    roots.into_iter().filter(|path| path.is_absolute() && path.is_dir()).collect()
 }
 
 /// Reads libraryfolders.vdf files and returns their declared library roots.
