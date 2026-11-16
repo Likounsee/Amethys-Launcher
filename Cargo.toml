@@ -5,7 +5,7 @@ members = ["apps/agent", "apps/cli", "crates/amethys-discovery", "crates/amethys
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
-license = "MIT"
+license = "LicenseRef-Proprietary"
 rust-version = "1.85"
 
 [workspace.dependencies]
