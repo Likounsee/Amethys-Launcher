@@ -363,6 +363,9 @@ mod tests {
         assert!(database.add_game_with_platform_id(
             "Duplicate", "Steam", Some("570"), "/games/duplicate", None
         ).is_err());
+        assert!(database.add_game_with_platform_id(
+            "Duplicate with different casing", "steam", Some("570"), "/games/duplicate-case", None
+        ).is_err());
         // The same identifier may exist on a different platform.
         assert!(database.add_game_with_platform_id(
             "Other Platform Game", "Epic Games", Some("570"), "/games/other", None
