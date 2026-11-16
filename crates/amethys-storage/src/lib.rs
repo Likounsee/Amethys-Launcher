@@ -43,7 +43,8 @@ impl Database {
         )?;
         connection.execute_batch(
             "PRAGMA foreign_keys = ON;
-             PRAGMA journal_mode = WAL;"
+             PRAGMA journal_mode = WAL;
+             PRAGMA synchronous = FULL;"
         ).map_err(|error| AmethysError::new(
             ErrorCode::StorageOpen,
             format!("Could not configure database: {error}"),
@@ -370,6 +371,19 @@ mod tests {
         assert!(database.add_game_with_platform_id(
             "Other Platform Game", "Epic Games", Some("570"), "/games/other", None
         ).is_ok());
+        drop(database);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[test]
+    fn database_uses_full_synchronous_commits_for_durability() {
+        let (database, path) = temporary_database();
+        let synchronous: i64 = database.connection()
+            .query_row("PRAGMA synchronous", [], |row| row.get(0))
+            .expect("synchronous mode is readable");
+        assert_eq!(synchronous, 2, "FULL synchronous mode must be enabled");
         drop(database);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
