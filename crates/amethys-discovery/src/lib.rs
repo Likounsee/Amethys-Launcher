@@ -1571,6 +1571,50 @@ mod tests {
     }
 
     #[test]
+    fn keeps_gog_product_id_available_after_rejecting_duplicate_path() {
+        use rusqlite::{params, Connection};
+
+        let root = std::env::temp_dir().join(format!(
+            "amethys-gog-dedup-order-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let first_install = root.join("First Game");
+        let valid_second_install = root.join("Second Game");
+        std::fs::create_dir_all(&first_install).expect("create first install");
+        std::fs::create_dir_all(&valid_second_install).expect("create second install");
+        let database = root.join("galaxy-2.0.db");
+        let connection = Connection::open(&database).expect("create fixture database");
+        connection.execute_batch(
+            "CREATE TABLE InstalledBaseProducts (productId TEXT, installationPath TEXT);
+             CREATE TABLE GamePieces (releaseKey TEXT, gamePieceTypeId INTEGER, value TEXT);
+             CREATE TABLE GamePieceTypes (id INTEGER, type TEXT);
+             INSERT INTO GamePieceTypes VALUES (1, 'originalTitle');"
+        ).expect("create GOG metadata tables");
+        for (id, path, title) in [
+            ("first", first_install.to_string_lossy().into_owned(), "First Game"),
+            ("second", first_install.to_string_lossy().into_owned(), "Duplicate Path"),
+            ("second", valid_second_install.to_string_lossy().into_owned(), "Second Game"),
+        ] {
+            connection.execute(
+                "INSERT INTO InstalledBaseProducts VALUES (?1, ?2)", params![id, path],
+            ).expect("insert GOG product");
+            connection.execute(
+                "INSERT INTO GamePieces VALUES (?1, 1, ?2)",
+                params![format!("gog_{id}"), serde_json::json!({"title": title}).to_string()],
+            ).expect("insert GOG title");
+        }
+        drop(connection);
+
+        let games = super::scan_gog_galaxy(&database);
+        assert_eq!(games.len(), 2);
+        assert!(games.iter().any(|game| game.platform_id.as_deref() == Some("second")
+            && game.install_path == valid_second_install));
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
     fn skips_invalid_gog_titles_and_stale_install_paths() {
         use rusqlite::{params, Connection};
 
@@ -1824,6 +1868,44 @@ mod tests {
         assert_eq!(games[0].name, "Blue Fire");
         assert_eq!(games[0].install_path, installed);
 
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn keeps_amazon_product_id_available_after_rejecting_duplicate_path() {
+        use rusqlite::{params, Connection};
+
+        let root = std::env::temp_dir().join(format!(
+            "amethys-amazon-dedup-order-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let first_install = root.join("First Game");
+        let valid_second_install = root.join("Second Game");
+        std::fs::create_dir_all(&first_install).expect("create first install");
+        std::fs::create_dir_all(&valid_second_install).expect("create second install");
+        let database = root.join("GameInstallInfo.sqlite");
+        let connection = Connection::open(&database).expect("create fixture database");
+        connection.execute_batch(
+            "CREATE TABLE DbSet (Id TEXT, InstallDirectory TEXT, ProductTitle TEXT);"
+        ).expect("create Amazon metadata table");
+        for (id, path, title) in [
+            ("amzn.first", first_install.to_string_lossy().into_owned(), "First Game"),
+            ("amzn.second", first_install.to_string_lossy().into_owned(), "Duplicate Path"),
+            ("amzn.second", valid_second_install.to_string_lossy().into_owned(), "Second Game"),
+        ] {
+            connection.execute(
+                "INSERT INTO DbSet (Id, InstallDirectory, ProductTitle) VALUES (?1, ?2, ?3)",
+                params![id, path, title],
+            ).expect("insert Amazon product");
+        }
+        drop(connection);
+
+        let games = super::scan_amazon_games(&database);
+        assert_eq!(games.len(), 2);
+        assert!(games.iter().any(|game| game.platform_id.as_deref() == Some("amzn.second")
+            && game.install_path == valid_second_install));
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
