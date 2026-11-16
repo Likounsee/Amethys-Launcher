@@ -18,6 +18,8 @@ client can verify that a response belongs to its request.
 - `ping`: checks whether the agent responds.
 - `get_status`: returns the core lifecycle state.
 - `games`: lists games saved in the local library.
+- `games list --platform <name>`: lists only saved games whose platform
+  matches the supplied name, case-insensitively.
 - `games search <term>`: searches saved game names, platforms, platform IDs,
   installation paths and executable paths, case-insensitively. When several
   words are supplied, every word must match somewhere in the combined metadata.
