@@ -55,13 +55,35 @@ explicit maintainer authority.
 - Do not add telemetry or transmit user/platform data without explicit,
   documented design approval.
 
-## Contribution rights
+## Contribution rights and required written agreement
 
-By submitting a pull request, you confirm that you have the right to submit
-the proposed changes and that they do not knowingly infringe third-party
-rights or violate confidentiality or contractual obligations. You retain
-ownership of your contribution, while granting Likounsee permission to review,
-test, modify and include it if accepted, as described in LICENSE.
+Submitting a pull request does not transfer ownership of the submitted code.
+The contributor keeps their rights while the proposal is being reviewed.
+
+**No third-party code or copyrightable contribution may be merged, distributed,
+or incorporated into Amethys Launcher until the contributor has signed a
+separate written assignment agreement for that specific accepted contribution.**
+The agreement must identify the contribution and specify the transferable
+economic rights, scope, territory, duration, purpose and any compensation in
+accordance with applicable law. A general statement in a pull request or this
+document is not a substitute for that signed agreement.
+
+Once the agreement is validly signed and the contribution is accepted, the
+rights expressly assigned under that agreement belong to Likounsee to the
+extent permitted by applicable law. The contributor will be credited in
+[CONTRIBUTORS.md](CONTRIBUTORS.md). Credit recognises the contributor's work;
+it does not give them ownership or control over the rights assigned to
+Likounsee. Non-transferable moral rights remain unaffected.
+
+Security-sensitive contributions follow the exact same assignment process.
+They also require enhanced security and confidentiality review. Writing
+security-related code does not automatically remove or transfer any additional
+rights: only the specific signed agreement can do that.
+
+Contributors must only submit work they are legally entitled to contribute.
+Third-party code, generated code, employer-owned work, code subject to another
+license, and code created under confidentiality obligations must be disclosed
+before submission and may be rejected.
 
 The maintainers decide whether a contribution is accepted. Submission alone
 does not create a right to merge or distribute it.
