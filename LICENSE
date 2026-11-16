@@ -29,20 +29,52 @@ including injunctive relief and damages where available. Nothing in this
 paragraph guarantees a particular legal outcome; that depends on the facts
 and applicable law.
 
-3. CONTRIBUTIONS
+3. CONTRIBUTIONS AND ASSIGNMENT REQUIREMENT
 
 Bug reports and proposed fixes are welcome under the repository's
 CONTRIBUTING.md rules. Submitting a pull request does not guarantee acceptance
 or merging. Every proposed change must be reviewed and explicitly approved by
-the project maintainers before it can be incorporated.
+the project maintainer before it can be incorporated.
 
-By submitting a contribution, you confirm that you have the right to submit
-it and that it does not knowingly violate another party's rights,
-confidentiality obligations, contractual restrictions, or applicable law.
-You grant Likounsee permission to review, test, modify, and, if accepted,
-include that contribution in Amethys Launcher under this proprietary license.
-You retain ownership of your contribution, subject to the rights you grant
-here and any separate written agreement.
+A contribution is NOT transferred to Likounsee merely because it is submitted,
+reviewed, discussed, or mentioned in a pull request. Before any third-party
+code or other copyrightable contribution is merged, distributed, or otherwise
+incorporated into Amethys Launcher, its contributor must sign a separate
+written contribution and intellectual-property assignment agreement covering
+that specific contribution. The agreement must identify the contribution and
+clearly specify the rights assigned and the permitted scope of exploitation,
+in accordance with applicable law.
+
+Subject to that signed agreement and applicable law, the contributor assigns
+to Likounsee the agreed transferable economic rights in the accepted
+contribution, including the expressly identified rights to reproduce, modify,
+adapt, translate, integrate, distribute, make available, and commercially or
+otherwise exploit it as part of Amethys Launcher and its related releases,
+in source-code and object-code form. The assignment's territory, duration,
+purposes, and any compensation must be stated in the individual agreement.
+No assignment of all of a person's future works is intended.
+
+The contributor will be credited in CONTRIBUTORS.md where reasonably
+practicable and as specified in the contribution process. Credit does not
+give the contributor ownership or control over the Project Materials or the
+assigned economic rights. Nothing here purports to transfer or waive moral
+rights that cannot legally be transferred or waived. In particular, mandatory
+rights under applicable law remain unaffected.
+
+Security-sensitive contributions are subject to the same prior written
+assignment requirement and must additionally pass the project's security and
+confidentiality review. Access to, possession of, or authorship of security
+code does not by itself create any special ownership transfer. Any assignment
+must be made through the same specific written agreement described above.
+Security reports and confidential information must follow SECURITY.md and
+must not be disclosed in public issues or pull requests.
+
+A contributor must not submit code or materials they do not have the right to
+contribute, or that violate another party's rights, confidentiality
+obligations, contractual restrictions, or applicable law. Until the required
+written agreement is signed and the contribution is accepted, the contributor
+retains their rights and Likounsee has no right to incorporate or exploit the
+contribution beyond what is strictly necessary to review it.
 
 4. THIRD-PARTY MATERIALS AND PLATFORMS
 
