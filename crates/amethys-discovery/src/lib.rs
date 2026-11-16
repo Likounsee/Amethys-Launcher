@@ -793,6 +793,31 @@ pub fn discover_ea_games() -> Vec<DetectedGame> {
     games
 }
 
+/// Parses optional custom EA game-library roots from
+/// AMETHYS_EA_LIBRARY_ROOTS (semicolon-separated on every platform).
+fn parse_ea_library_roots(value: &str) -> Vec<PathBuf> {
+    let mut roots = BTreeSet::new();
+    for entry in value.split(';') {
+        let entry = entry.trim().trim_matches('"');
+        if entry.is_empty() {
+            continue;
+        }
+        let path = PathBuf::from(entry);
+        if is_absolute_metadata_path(&path) {
+            roots.insert(path);
+        }
+    }
+    roots.into_iter().collect()
+}
+
+/// Returns user-configured EA library roots without probing arbitrary drives.
+/// This supports libraries outside EA's default Program Files locations.
+fn configured_ea_library_roots() -> Vec<PathBuf> {
+    std::env::var("AMETHYS_EA_LIBRARY_ROOTS")
+        .map(|value| parse_ea_library_roots(&value))
+        .unwrap_or_default()
+}
+
 /// Reads EA app installations using the installer metadata shipped with each game.
 pub fn scan_ea_games(roots: &[PathBuf]) -> Vec<DetectedGame> {
     let mut games = Vec::new();
@@ -1459,19 +1484,17 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
 
     #[cfg(windows)]
     {
-        let program_files = std::env::var_os("ProgramFiles").map(PathBuf::from);
-        if let Some(root) = program_files.as_ref() {
-            games.extend(scan_ea_games(&[root.join("EA Games")]));
+        let mut ea_roots = configured_ea_library_roots();
+        if let Some(program_files) = std::env::var_os("ProgramFiles").map(PathBuf::from) {
+            ea_roots.push(program_files.join("EA Games"));
         }
         // EA app may store games in either Program Files tree. Every candidate
         // still needs EA's installerdata.xml and an existing absolute directory.
         if let Some(program_files_x86) = std::env::var_os("ProgramFiles(x86)") {
-            games.extend(scan_ea_games(&[
-                PathBuf::from(program_files_x86).join("EA Games"),
-            ]));
+            ea_roots.push(PathBuf::from(program_files_x86).join("EA Games"));
         }
+        games.extend(scan_ea_games(&ea_roots));
         // Registry records also cover custom EA game-library locations.
-        games.extend(discover_ea_games());
 
         // GOG is detected from Galaxy's installed-product database rather
         // than guessed from folders that may contain unrelated files.
@@ -3379,6 +3402,16 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         assert_eq!(games[0].platform_id.as_deref(), Some("Game123"));
         assert_eq!(games[0].name, "Ubisoft Game");
         std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn parses_configured_ea_library_roots_without_accepting_relative_paths() {
+        let roots = super::parse_ea_library_roots(
+            r#" A:\EA ; "D:\Game Libraries\EA" ; relative\EA ; ; A:\EA "#,
+        );
+        assert_eq!(roots.len(), 2);
+        assert!(roots.iter().any(|path| path.to_string_lossy() == r"A:\EA"));
+        assert!(roots.iter().any(|path| path.to_string_lossy() == r"D:\Game Libraries\EA"));
     }
 
     #[test]
