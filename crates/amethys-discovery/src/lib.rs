@@ -227,7 +227,10 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
     // Filesystem directory iteration order is unspecified. Sort manifests so
     // duplicate metadata always produces the same result across scans.
     let mut entries: Vec<_> = entries.flatten().collect();
-    entries.sort_by_key(|entry| entry.file_name().to_string_lossy().to_ascii_lowercase());
+    entries.sort_by_key(|entry| {
+        let filename = entry.file_name();
+        (filename.to_string_lossy().to_ascii_lowercase(), filename)
+    });
     let mut games = Vec::new();
     let mut seen_paths = BTreeSet::new();
     let mut seen_app_ids = BTreeSet::new();
