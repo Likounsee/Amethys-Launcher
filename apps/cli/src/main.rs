@@ -56,6 +56,23 @@ async fn connect_to_core() -> Result<BoxedIpcStream, Box<dyn Error>> {
     Err("La communication locale avec Amethys n'est pas disponible sur ce système.".into())
 }
 
+/// Sends one local command with bounded connection and response times.
+async fn request_core(command: IpcCommand) -> Result<amethys_ipc::IpcResponse, Box<dyn Error>> {
+    let mut connection = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        connect_to_core(),
+    )
+    .await??;
+
+    let response = tokio::time::timeout(
+        std::time::Duration::from_secs(15),
+        send_request(&mut connection, IpcRequest::new(command)),
+    )
+    .await??;
+
+    Ok(response)
+}
+
 fn status_label(status: IpcCoreStatus) -> &'static str {
     match status {
         IpcCoreStatus::Created => "créé, mais pas encore démarré",
@@ -122,13 +139,9 @@ fn game_is_already_imported(
 }
 
 async fn load_saved_games() -> Result<Vec<amethys_ipc::IpcGameEntry>, Box<dyn Error>> {
-    let mut connection = connect_to_core().await.map_err(|error| {
+    let response = request_core(IpcCommand::ListGames).await.map_err(|error| {
         format!("Impossible de joindre Amethys. Vérifie que le programme fonctionne. Détail : {error}")
     })?;
-    let response = send_request(
-        &mut connection,
-        IpcRequest::new(IpcCommand::ListGames),
-    ).await?;
 
     match response.result {
         Ok(IpcResponsePayload::Games { games }) => Ok(games),
@@ -158,10 +171,9 @@ async fn import_one_detected_game(
         install_path: game.install_path.to_string_lossy().into_owned(),
         executable: None,
     };
-    let mut connection = connect_to_core().await.map_err(|error| {
+    let response = request_core(command).await.map_err(|error| {
         format!("Impossible de joindre Amethys. Vérifie que le programme fonctionne. Détail : {error}")
     })?;
-    let response = send_request(&mut connection, IpcRequest::new(command)).await?;
     match response.result {
         Ok(IpcResponsePayload::GameAdded { game }) => {
             println!("{} a été ajouté à la bibliothèque Amethys.", game.name);
@@ -307,10 +319,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let command = parse_arguments(&arguments)?;
 
-    let mut connection = connect_to_core().await.map_err(|error| {
+    let response = request_core(command.clone()).await.map_err(|error| {
         format!("Impossible de joindre Amethys. Vérifie que le programme fonctionne. Détail : {error}")
     })?;
-    let response = send_request(&mut connection, IpcRequest::new(command.clone())).await?;
 
     match response.result {
         Err(remote_error) => Err(format!(
