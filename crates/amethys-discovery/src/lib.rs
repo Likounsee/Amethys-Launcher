@@ -156,7 +156,11 @@ pub fn scan_steam_libraries(libraries: &[PathBuf]) -> Vec<DetectedGame> {
         }
     }
 
-    games.sort_by_key(|game| game.name.to_lowercase());
+    games.sort_by_key(|game| (
+        game.name.to_lowercase(),
+        game.install_path.clone(),
+        game.platform_id.clone(),
+    ));
     games
 }
 
@@ -312,7 +316,11 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
             });
         }
     }
-    games.sort_by_key(|game| game.name.to_lowercase());
+    games.sort_by_key(|game| (
+        game.name.to_lowercase(),
+        game.install_path.clone(),
+        game.platform_id.clone(),
+    ));
     games
 }
 
@@ -371,7 +379,11 @@ pub fn scan_heroic_legendary_installed(installed_json: &Path) -> Vec<DetectedGam
             platform: "Heroic",
         });
     }
-    games.sort_by_key(|game| game.name.to_lowercase());
+    games.sort_by_key(|game| (
+        game.name.to_lowercase(),
+        game.install_path.clone(),
+        game.platform_id.clone(),
+    ));
     games
 }
 
@@ -485,7 +497,11 @@ pub fn scan_gog_galaxy(database: &Path) -> Vec<DetectedGame> {
             });
         }
     }
-    games.sort_by_key(|game| game.name.to_lowercase());
+    games.sort_by_key(|game| (
+        game.name.to_lowercase(),
+        game.install_path.clone(),
+        game.platform_id.clone(),
+    ));
     games
 }
 
@@ -559,7 +575,11 @@ pub fn scan_amazon_games(database: &Path) -> Vec<DetectedGame> {
             });
         }
     }
-    games.sort_by_key(|game| game.name.to_lowercase());
+    games.sort_by_key(|game| (
+        game.name.to_lowercase(),
+        game.install_path.clone(),
+        game.platform_id.clone(),
+    ));
     games
 }
 
@@ -664,7 +684,11 @@ pub fn parse_ea_registry_output(contents: &str) -> Vec<DetectedGame> {
 
     let mut seen_paths = BTreeSet::new();
     games.retain(|game| insert_unique_install_path(&mut seen_paths, &game.install_path));
-    games.sort_by_key(|game| game.name.to_lowercase());
+    games.sort_by_key(|game| (
+        game.name.to_lowercase(),
+        game.install_path.clone(),
+        game.platform_id.clone(),
+    ));
     games
 }
 
@@ -688,7 +712,11 @@ pub fn discover_ea_games() -> Vec<DetectedGame> {
     }
     let mut seen_paths = BTreeSet::new();
     games.retain(|game| insert_unique_install_path(&mut seen_paths, &game.install_path));
-    games.sort_by_key(|game| game.name.to_lowercase());
+    games.sort_by_key(|game| (
+        game.name.to_lowercase(),
+        game.install_path.clone(),
+        game.platform_id.clone(),
+    ));
     games
 }
 
@@ -734,7 +762,11 @@ pub fn scan_ea_games(roots: &[PathBuf]) -> Vec<DetectedGame> {
             }
         }
     }
-    games.sort_by_key(|game| game.name.to_lowercase());
+    games.sort_by_key(|game| (
+        game.name.to_lowercase(),
+        game.install_path.clone(),
+        game.platform_id.clone(),
+    ));
     games
 }
 
@@ -926,7 +958,11 @@ pub fn parse_ubisoft_registry_output(contents: &str) -> Vec<DetectedGame> {
             }
         }
     }
-    games.sort_by_key(|game| game.name.to_lowercase());
+    games.sort_by_key(|game| (
+        game.name.to_lowercase(),
+        game.install_path.clone(),
+        game.platform_id.clone(),
+    ));
     games
 }
 
@@ -950,7 +986,11 @@ pub fn discover_ubisoft_games() -> Vec<DetectedGame> {
     }
     let mut seen_paths = BTreeSet::new();
     games.retain(|game| insert_unique_install_path(&mut seen_paths, &game.install_path));
-    games.sort_by_key(|game| game.name.to_lowercase());
+    games.sort_by_key(|game| (
+        game.name.to_lowercase(),
+        game.install_path.clone(),
+        game.platform_id.clone(),
+    ));
     games
 }
 
@@ -984,7 +1024,11 @@ pub fn scan_game_folders(platform: &'static str, roots: &[PathBuf]) -> Vec<Detec
             }
         }
     }
-    games.sort_by_key(|game| game.name.to_lowercase());
+    games.sort_by_key(|game| (
+        game.name.to_lowercase(),
+        game.install_path.clone(),
+        game.platform_id.clone(),
+    ));
     games
 }
 
@@ -1081,7 +1125,11 @@ pub fn scan_battlenet_product_db(database: &Path) -> Vec<DetectedGame> {
             platform: "Battle.net",
         });
     }
-    games.sort_by_key(|game| game.name.to_lowercase());
+    games.sort_by_key(|game| (
+        game.name.to_lowercase(),
+        game.install_path.clone(),
+        game.platform_id.clone(),
+    ));
     games
 }
 
@@ -1244,7 +1292,12 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
     // Do not infer installed games from generic `GOG Games` directories.
     // GOG Galaxy metadata is the source of truth when its database is available.
 
-    games.sort_by_key(|game| (game.platform, game.name.to_lowercase()));
+    games.sort_by_key(|game| (
+        game.platform,
+        game.name.to_lowercase(),
+        game.install_path.clone(),
+        game.platform_id.clone(),
+    ));
     let mut seen_installations = BTreeSet::new();
     games.retain(|game| {
         insert_unique_platform_install_path(
