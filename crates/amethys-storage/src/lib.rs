@@ -14,6 +14,11 @@ pub struct GameEntry {
     pub added_at: String,
 }
 
+const MAX_GAME_NAME_BYTES: usize = 512;
+const MAX_PLATFORM_NAME_BYTES: usize = 128;
+const MAX_PLATFORM_ID_BYTES: usize = 512;
+const MAX_GAME_PATH_BYTES: usize = 32 * 1024;
+
 /// SQLite database owned by the core process.
 pub struct Database {
     connection: Connection,
@@ -200,6 +205,28 @@ impl Database {
             || executable.is_some_and(|value| value.contains('\\0'))
         {
             return Err(storage_error("Game metadata must not contain NUL characters."));
+        }
+        if name.len() > MAX_GAME_NAME_BYTES {
+            return Err(storage_error(format!(
+                "Game name exceeds the {MAX_GAME_NAME_BYTES}-byte limit."
+            )));
+        }
+        if platform.len() > MAX_PLATFORM_NAME_BYTES {
+            return Err(storage_error(format!(
+                "Platform name exceeds the {MAX_PLATFORM_NAME_BYTES}-byte limit."
+            )));
+        }
+        if platform_id.is_some_and(|value| value.len() > MAX_PLATFORM_ID_BYTES) {
+            return Err(storage_error(format!(
+                "Platform game ID exceeds the {MAX_PLATFORM_ID_BYTES}-byte limit."
+            )));
+        }
+        if install_path.len() > MAX_GAME_PATH_BYTES
+            || executable.is_some_and(|value| value.len() > MAX_GAME_PATH_BYTES)
+        {
+            return Err(storage_error(format!(
+                "Game paths must not exceed {MAX_GAME_PATH_BYTES} bytes."
+            )));
         }
 
         let id = uuid::Uuid::new_v4().to_string();
@@ -421,6 +448,36 @@ mod tests {
         ).is_err());
         assert!(database.add_game_with_platform_id(
             "Example", "Steam", Some("57\\0"), "/games/example", None
+        ).is_err());
+        assert!(database.list_games().expect("list remains readable").is_empty());
+        drop(database);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[test]
+    fn game_metadata_enforces_field_size_limits() {
+        let (database, path) = temporary_database();
+        let oversized_name = "n".repeat(super::MAX_GAME_NAME_BYTES + 1);
+        let oversized_platform = "p".repeat(super::MAX_PLATFORM_NAME_BYTES + 1);
+        let oversized_id = "i".repeat(super::MAX_PLATFORM_ID_BYTES + 1);
+        let oversized_path = format!("/games/{}", "x".repeat(super::MAX_GAME_PATH_BYTES));
+
+        assert!(database.add_game(
+            &oversized_name, "Steam", "/games/example", None
+        ).is_err());
+        assert!(database.add_game(
+            "Example", &oversized_platform, "/games/example", None
+        ).is_err());
+        assert!(database.add_game_with_platform_id(
+            "Example", "Steam", Some(&oversized_id), "/games/example", None
+        ).is_err());
+        assert!(database.add_game(
+            "Example", "Steam", &oversized_path, None
+        ).is_err());
+        assert!(database.add_game(
+            "Example", "Steam", "/games/example", Some(&oversized_path)
         ).is_err());
         assert!(database.list_games().expect("list remains readable").is_empty());
         drop(database);
