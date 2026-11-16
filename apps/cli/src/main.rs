@@ -76,6 +76,23 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
     }
 }
 
+/// Compares saved and detected installation paths after resolving aliases.
+/// Windows paths are case-insensitive; other platforms retain native path rules.
+fn same_install_location(saved: &str, detected: &std::path::Path) -> bool {
+    let saved = std::path::Path::new(saved);
+    let saved = saved.canonicalize().unwrap_or_else(|_| saved.to_path_buf());
+    let detected = detected.canonicalize().unwrap_or_else(|_| detected.to_path_buf());
+
+    #[cfg(windows)]
+    {
+        saved.to_string_lossy().eq_ignore_ascii_case(&detected.to_string_lossy())
+    }
+    #[cfg(not(windows))]
+    {
+        saved == detected
+    }
+}
+
 async fn import_detected_game(platform: &str, platform_id: &str) -> Result<(), Box<dyn Error>> {
     let game = amethys_discovery::discover_all_games()
         .into_iter()
@@ -110,7 +127,7 @@ async fn import_detected_game(platform: &str, platform_id: &str) -> Result<(), B
     let install_path = game.install_path.to_string_lossy().into_owned();
     if saved_games.iter().any(|saved| {
         saved.platform.eq_ignore_ascii_case(game.platform)
-            && saved.install_path == install_path
+            && same_install_location(&saved.install_path, &game.install_path)
     }) {
         println!("{} est déjà présent dans la bibliothèque Amethys.", game.name);
         return Ok(());
@@ -214,8 +231,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_arguments, parse_command, status_label};
+    use super::{parse_arguments, parse_command, same_install_location, status_label};
     use amethys_ipc::{IpcCommand, IpcCoreStatus};
+
+    #[test]
+    fn recognizes_installation_path_aliases_without_merging_distinct_paths() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-cli-path-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let install = root.join("Installed Game");
+        let other = root.join("Other Game");
+        std::fs::create_dir_all(&install).expect("create install");
+        std::fs::create_dir_all(&other).expect("create other install");
+
+        let alias = install.join("..").join("Installed Game");
+        assert!(same_install_location(&alias.to_string_lossy(), &install));
+        assert!(!same_install_location(&other.to_string_lossy(), &install));
+
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
 
     #[test]
     fn accepts_supported_commands() {
