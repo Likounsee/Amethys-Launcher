@@ -72,18 +72,20 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
         [group, action, id] if group == "games" && action == "remove" => {
             Ok(IpcCommand::RemoveGame { id: id.clone() })
         }
-        _ => Err("Utilisation : amethysctl games add <nom> <plateforme> <dossier> [executable] | games remove <id> | games scan | games import <appid>"),
+        _ => Err("Utilisation : amethysctl games add <nom> <plateforme> <dossier> [executable] | games remove <id> | games scan | games import <appid> | games import <plateforme> <id>"),
     }
 }
 
-async fn import_detected_steam_game(app_id: &str) -> Result<(), Box<dyn Error>> {
-    let game = amethys_discovery::discover_steam_games()
+async fn import_detected_game(platform: &str, platform_id: &str) -> Result<(), Box<dyn Error>> {
+    let game = amethys_discovery::discover_all_games()
         .into_iter()
-        .find(|game| game.platform_id.as_deref() == Some(app_id))
+        .find(|game| {
+            game.platform.eq_ignore_ascii_case(platform)
+                && game.platform_id.as_deref() == Some(platform_id)
+        })
         .ok_or_else(|| format!(
-            "Aucun jeu Steam installé ne correspond à l'AppID {app_id}. Lance « amethysctl games scan » pour voir les jeux détectés."
+            "Aucun jeu installé de la plateforme « {platform} » ne correspond à l'identifiant {platform_id}. Lance « amethysctl games scan » pour voir les jeux détectés."
         ))?;
-
     let mut library_connection = connect_to_core().await.map_err(|error| {
         format!("Impossible de joindre Amethys. Vérifie que le programme fonctionne. Détail : {error}")
     })?;
@@ -142,7 +144,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
     if let [group, action, app_id] = arguments.as_slice() {
         if group == "games" && action == "import" {
-            return import_detected_steam_game(app_id).await;
+            // Backward-compatible shorthand: a single identifier means Steam.
+            return import_detected_game("Steam", app_id).await;
+        }
+    }
+    if let [group, action, platform, platform_id] = arguments.as_slice() {
+        if group == "games" && action == "import" {
+            return import_detected_game(platform, platform_id).await;
         }
     }
     if arguments.as_slice() == ["games", "scan"] {
