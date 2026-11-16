@@ -107,7 +107,7 @@ pub fn scan_steam_libraries(libraries: &[PathBuf]) -> Vec<DetectedGame> {
             Err(_) => continue,
         };
         let mut entries: Vec<_> = entries.flatten().collect();
-        entries.sort_by(|left, right| left.file_name().cmp(&right.file_name()));
+        entries.sort_by_key(|entry| entry.file_name());
 
         for entry in entries {
             let path = entry.path();
