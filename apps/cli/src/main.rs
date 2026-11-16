@@ -304,7 +304,7 @@ fn print_scan_results(games: &[amethys_discovery::DetectedGame], verbose: bool) 
 enum PathCheck {
     Available,
     Missing,
-    NotDirectory,
+    WrongType,
     Inaccessible,
     Error,
 }
@@ -314,7 +314,7 @@ impl PathCheck {
         match self {
             Self::Available => "available",
             Self::Missing => "missing",
-            Self::NotDirectory => "not_directory",
+            Self::WrongType => "wrong_type",
             Self::Inaccessible => "inaccessible",
             Self::Error => "error",
         }
@@ -330,7 +330,7 @@ fn inspect_path(path: &std::path::Path, expect_directory: bool) -> PathCheck {
     match std::fs::metadata(path) {
         Ok(metadata) if expect_directory && metadata.is_dir() => PathCheck::Available,
         Ok(metadata) if !expect_directory && metadata.is_file() => PathCheck::Available,
-        Ok(_) => PathCheck::NotDirectory,
+        Ok(_) => PathCheck::WrongType,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => PathCheck::Missing,
         Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => PathCheck::Inaccessible,
         Err(_) => PathCheck::Error,
@@ -743,13 +743,14 @@ mod tests {
         std::fs::create_dir_all(&root).expect("create fixture");
         let file = root.join("not-a-directory");
         std::fs::write(&file, b"sentinel").expect("create file");
+        let missing = root.join("missing");
         assert_eq!(
-            super::inspect_path(&root.join("missing").as_path(), true),
+            super::inspect_path(&missing, true),
             super::PathCheck::Missing
         );
         assert_eq!(
             super::inspect_path(&file, true),
-            super::PathCheck::NotDirectory
+            super::PathCheck::WrongType
         );
         std::fs::remove_dir_all(root).expect("remove fixture");
     }
