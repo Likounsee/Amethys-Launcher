@@ -168,6 +168,7 @@ fn is_steam_runtime_component(app_id: &str, name: &str) -> bool {
 }
 
 /// Extracts Steam's registered installation root from Windows `reg query` output.
+#[cfg(any(windows, test))]
 fn parse_steam_registry_output(output: &str) -> Option<PathBuf> {
     output.lines().find_map(|line| {
         let line = line.trim();
@@ -1490,7 +1491,7 @@ HKEY_CURRENT_USER\Software\Valve\Steam
 "#;
         assert_eq!(
             super::parse_steam_registry_output(output),
-            Some(PathBuf::from(r"E:\Custom Steam"))
+            Some(std::path::PathBuf::from(r"E:\Custom Steam"))
         );
         assert_eq!(
             super::parse_steam_registry_output(
