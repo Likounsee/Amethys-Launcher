@@ -459,6 +459,41 @@ pub fn scan_amazon_games(database: &Path) -> Vec<DetectedGame> {
     games
 }
 
+/// Expands Windows-style %NAME% references without invoking a shell.
+/// Unknown variables are preserved so an unresolved path cannot become a false hit.
+fn expand_windows_environment_variables_with<F>(value: &str, mut lookup: F) -> String
+where
+    F: FnMut(&str) -> Option<String>,
+{
+    let mut expanded = String::with_capacity(value.len());
+    let mut remaining = value;
+    while let Some(start) = remaining.find('%') {
+        expanded.push_str(&remaining[..start]);
+        let after_start = &remaining[start + 1..];
+        let Some(end) = after_start.find('%') else {
+            expanded.push_str(&remaining[start..]);
+            return expanded;
+        };
+        let variable = &after_start[..end];
+        if variable.is_empty() {
+            expanded.push_str("%%");
+        } else if let Some(replacement) = lookup(variable) {
+            expanded.push_str(&replacement);
+        } else {
+            expanded.push('%');
+            expanded.push_str(variable);
+            expanded.push('%');
+        }
+        remaining = &after_start[end + 1..];
+    }
+    expanded.push_str(remaining);
+    expanded
+}
+
+fn expand_windows_environment_variables(value: &str) -> String {
+    expand_windows_environment_variables_with(value, |name| std::env::var(name).ok())
+}
+
 /// Parses EA app registry installation records and validates each game's installer metadata.
 ///
 /// EA app stores per-game install locations under HKLM\\SOFTWARE\\EA Games.
@@ -481,7 +516,8 @@ pub fn parse_ea_registry_output(contents: &str) -> Vec<DetectedGame> {
         let Some((name, value)) = trimmed.split_once("REG_SZ")
             .or_else(|| trimmed.split_once("REG_EXPAND_SZ")) else { continue; };
         if !["Install Dir", "InstallDir"].iter().any(|candidate| name.trim().eq_ignore_ascii_case(candidate)) { continue; }
-        let install_path = PathBuf::from(value.trim().trim_matches('"'));
+        let expanded_path = expand_windows_environment_variables(value.trim().trim_matches('"'));
+        let install_path = PathBuf::from(expanded_path);
         if !install_path.is_dir() || !install_path.join("__Installer/installerdata.xml").is_file() {
             continue;
         }
@@ -643,7 +679,8 @@ pub fn parse_ubisoft_registry_output(contents: &str) -> Vec<DetectedGame> {
             .or_else(|| trimmed.split_once("REG_EXPAND_SZ"))
             .filter(|(name, _)| name.trim().eq_ignore_ascii_case("InstallDir"))
         {
-            let install_path = PathBuf::from(value.trim().trim_matches('"'));
+            let expanded_path = expand_windows_environment_variables(value.trim().trim_matches('"'));
+            let install_path = PathBuf::from(expanded_path);
             if !install_path.is_dir() {
                 continue;
             }
@@ -1489,6 +1526,19 @@ mod tests {
         );
         assert!(super::parse_ea_registry_output(&output).is_empty());
         std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn expands_windows_environment_variables_and_preserves_unknown_names() {
+        let expanded = super::expand_windows_environment_variables_with(
+            r#"%GAMES_ROOT%\\Title\\%MISSING%"#,
+            |name| (name == "GAMES_ROOT").then(|| r#"D:\\Game Library"#.to_owned()),
+        );
+        assert_eq!(expanded, r#"D:\\Game Library\\Title\\%MISSING%"#);
+        assert_eq!(
+            super::expand_windows_environment_variables_with("100%% complete", |_| None),
+            "100%% complete",
+        );
     }
 
     #[test]
