@@ -158,8 +158,19 @@ fn store_runtime_state(shared: &AtomicU8, state: RuntimeState) {
 
 #[cfg(test)]
 mod tests {
-    use super::mutation_allowed;
-    use amethys_ipc::IpcCoreStatus;
+    use super::{
+        mutation_allowed, serve_database_connection, STATE_STOPPING,
+    };
+    use amethys_ipc::{
+        IpcCommand, IpcEnvelope, IpcRequest, IpcResponse, read_message, write_message,
+        IpcCoreStatus,
+    };
+    use amethys_storage::Database;
+    use std::sync::{
+        Arc,
+        atomic::AtomicU8,
+    };
+    use tokio::{io::duplex, sync::Mutex};
 
     #[test]
     fn library_mutations_are_only_allowed_while_core_is_running() {
@@ -167,6 +178,40 @@ mod tests {
         assert!(!mutation_allowed(IpcCoreStatus::Created));
         assert!(!mutation_allowed(IpcCoreStatus::Stopping));
         assert!(!mutation_allowed(IpcCoreStatus::Stopped));
+    }
+
+    #[tokio::test]
+    async fn stopping_core_rejects_game_library_mutations_without_writing_database() {
+        let database = Arc::new(Mutex::new(Database::open(":memory:").expect("database opens")));
+        let state = Arc::new(AtomicU8::new(STATE_STOPPING));
+        let (mut client, mut server) = duplex(4096);
+        let request = IpcEnvelope::new(IpcRequest::new(IpcCommand::AddGame {
+            name: "Must not be added".to_owned(),
+            platform: "Steam".to_owned(),
+            install_path: "/games/blocked".to_owned(),
+            executable: None,
+        }));
+        let request_id = request.request_id;
+
+        let server_database = Arc::clone(&database);
+        let server_state = Arc::clone(&state);
+        let server_task = tokio::spawn(async move {
+            serve_database_connection(&mut server, &server_state, &server_database)
+                .await
+                .expect("serve rejected request");
+        });
+
+        write_message(&mut client, &request).await.expect("send request");
+        let response: IpcResponse = read_message(&mut client).await.expect("read response");
+        server_task.await.expect("server task");
+
+        assert_eq!(response.request_id, request_id);
+        let error = response.result.expect_err("mutation must be rejected");
+        assert_eq!(error.code, "AM-CORE-0002");
+        assert!(
+            database.lock().await.list_games().expect("list games").is_empty(),
+            "rejected mutation must not reach SQLite"
+        );
     }
 }
 
