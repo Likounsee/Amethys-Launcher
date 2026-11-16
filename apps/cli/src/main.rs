@@ -15,6 +15,7 @@ COMMANDES:
     ping                              Vérifie que le cœur Amethys répond
     status                            Affiche l'état du cœur
     games                             Liste la bibliothèque Amethys
+    games list --platform <nom>       Filtre la bibliothèque par plateforme
     games search <terme>              Recherche dans la bibliothèque Amethys
     games scan [--verbose|--json]      Détecte les jeux sans les importer
     games import <appid>              Importe un jeu Steam par son App ID
@@ -155,6 +156,39 @@ async fn load_saved_games() -> Result<Vec<amethys_ipc::IpcGameEntry>, Box<dyn Er
             "Amethys a envoyé une réponse inattendue en lisant la bibliothèque.".into(),
         ),
     }
+}
+
+/// Filters the saved library by platform name without changing stored entries.
+fn filter_games_by_platform<'a>(
+    games: &'a [amethys_ipc::IpcGameEntry],
+    platform: &str,
+) -> Vec<&'a amethys_ipc::IpcGameEntry> {
+    let platform = platform.trim();
+    if platform.is_empty() {
+        return Vec::new();
+    }
+    games.iter()
+        .filter(|game| game.platform.eq_ignore_ascii_case(platform))
+        .collect()
+}
+
+async fn list_games_for_platform(platform: &str) -> Result<(), Box<dyn Error>> {
+    if platform.trim().is_empty() {
+        return Err("Indique une plateforme : amethysctl games list --platform <nom>.".into());
+    }
+    let games = load_saved_games().await?;
+    let matches = filter_games_by_platform(&games, platform);
+    if matches.is_empty() {
+        println!("Aucun jeu enregistré pour la plateforme « {} ».", platform.trim());
+        return Ok(());
+    }
+    println!("{} jeu(x) enregistré(s) sur {} :", matches.len(), platform.trim());
+    for game in matches {
+        println!("- {}{} — {}", game.name,
+            game.platform_id.as_deref().map(|id| format!(" — ID {id}")).unwrap_or_default(),
+            game.install_path);
+    }
+    Ok(())
 }
 
 /// Searches saved game metadata without requiring any launcher to be running.
@@ -548,6 +582,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
         println!("Amethys Launcher {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
+    if arguments.len() == 4
+        && arguments[0] == "games"
+        && arguments[1] == "list"
+        && arguments[2] == "--platform"
+    {
+        return list_games_for_platform(&arguments[3]).await;
+    }
+    if arguments.len() == 3
+        && arguments[0] == "games"
+        && arguments[1] == "list"
+        && arguments[2] == "--platform"
+    {
+        return Err("Indique une plateforme : amethysctl games list --platform <nom>.".into());
+    }
     if arguments.len() >= 2 && arguments[0] == "games" && arguments[1] == "search" {
         return search_library(&arguments[2..].join(" ")).await;
     }
@@ -890,6 +938,27 @@ mod tests {
                 "scan summary must include the {platform} adapter"
             );
         }
+    }
+
+    #[test]
+    fn filters_library_by_platform_case_insensitively() {
+        let games = vec![
+            amethys_ipc::IpcGameEntry {
+                id: "steam-1".to_owned(), name: "Example".to_owned(),
+                platform: "Steam".to_owned(), platform_id: Some("10".to_owned()),
+                install_path: "A:/Steam/Example".to_owned(), executable: None,
+            },
+            amethys_ipc::IpcGameEntry {
+                id: "epic-1".to_owned(), name: "Example".to_owned(),
+                platform: "Epic Games".to_owned(), platform_id: Some("10".to_owned()),
+                install_path: "A:/Epic/Example".to_owned(), executable: None,
+            },
+        ];
+        let steam = super::filter_games_by_platform(&games, "sTEAM");
+        assert_eq!(steam.len(), 1);
+        assert_eq!(steam[0].id, "steam-1");
+        assert!(super::filter_games_by_platform(&games, "GOG").is_empty());
+        assert!(super::filter_games_by_platform(&games, "  ").is_empty());
     }
 
     #[test]
