@@ -28,8 +28,12 @@ pub fn parse_library_folders(contents: &str, steam_root: &Path) -> Vec<PathBuf> 
             // not library paths.
             let is_legacy_library = depth == 1 && key.parse::<u32>().is_ok();
             let is_modern_library_path = depth == 2 && key.eq_ignore_ascii_case("path");
-            if (is_legacy_library || is_modern_library_path) && !value.is_empty() {
-                paths.insert(PathBuf::from(unescape_vdf(&value)));
+            if is_legacy_library || is_modern_library_path {
+                let path = unescape_vdf(&value);
+                let path = path.trim();
+                if !path.is_empty() {
+                    paths.insert(PathBuf::from(path));
+                }
             }
         }
 
@@ -1476,6 +1480,31 @@ mod tests {
         "#;
         let paths = parse_library_folders(contents, Path::new("C:/Steam"));
         assert!(paths.contains(&Path::new(r"D:\SteamLibrary").to_path_buf()));
+    }
+
+    #[test]
+    fn trims_steam_library_paths_and_ignores_empty_values() {
+        let contents = r#"
+            "libraryfolders"
+            {
+                "0"
+                {
+                    "path" "   "
+                }
+                "1"
+                {
+                    "path" "  D:\\SteamLibrary  "
+                }
+            }
+        "#;
+        let paths = parse_library_folders(contents, Path::new("C:/Steam"));
+        assert_eq!(
+            paths,
+            vec![
+                Path::new("C:/Steam").to_path_buf(),
+                Path::new(r"D:\SteamLibrary").to_path_buf(),
+            ]
+        );
     }
 
     #[test]
