@@ -72,7 +72,7 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
         [group, action, id] if group == "games" && action == "remove" => {
             Ok(IpcCommand::RemoveGame { id: id.clone() })
         }
-        _ => Err("Utilisation : amethysctl games add <nom> <plateforme> <dossier> [executable] | games remove <id> | games scan | games import <appid> | games import <plateforme> <id> | games import-all | games import-all"),
+        _ => Err("Utilisation : amethysctl games add <nom> <plateforme> <dossier> [executable] | games remove <id> | games scan | games import <appid> | games import <plateforme> <id> | games import-all | games verify"),
     }
 }
 
@@ -201,6 +201,40 @@ async fn import_detected_games(
     }
 }
 
+fn installation_path_exists(path: &str) -> bool {
+    std::path::Path::new(path).exists()
+}
+
+async fn verify_saved_games() -> Result<(), Box<dyn Error>> {
+    let games = load_saved_games().await?;
+    if games.is_empty() {
+        println!("Aucun jeu enregistré à vérifier.");
+        return Ok(());
+    }
+
+    let mut missing = 0usize;
+    for game in &games {
+        if installation_path_exists(&game.install_path) {
+            println!("[OK] {} ({}) — {}", game.name, game.platform, game.install_path);
+        } else {
+            missing += 1;
+            println!("[ABSENT] {} ({}) — {}", game.name, game.platform, game.install_path);
+        }
+    }
+
+    let available = games.len() - missing;
+    println!(
+        "Vérification terminée : {available}/{} chemin(s) d'installation disponible(s), {missing} absent(s). Aucun fichier n'a été modifié.",
+        games.len()
+    );
+
+    if missing == 0 {
+        Ok(())
+    } else {
+        Err(format!("{missing} chemin(s) d'installation sont introuvables.").into())
+    }
+}
+
 async fn import_detected_game(platform: &str, platform_id: &str) -> Result<(), Box<dyn Error>> {
     let game = amethys_discovery::discover_all_games()
         .into_iter()
@@ -220,6 +254,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
     if arguments.as_slice() == ["games", "import-all"] {
         return import_detected_games(amethys_discovery::discover_all_games()).await;
+    }
+    if arguments.as_slice() == ["games", "verify"] {
+        return verify_saved_games().await;
     }
     if let [group, action, app_id] = arguments.as_slice() {
         if group == "games" && action == "import" {
@@ -299,7 +336,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_arguments, parse_command, same_install_location, status_label};
+    use super::{installation_path_exists, parse_arguments, parse_command, same_install_location, status_label};
     use amethys_ipc::{IpcCommand, IpcCoreStatus};
 
     #[test]
@@ -345,6 +382,25 @@ mod tests {
         let alias = install.join("..").join("Installed Game");
         assert!(same_install_location(&alias.to_string_lossy(), &install));
         assert!(!same_install_location(&other.to_string_lossy(), &install));
+
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn verifies_installation_paths_without_modifying_them() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-verify-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create installation directory");
+        let existing = root.to_string_lossy().into_owned();
+        let missing = root.join("missing-game").to_string_lossy().into_owned();
+
+        assert!(installation_path_exists(&existing));
+        assert!(!installation_path_exists(&missing));
+        assert!(root.is_dir(), "verification must leave the installation untouched");
 
         std::fs::remove_dir_all(root).expect("cleanup");
     }
