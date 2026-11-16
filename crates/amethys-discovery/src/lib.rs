@@ -1244,7 +1244,7 @@ mod tests {
     fn preserves_numeric_references_to_characters_forbidden_by_xml_10() {
         assert_eq!(
             super::decode_xml_entities("A&#0;B &#x1; &#xD800; &#xFFFE; &#x10FFFF;"),
-            "A&#0;B &#x1; &#xD800; &#xFFFE; 􏿿"
+            "A&#0;B &#x1; &#xD800; &#xFFFE; \\u{10FFFF}"
         );
         assert_eq!(
             super::decode_xml_entities("line&#10;break&#13;return"),
