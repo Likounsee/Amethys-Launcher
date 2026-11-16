@@ -698,15 +698,19 @@ pub fn scan_ea_games(roots: &[PathBuf]) -> Vec<DetectedGame> {
 }
 
 fn xml_element_text(contents: &str, element: &str) -> Option<String> {
-    // EA metadata may contain tag-looking text in comments or CDATA.
-    let open_start = find_xml_tag(contents, element, false, 0)?;
-    let open_end = find_xml_tag_end(contents, open_start)?;
-    // A self-closing element has no text content; do not accidentally pair it
-    // with a later closing tag belonging to another element.
-    let opening_tag = contents.get(open_start..open_end)?.trim_end();
-    if opening_tag.strip_suffix('>')?.trim_end().ends_with('/') {
-        return None;
-    }
+    // EA metadata may contain tag-looking text in comments or CDATA. Empty
+    // self-closing elements are skipped so a later populated element remains
+    // discoverable, without pairing it with the wrong closing tag.
+    let mut search_from = 0;
+    let (open_start, open_end) = loop {
+        let open_start = find_xml_tag(contents, element, false, search_from)?;
+        let open_end = find_xml_tag_end(contents, open_start)?;
+        let opening_tag = contents.get(open_start..open_end)?.trim_end();
+        if !opening_tag.strip_suffix('>')?.trim_end().ends_with('/') {
+            break (open_start, open_end);
+        }
+        search_from = open_end;
+    };
     let close_start = find_xml_tag(contents, element, true, open_end)?;
     let raw = contents[open_end..close_start].trim();
     if raw.is_empty() {
