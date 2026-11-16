@@ -15,7 +15,7 @@ COMMANDES:
     ping                              Vérifie que le cœur Amethys répond
     status                            Affiche l'état du cœur
     games                             Liste la bibliothèque Amethys
-    games scan                        Détecte les jeux sans les importer
+    games scan [--verbose]            Détecte les jeux sans les importer
     games import <appid>              Importe un jeu Steam par son App ID
     games import <plateforme> <id>    Importe un jeu détecté par plateforme et ID
     games import-all                  Importe les jeux détectés non encore enregistrés
@@ -228,6 +228,56 @@ async fn import_detected_games(
     }
 }
 
+/// Lists the launcher adapters enabled for the current operating system.
+fn supported_platforms() -> &'static [&'static str] {
+    #[cfg(windows)]
+    {
+        &["Steam", "Epic Games", "Heroic", "GOG Galaxy", "Amazon Games", "EA app", "Ubisoft Connect", "Battle.net"]
+    }
+    #[cfg(target_os = "macos")]
+    {
+        &["Steam", "Heroic", "GOG Galaxy"]
+    }
+    #[cfg(target_os = "linux")]
+    {
+        &["Steam", "Heroic"]
+    }
+    #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
+    {
+        &[]
+    }
+}
+
+/// Prints a real discovery result, optionally including zero-result adapters.
+fn print_scan_results(games: &[amethys_discovery::DetectedGame], verbose: bool) {
+    if games.is_empty() {
+        println!("Aucun jeu installé n'a été détecté dans les plateformes prises en charge.");
+    } else {
+        println!("Jeux détectés (aucun ajout automatique) :");
+        for game in games {
+            println!(
+                "- {} [{}]{} — {}",
+                game.name,
+                game.platform,
+                game.platform_id.as_deref().map(|id| format!(" — ID {id}")).unwrap_or_default(),
+                game.install_path.display()
+            );
+        }
+        println!("Total : {} jeu(x) détecté(s).", games.len());
+    }
+
+    if verbose {
+        println!("\nRésultat par plateforme :");
+        for platform in supported_platforms() {
+            let count = games.iter()
+                .filter(|game| game.platform.eq_ignore_ascii_case(platform))
+                .count();
+            println!("- {platform} : {count} jeu(x) détecté(s)");
+        }
+        println!("Résultats issus des métadonnées locales réellement trouvées ; aucun jeu fictif n'est ajouté.");
+    }
+}
+
 fn installation_path_exists(path: &str) -> bool {
     std::path::Path::new(path).is_dir()
 }
@@ -304,16 +354,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
             return import_detected_game(platform, platform_id).await;
         }
     }
-    if arguments.as_slice() == ["games", "scan"] {
+    if arguments.as_slice() == ["games", "scan"]
+        || arguments.as_slice() == ["games", "scan", "--verbose"]
+    {
+        let verbose = arguments.len() == 3;
         let games = amethys_discovery::discover_all_games();
-        if games.is_empty() {
-            println!("Aucun jeu installé n'a été détecté dans les plateformes prises en charge.");
-        } else {
-            println!("Jeux détectés (aucun ajout automatique) :");
-            for game in games {
-                println!("- {} [{}]{} — {}", game.name, game.platform, game.platform_id.as_deref().map(|id| format!(" — ID {id}")).unwrap_or_default(), game.install_path.display());
-            }
-        }
+        print_scan_results(&games, verbose);
         return Ok(());
     }
 
