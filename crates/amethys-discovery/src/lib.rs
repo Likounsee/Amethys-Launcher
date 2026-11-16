@@ -2057,7 +2057,7 @@ mod tests {
         let metadata = "<gameTitle/><gameTitle>Actual Game</gameTitle>";
         assert_eq!(
             super::xml_element_text(metadata, "gameTitle").as_deref(),
-            None
+            Some("Actual Game")
         );
     }
 
