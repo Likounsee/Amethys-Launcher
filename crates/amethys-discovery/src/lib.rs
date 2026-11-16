@@ -702,7 +702,7 @@ fn xml_element_text(contents: &str, element: &str) -> Option<String> {
     // self-closing elements are skipped so a later populated element remains
     // discoverable, without pairing it with the wrong closing tag.
     let mut search_from = 0;
-    let (open_start, open_end) = loop {
+    let (_open_start, open_end) = loop {
         let open_start = find_xml_tag(contents, element, false, search_from)?;
         let open_end = find_xml_tag_end(contents, open_start)?;
         let opening_tag = contents.get(open_start..open_end)?.trim_end();
