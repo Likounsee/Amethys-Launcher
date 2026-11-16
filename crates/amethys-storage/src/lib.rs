@@ -50,8 +50,31 @@ impl Database {
             "CREATE TABLE IF NOT EXISTS schema_migrations (
                  version INTEGER PRIMARY KEY NOT NULL,
                  applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-             );
-             CREATE TABLE IF NOT EXISTS app_settings (
+             );"
+        ).map_err(|error| AmethysError::new(
+            ErrorCode::StorageMigration,
+            format!("Could not create migration history: {error}"),
+        ))?;
+
+        let current_version: i64 = transaction.query_row(
+            "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
+            [],
+            |row| row.get(0),
+        ).map_err(|error| AmethysError::new(
+            ErrorCode::StorageMigration,
+            format!("Could not read migration history: {error}"),
+        ))?;
+        if current_version > 2 {
+            return Err(AmethysError::new(
+                ErrorCode::StorageMigration,
+                format!(
+                    "Database schema version {current_version} is newer than the supported version 2."
+                ),
+            ));
+        }
+
+        transaction.execute_batch(
+            "CREATE TABLE IF NOT EXISTS app_settings (
                  key TEXT PRIMARY KEY NOT NULL,
                  value TEXT NOT NULL
              );
@@ -196,6 +219,40 @@ mod tests {
             |row| row.get(0),
         ).expect("schema catalog is readable");
         assert_eq!(app_settings_exists, 0, "partial table creation must be rolled back");
+        drop(connection);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[test]
+    fn newer_database_schema_is_rejected_without_modification() {
+        let path = std::env::temp_dir().join(format!("amethys-{}.sqlite", uuid::Uuid::new_v4()));
+        {
+            let connection = rusqlite::Connection::open(&path).expect("fixture database opens");
+            connection.execute_batch(
+                "CREATE TABLE schema_migrations (
+                    version INTEGER PRIMARY KEY NOT NULL,
+                    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                INSERT INTO schema_migrations (version) VALUES (3);"
+            ).expect("future schema is created");
+        }
+
+        let error = match Database::open(&path) {
+            Err(error) => error,
+            Ok(_) => panic!("newer schema must be rejected"),
+        };
+        assert_eq!(error.code(), amethys_errors::ErrorCode::StorageMigration);
+        assert!(error.message().contains("newer than the supported version 2"));
+
+        let connection = rusqlite::Connection::open(&path).expect("fixture database reopens");
+        let games_exists: i64 = connection.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'games'",
+            [],
+            |row| row.get(0),
+        ).expect("schema catalog is readable");
+        assert_eq!(games_exists, 0, "future database must remain untouched");
         drop(connection);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
