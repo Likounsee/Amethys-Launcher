@@ -11,10 +11,16 @@ Amethys performs read-only discovery from local launcher metadata. A launcher be
 | Heroic / Legendary | installed.json | Implemented |
 | GOG Galaxy | Local installed-product database, opened read-only | Implemented |
 | Amazon Games | Local launcher database, opened read-only | Implemented |
-| EA app | Installer metadata and Windows registry install records | Implemented |
+| EA app | Installer metadata in both Program Files game-library roots, plus Windows registry install records for custom paths | Implemented |
 | Ubisoft Connect | Windows registry install records | Implemented |
 | Battle.net | Local Agent product metadata | Implemented |
 | Riot Games | Riot Client JSON and per-product product_settings.yaml metadata (VALORANT, League of Legends, LoR, 2XKO) | Initial adapter; validate against real installations |
+
+## Game-specific coverage notes
+
+- THE FINALS is already detected through Steam AppID metadata (2073850).
+- VALORANT is detected through Riot Client installation metadata and Riot product settings.
+- Apex Legends is not a dedicated adapter: it should be discovered through its installing platform (Steam AppID metadata or EA app installer/registry metadata). The EA app adapter now checks both standard Program Files game-library roots as well as registry-recorded custom paths. A real installation still needs to be validated on a machine where Apex is installed.
 
 ## Planned adapters and investigations
 
