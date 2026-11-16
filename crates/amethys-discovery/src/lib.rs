@@ -999,12 +999,18 @@ pub fn discover_ubisoft_games() -> Vec<DetectedGame> {
 pub fn scan_game_folders(platform: &'static str, roots: &[PathBuf]) -> Vec<DetectedGame> {
     let mut games = Vec::new();
     let mut seen_paths = BTreeSet::new();
-    for root in roots {
+    // Directory enumeration and caller-provided root order are unspecified.
+    // Sort both before de-duplication so aliases resolve consistently.
+    let mut roots = roots.to_vec();
+    roots.sort();
+    for root in &roots {
         let entries = match fs::read_dir(root) {
             Ok(entries) => entries,
             Err(_) => continue,
         };
-        for entry in entries.flatten() {
+        let mut entries: Vec<_> = entries.flatten().collect();
+        entries.sort_by_key(|entry| entry.file_name());
+        for entry in entries {
             let path = entry.path();
             if !path.is_dir() {
                 continue;
@@ -2787,6 +2793,35 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let file = std::fs::File::create(&database).expect("create database");
         file.set_len(16 * 1024 * 1024 + 1).expect("extend database");
         assert!(super::scan_battlenet_product_db(&database).is_empty());
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn folder_scan_resolves_symlink_aliases_independently_of_root_order() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-folder-alias-order-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let actual_root = root.join("a-library");
+        let alias_root = root.join("z-library");
+        std::fs::create_dir_all(actual_root.join("Same Game")).expect("create install");
+        std::fs::create_dir_all(&alias_root).expect("create alias root");
+        std::os::unix::fs::symlink(
+            actual_root.join("Same Game"),
+            alias_root.join("Same Game"),
+        ).expect("create install alias");
+
+        let forward = scan_game_folders("EA app", &[alias_root.clone(), actual_root.clone()]);
+        let reverse = scan_game_folders("EA app", &[actual_root.clone(), alias_root.clone()]);
+        assert_eq!(forward, reverse);
+        assert_eq!(forward.len(), 1);
+        assert_eq!(forward[0].install_path, actual_root.join("Same Game"));
+
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
