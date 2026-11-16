@@ -739,7 +739,7 @@ fn decode_xml_entities(raw: &str) -> String {
                     .or_else(|| entity.strip_prefix("#X"))
                     .and_then(|value| u32::from_str_radix(value, 16).ok())
                     .or_else(|| entity.strip_prefix('#').and_then(|value| value.parse::<u32>().ok()));
-                numeric.and_then(char::from_u32)
+                numeric.and_then(xml_char_from_reference)
             }
         };
 
@@ -755,6 +755,15 @@ fn decode_xml_entities(raw: &str) -> String {
 
     decoded.push_str(remaining);
     decoded
+}
+
+/// Converts a numeric XML character reference only when it is legal in XML 1.0.
+fn xml_char_from_reference(value: u32) -> Option<char> {
+    let is_valid = matches!(value, 0x9 | 0xA | 0xD)
+        || (0x20..=0xD7FF).contains(&value)
+        || (0xE000..=0xFFFD).contains(&value)
+        || (0x10000..=0x10FFFF).contains(&value);
+    is_valid.then(|| char::from_u32(value)).flatten()
 }
 
 /// Returns the standard Amazon Games install metadata database on Windows.
@@ -1231,6 +1240,18 @@ fn unescape_vdf(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn preserves_numeric_references_to_characters_forbidden_by_xml_10() {
+        assert_eq!(
+            super::decode_xml_entities("A&#0;B &#x1; &#xD800; &#xFFFE; &#x10FFFF;"),
+            "A&#0;B &#x1; &#xD800; &#xFFFE; 􏿿"
+        );
+        assert_eq!(
+            super::decode_xml_entities("line&#10;break&#13;return"),
+            "line\nbreak\rreturn"
+        );
+    }
+
     #[test]
     fn decodes_numeric_xml_entities_without_redecoding_escaped_text() {
         assert_eq!(
