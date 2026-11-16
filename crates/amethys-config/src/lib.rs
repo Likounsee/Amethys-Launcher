@@ -224,7 +224,10 @@ impl AppConfig {
         // Persist the directory entry update on Unix as well as the file
         // contents. Without this, a power loss can lose the rename itself.
         #[cfg(unix)]
-        if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
+        {
+            let parent = path.parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or_else(|| Path::new("."));
             std::fs::File::open(parent)
                 .and_then(|directory| directory.sync_all())
                 .map_err(|error| AmethysError::new(
