@@ -17,7 +17,11 @@ pub struct DetectedGame {
 /// Reads the "path" entries from Steam's libraryfolders.vdf file.
 pub fn parse_library_folders(contents: &str, steam_root: &Path) -> Vec<PathBuf> {
     let mut paths = BTreeSet::new();
-    paths.insert(steam_root.to_path_buf());
+    // VDF metadata is external input. Never let a relative library entry (or
+    // relative root supplied by a caller) resolve against the launcher's CWD.
+    if steam_root.is_absolute() {
+        paths.insert(steam_root.to_path_buf());
+    }
     let mut depth = 0usize;
 
     for line in contents.lines() {
@@ -32,7 +36,10 @@ pub fn parse_library_folders(contents: &str, steam_root: &Path) -> Vec<PathBuf> 
                 let path = unescape_vdf(&value);
                 let path = path.trim();
                 if !path.is_empty() {
-                    paths.insert(PathBuf::from(path));
+                    let path = PathBuf::from(path);
+                    if path.is_absolute() {
+                        paths.insert(path);
+                    }
                 }
             }
         }
@@ -1511,6 +1518,22 @@ mod tests {
         );
         assert!(libraries.contains(&PathBuf::from("/real/library")));
         assert!(!libraries.contains(&PathBuf::from("/ignored/library")));
+    }
+
+    #[test]
+    fn ignores_relative_steam_library_paths_and_roots() {
+        let libraries = super::parse_library_folders(
+            r#"
+            "libraryfolders"
+            {
+                "1" "relative/library"
+                "2" "/absolute/library"
+            }
+            "#,
+            Path::new("relative/steam"),
+        );
+
+        assert_eq!(libraries, vec![PathBuf::from("/absolute/library")]);
     }
 
     #[test]
