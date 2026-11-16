@@ -50,8 +50,11 @@ visibility does not grant permission to copy, reuse, modify or redistribute
 project materials. See [LICENSE](LICENSE) for the terms.
 
 Bug reports and proposed fixes are welcome. Pull requests are reviewed before
-any merge, including checks for correctness, security, privacy and platform
-compliance. See [CONTRIBUTING.md](CONTRIBUTING.md) and [SECURITY.md](SECURITY.md).
+any merge, including checks for source-code provenance, copyright, security,
+privacy and platform compliance. Code contributions require an explicit
+policy acknowledgement and a signed, contribution-specific rights assignment
+agreement before they can be merged. See [CONTRIBUTING.md](CONTRIBUTING.md),
+[CLA.md](CLA.md), and [SECURITY.md](SECURITY.md).
 
 Never publish credentials, personal data, private platform responses or
 confidential information from Steam, Epic Games or other services in this
