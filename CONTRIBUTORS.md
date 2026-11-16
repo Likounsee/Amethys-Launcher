@@ -1,25 +1,22 @@
-# Amethys Launcher Contributors
+# Amethys Launcher — Community Recognition
 
-This file publicly recognises people whose contributions have been reviewed,
-accepted and incorporated into Amethys Launcher.
+This file recognises people whose GitHub Issues have materially helped
+Amethys Launcher through useful bug reports, technical investigations,
+feature proposals, diagnostic information or suggested means of resolution.
 
-A credit records authorship and participation. It does not give ownership
-of Amethys Launcher or reverse a valid written assignment of transferable
-economic rights. Rights that cannot legally be transferred remain unaffected.
+Recognition is for community participation and problem-solving. It does not
+imply that a person has contributed code or received rights in the project.
 
-Where practical, each entry identifies the files, components or features
-contributed so that the person's work is visible.
+## Community contributors
 
-## Contributors
+_No community contributions have been recorded yet._
 
-_No external code contributions have been accepted and recorded yet._
+## Recognition and planned rewards
 
-## Recognition and rewards
-
-The project intends to provide gift-card rewards after Amethys Launcher is
-completed with its Store and integrated wallets. The intended reward level
-will reflect accepted work and each contributor's involvement. Eligibility,
-assessment criteria, budget, gift-card types, values and distribution
-conditions will be published before awards are determined. Listing in this
-file records recognition but does not, by itself, guarantee a specific
-reward or amount.
+The project intends to establish a gift-card reward programme after Amethys
+Launcher is completed with its Store and integrated wallets. Recognition may
+reflect the usefulness and impact of Issues, investigations, proposals and
+help validating outcomes. Eligibility, assessment criteria, budget, gift-card
+types, values and distribution conditions will be published before awards
+are determined. Being listed here does not guarantee a specific reward or
+amount.
