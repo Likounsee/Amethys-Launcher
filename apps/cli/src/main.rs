@@ -300,40 +300,107 @@ fn print_scan_results(games: &[amethys_discovery::DetectedGame], verbose: bool) 
     }
 }
 
-fn installation_path_exists(path: &str) -> bool {
-    std::path::Path::new(path).is_dir()
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PathCheck {
+    Available,
+    Missing,
+    NotDirectory,
+    Inaccessible,
+    Error,
 }
 
-/// Creates a versioned, read-only report of saved installation directories.
+impl PathCheck {
+    const fn as_str(self) -> &'static str {
+        match self {
+            Self::Available => "available",
+            Self::Missing => "missing",
+            Self::NotDirectory => "not_directory",
+            Self::Inaccessible => "inaccessible",
+            Self::Error => "error",
+        }
+    }
+
+    const fn is_available(self) -> bool {
+        matches!(self, Self::Available)
+    }
+}
+
+/// Inspects a path without opening, changing, or creating its contents.
+fn inspect_path(path: &std::path::Path, expect_directory: bool) -> PathCheck {
+    match std::fs::metadata(path) {
+        Ok(metadata) if expect_directory && metadata.is_dir() => PathCheck::Available,
+        Ok(metadata) if !expect_directory && metadata.is_file() => PathCheck::Available,
+        Ok(_) => PathCheck::NotDirectory,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => PathCheck::Missing,
+        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => PathCheck::Inaccessible,
+        Err(_) => PathCheck::Error,
+    }
+}
+
+fn installation_path_exists(path: &str) -> bool {
+    inspect_path(std::path::Path::new(path), true).is_available()
+}
+
+fn inspect_game_executable(game: &amethys_ipc::IpcGameEntry) -> Option<PathCheck> {
+    let executable = game.executable.as_deref()?;
+    let executable_path = std::path::Path::new(executable);
+    let resolved = if executable_path.is_absolute() {
+        executable_path.to_path_buf()
+    } else {
+        std::path::Path::new(&game.install_path).join(executable_path)
+    };
+    Some(inspect_path(&resolved, false))
+}
+
+/// Creates a versioned, read-only report of saved installation directories and
+/// configured executables. Directory availability remains separate from executable status.
 fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value {
     let entries = games.iter().map(|game| {
-        let available = installation_path_exists(&game.install_path);
+        let directory_status = inspect_path(std::path::Path::new(&game.install_path), true);
+        let executable_status = inspect_game_executable(game);
+        let executable_label = executable_status
+            .map(PathCheck::as_str)
+            .unwrap_or("not_configured");
+        let healthy = directory_status.is_available()
+            && executable_status.is_none_or(PathCheck::is_available);
         serde_json::json!({
             "id": game.id,
             "name": game.name,
             "platform": game.platform,
             "platform_id": game.platform_id,
             "install_path": game.install_path,
-            "directory_available": available,
+            "directory_available": directory_status.is_available(),
+            "directory_status": directory_status.as_str(),
+            "executable": game.executable,
+            "executable_status": executable_label,
+            "healthy": healthy,
         })
     }).collect::<Vec<_>>();
     let available = entries.iter()
         .filter(|entry| entry["directory_available"] == true)
         .count();
-    json_verify_summary(games.len(), available, entries)
+    let healthy = entries.iter()
+        .filter(|entry| entry["healthy"] == true)
+        .count();
+    let issues = entries.len() - healthy;
+    json_verify_summary(games.len(), available, healthy, issues, entries)
 }
 
 fn json_verify_summary(
     total: usize,
     available: usize,
+    healthy: usize,
+    issues: usize,
     games: Vec<serde_json::Value>,
 ) -> serde_json::Value {
     serde_json::json!({
-        "schema_version": 1,
+        "schema_version": 2,
         "read_only": true,
         "total_games": total,
         "available": available,
         "missing": total - available,
+        "healthy": healthy,
+        "issues": issues,
         "games": games,
     })
 }
@@ -343,6 +410,8 @@ async fn verify_saved_games(json_output: bool) -> Result<(), Box<dyn Error>> {
     let report = build_verify_report(&games);
     let total = games.len();
     let available = report["available"].as_u64().unwrap_or(0) as usize;
+    let healthy = report["healthy"].as_u64().unwrap_or(0) as usize;
+    let issues = total - healthy;
     let missing = total - available;
 
     if json_output {
@@ -351,21 +420,33 @@ async fn verify_saved_games(json_output: bool) -> Result<(), Box<dyn Error>> {
         println!("Aucun jeu enregistré à vérifier.");
     } else {
         for game in &games {
-            if installation_path_exists(&game.install_path) {
-                println!("[OK] {} ({}) — {}", game.name, game.platform, game.install_path);
-            } else {
-                println!("[ABSENT] {} ({}) — {}", game.name, game.platform, game.install_path);
+            let directory_status = inspect_path(std::path::Path::new(&game.install_path), true);
+            let executable_status = inspect_game_executable(game);
+            let healthy = directory_status.is_available()
+                && executable_status.is_none_or(PathCheck::is_available);
+            let marker = if healthy { "OK" } else { "ATTENTION" };
+            println!(
+                "[{marker}] {} ({}) — dossier : {}",
+                game.name,
+                game.platform,
+                directory_status.as_str()
+            );
+            if let Some(status) = executable_status {
+                println!("       Exécutable : {}", status.as_str());
+            }
+            if !directory_status.is_available() {
+                println!("       Chemin : {}", game.install_path);
             }
         }
         println!(
-            "Vérification terminée : {available}/{total} chemin(s) d'installation disponible(s), {missing} absent(s). Aucun fichier n'a été modifié."
+            "Vérification terminée : {healthy}/{total} installation(s) cohérente(s), {available}/{total} dossier(s) disponible(s), {issues} anomalie(s). Aucun fichier n'a été modifié."
         );
     }
 
-    if missing == 0 {
-        Ok(())
+    if missing > 0 || issues > 0 {
+        Err(format!("{issues} installation(s) nécessitent une vérification.").into())
     } else {
-        Err(format!("{missing} chemin(s) d'installation sont introuvables.").into())
+        Ok(())
     }
 }
 
@@ -609,13 +690,68 @@ mod tests {
             executable: None,
         };
         let report = super::build_verify_report(&[game]);
-        assert_eq!(report["schema_version"], 1);
+        assert_eq!(report["schema_version"], 2);
         assert_eq!(report["read_only"], true);
         assert_eq!(report["total_games"], 1);
         assert_eq!(report["available"], 1);
         assert_eq!(report["missing"], 0);
+        assert_eq!(report["healthy"], 1);
+        assert_eq!(report["issues"], 0);
         assert_eq!(report["games"][0]["directory_available"], true);
+        assert_eq!(report["games"][0]["directory_status"], "available");
+        assert_eq!(report["games"][0]["executable_status"], "not_configured");
+        assert_eq!(report["games"][0]["healthy"], true);
         std::fs::remove_dir_all(root).expect("remove test installation");
+    }
+
+    #[test]
+    fn verification_checks_configured_executables_without_modifying_them() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-verify-executable-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        std::fs::create_dir_all(root.join("bin")).expect("create install and bin");
+        std::fs::write(root.join("bin/game.exe"), b"sentinel").expect("create executable fixture");
+        let make_game = |executable: &str| amethys_ipc::IpcGameEntry {
+            id: "game-exe".to_owned(),
+            name: "Example".to_owned(),
+            platform: "Test".to_owned(),
+            platform_id: None,
+            install_path: root.to_string_lossy().into_owned(),
+            executable: Some(executable.to_owned()),
+        };
+        let present = super::build_verify_report(&[make_game("bin/game.exe")]);
+        assert_eq!(present["games"][0]["executable_status"], "available");
+        assert_eq!(present["games"][0]["healthy"], true);
+        let missing = super::build_verify_report(&[make_game("bin/missing.exe")]);
+        assert_eq!(missing["games"][0]["executable_status"], "missing");
+        assert_eq!(missing["games"][0]["healthy"], false);
+        assert_eq!(std::fs::read(root.join("bin/game.exe")).expect("fixture remains"), b"sentinel");
+        std::fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[test]
+    fn verification_distinguishes_missing_paths_from_non_directories() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-verify-status-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create fixture");
+        let file = root.join("not-a-directory");
+        std::fs::write(&file, b"sentinel").expect("create file");
+        assert_eq!(
+            super::inspect_path(&root.join("missing").as_path(), true),
+            super::PathCheck::Missing
+        );
+        assert_eq!(
+            super::inspect_path(&file, true),
+            super::PathCheck::NotDirectory
+        );
+        std::fs::remove_dir_all(root).expect("remove fixture");
     }
 
     #[test]
