@@ -55,8 +55,7 @@ make them responsible for writing or submitting code.
 
 Pull Requests containing code from community members are not part of this
 contribution process and will normally be closed with a request to use an
-Issue instead. Exceptional work under a separate, explicit written agreement
-with the maintainer is outside this ordinary community policy.
+Issue instead. Code contributions and Pull Requests are not accepted through the community contribution process.
 
 ## 4. Recognition and planned rewards
 
