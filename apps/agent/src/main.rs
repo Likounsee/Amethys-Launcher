@@ -111,8 +111,7 @@ fn store_runtime_state(shared: &AtomicU8, state: RuntimeState) {
 async fn main() -> Result<(), Box<dyn Error>> {
     amethys_logging::initialize()?;
 
-    let data_dir = amethys_config::data_directory()?;
-    std::fs::create_dir_all(&data_dir)?;
+    let data_dir = amethys_config::prepare_data_directory()?;
     let database = Database::open(data_dir.join("amethys.sqlite"))?;
 
     let mut runtime = CoreRuntime::new(EventBus::new(128));
