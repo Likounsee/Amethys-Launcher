@@ -167,6 +167,20 @@ fn is_steam_runtime_component(app_id: &str, name: &str) -> bool {
         || name.starts_with("Proton ")
 }
 
+/// Extracts Steam's registered installation root from Windows `reg query` output.
+fn parse_steam_registry_output(output: &str) -> Option<PathBuf> {
+    output.lines().find_map(|line| {
+        let line = line.trim();
+        let (name, value) = line.split_once("REG_SZ")
+            .or_else(|| line.split_once("REG_EXPAND_SZ"))?;
+        if !name.trim().eq_ignore_ascii_case("SteamPath") {
+            return None;
+        }
+        let value = value.trim().trim_matches('"').trim();
+        (!value.is_empty()).then(|| PathBuf::from(value))
+    })
+}
+
 /// Finds common Steam installation roots for the current operating system.
 pub fn steam_install_roots() -> Vec<PathBuf> {
     let mut roots = BTreeSet::new();
@@ -178,6 +192,20 @@ pub fn steam_install_roots() -> Vec<PathBuf> {
         }
         if let Some(program_files) = std::env::var_os("ProgramFiles") {
             roots.insert(PathBuf::from(program_files).join("Steam"));
+        }
+        // Steam may be installed outside Program Files. Its per-user registry
+        // value is the authoritative root and can be read without elevation.
+        if let Ok(output) = std::process::Command::new("reg")
+            .args(["query", r"HKCU\Software\Valve\Steam", "/v", "SteamPath"])
+            .output()
+        {
+            if output.status.success() {
+                if let Some(root) = parse_steam_registry_output(
+                    &String::from_utf8_lossy(&output.stdout)
+                ) {
+                    roots.insert(root);
+                }
+            }
         }
     }
 
@@ -1450,6 +1478,25 @@ mod tests {
         assert_eq!(
             super::quoted_pair(r#""path" "C:\\Games\\A \"Quoted\" Game""#),
             Some(("path".to_owned(), r#"C:\\Games\\A \"Quoted\" Game"#.to_owned())),
+        );
+    }
+
+    #[test]
+    fn parses_registered_steam_root_without_matching_unrelated_registry_values() {
+        let output = r#"
+HKEY_CURRENT_USER\\Software\\Valve\\Steam
+    InstallPath    REG_SZ    D:\\Games\\Steam
+    SteamPath      REG_SZ    "E:\\Custom Steam"
+"#;
+        assert_eq!(
+            super::parse_steam_registry_output(output),
+            Some(PathBuf::from(r"E:\Custom Steam"))
+        );
+        assert_eq!(
+            super::parse_steam_registry_output(
+                "HKEY_CURRENT_USER\\Software\\Valve\\Steam\n    InstallPath REG_SZ D:\\Games\\Steam"
+            ),
+            None
         );
     }
 
