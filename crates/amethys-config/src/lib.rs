@@ -12,28 +12,40 @@ use tokio::fs;
 /// conventional per-user application-data location is used; the current
 /// working directory is never used as a fallback.
 pub fn data_directory() -> io::Result<PathBuf> {
-    if let Some(path) = std::env::var_os("AMETHYS_DATA_DIR")
-        .filter(|value| !value.is_empty())
-    {
+    resolve_data_directory(
+        std::env::var_os("AMETHYS_DATA_DIR"),
+        std::env::var_os("APPDATA"),
+        std::env::var_os("LOCALAPPDATA"),
+        std::env::var_os("HOME"),
+        std::env::var_os("XDG_DATA_HOME"),
+    )
+}
+
+fn resolve_data_directory(
+    override_path: Option<std::ffi::OsString>,
+    app_data: Option<std::ffi::OsString>,
+    local_app_data: Option<std::ffi::OsString>,
+    home: Option<std::ffi::OsString>,
+    xdg_data_home: Option<std::ffi::OsString>,
+) -> io::Result<PathBuf> {
+    if let Some(path) = override_path.filter(|value| !value.is_empty()) {
         return Ok(PathBuf::from(path));
     }
 
     #[cfg(windows)]
     {
-        let base = std::env::var_os("APPDATA")
-            .or_else(|| std::env::var_os("LOCALAPPDATA"))
-            .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::NotFound,
-                    "APPDATA or LOCALAPPDATA must be set to locate Amethys data",
-                )
-            })?;
+        let base = app_data.or(local_app_data).ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "APPDATA or LOCALAPPDATA must be set to locate Amethys data",
+            )
+        })?;
         return Ok(PathBuf::from(base).join("Amethys"));
     }
 
     #[cfg(target_os = "macos")]
     {
-        let home = std::env::var_os("HOME").ok_or_else(|| {
+        let home = home.ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
                 "HOME must be set to locate Amethys data",
@@ -47,12 +59,10 @@ pub fn data_directory() -> io::Result<PathBuf> {
 
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        if let Some(xdg) = std::env::var_os("XDG_DATA_HOME")
-            .filter(|value| Path::new(value).is_absolute())
-        {
+        if let Some(xdg) = xdg_data_home.filter(|value| Path::new(value).is_absolute()) {
             return Ok(PathBuf::from(xdg).join("amethys"));
         }
-        let home = std::env::var_os("HOME").ok_or_else(|| {
+        let home = home.ok_or_else(|| {
             io::Error::new(
                 io::ErrorKind::NotFound,
                 "HOME must be set to locate Amethys data",
@@ -66,6 +76,7 @@ pub fn data_directory() -> io::Result<PathBuf> {
 
     #[cfg(not(any(windows, unix)))]
     {
+        let _ = (app_data, local_app_data, home, xdg_data_home);
         Err(io::Error::new(
             io::ErrorKind::Unsupported,
             "Amethys data directories are not defined for this operating system",
@@ -158,7 +169,88 @@ impl AppConfig {
 
 #[cfg(test)]
 mod tests {
-    use super::AppConfig;
+    use super::{AppConfig, resolve_data_directory};
+    use std::ffi::OsString;
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test]
+    fn data_directory_prefers_absolute_xdg_location() {
+        let path = resolve_data_directory(
+            None,
+            None,
+            None,
+            Some(OsString::from("/home/tester")),
+            Some(OsString::from("/mnt/data")),
+        )
+        .expect("XDG data directory resolves");
+        assert_eq!(path, Path::new("/mnt/data/amethys"));
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test]
+    fn data_directory_ignores_relative_xdg_location() {
+        let path = resolve_data_directory(
+            None,
+            None,
+            None,
+            Some(OsString::from("/home/tester")),
+            Some(OsString::from("relative/data")),
+        )
+        .expect("home data directory resolves");
+        assert_eq!(path, Path::new("/home/tester/.local/share/amethys"));
+    }
+
+    #[test]
+    fn data_directory_override_has_priority() {
+        let path = resolve_data_directory(
+            Some(OsString::from("/custom/amethys")),
+            Some(OsString::from("/unused/appdata")),
+            Some(OsString::from("/unused/local")),
+            Some(OsString::from("/unused/home")),
+            Some(OsString::from("/unused/xdg")),
+        )
+        .expect("explicit override resolves");
+        assert_eq!(path, Path::new("/custom/amethys"));
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    #[test]
+    fn data_directory_requires_home_when_xdg_is_unusable() {
+        let error = resolve_data_directory(None, None, None, None, None)
+            .expect_err("missing HOME must not fall back to current directory");
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn data_directory_prefers_roaming_app_data() {
+        let path = resolve_data_directory(
+            None,
+            Some(OsString::from(r"C:\Users\tester\AppData\Roaming")),
+            Some(OsString::from(r"C:\Users\tester\AppData\Local")),
+            None,
+            None,
+        )
+        .expect("APPDATA resolves");
+        assert_eq!(path, Path::new(r"C:\Users\tester\AppData\Roaming\Amethys"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn data_directory_uses_application_support() {
+        let path = resolve_data_directory(
+            None,
+            None,
+            None,
+            Some(OsString::from("/Users/tester")),
+            None,
+        )
+        .expect("macOS data directory resolves");
+        assert_eq!(
+            path,
+            Path::new("/Users/tester/Library/Application Support/Amethys")
+        );
+    }
 
     #[tokio::test]
     async fn missing_file_returns_defaults() {
