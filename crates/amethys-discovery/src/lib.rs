@@ -394,6 +394,16 @@ pub fn scan_heroic_legendary_installed(installed_json: &Path) -> Vec<DetectedGam
     games
 }
 
+/// Resolves Linux XDG configuration storage without interpreting relative
+/// environment values against the launcher's current working directory.
+#[cfg(any(target_os = "linux", test))]
+fn linux_heroic_config_home(xdg_config_home: Option<&Path>, home: Option<&Path>) -> Option<PathBuf> {
+    xdg_config_home
+        .filter(|path| path.is_absolute())
+        .map(Path::to_path_buf)
+        .or_else(|| home.filter(|path| path.is_absolute()).map(|path| path.join(".config")))
+}
+
 /// Returns known Heroic and standalone Legendary installed.json locations.
 ///
 /// Heroic stores its configuration below Electron's appData/heroic directory;
@@ -408,14 +418,14 @@ pub fn heroic_legendary_installed_files() -> Vec<PathBuf> {
 
     #[cfg(target_os = "linux")]
     {
-        if let Some(config_home) = std::env::var_os("XDG_CONFIG_HOME") {
-            let config_home = PathBuf::from(config_home);
+        let config_home = std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute())
+            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")));
+
+        if let Some(config_home) = config_home {
             files.insert(config_home.join("heroic/legendaryConfig/legendary/installed.json"));
             files.insert(config_home.join("legendary/installed.json"));
-        } else if let Some(home) = std::env::var_os("HOME") {
-            let config = PathBuf::from(home).join(".config");
-            files.insert(config.join("heroic/legendaryConfig/legendary/installed.json"));
-            files.insert(config.join("legendary/installed.json"));
         }
         if let Some(home) = std::env::var_os("HOME") {
             let home = PathBuf::from(home);
@@ -1472,6 +1482,27 @@ mod tests {
         scan_steam_libraries,
     };
     use std::{collections::BTreeSet, path::Path};
+
+    #[test]
+    fn relative_xdg_config_home_is_ignored_in_favor_of_absolute_home_fallback() {
+        let home = Path::new("/home/test-user");
+        let config = super::linux_heroic_config_home(Some(Path::new("relative/config")), Some(home));
+        assert_eq!(config, Some(home.join(".config")));
+    }
+
+    #[test]
+    fn absolute_xdg_config_home_takes_precedence_over_home_fallback() {
+        let config = super::linux_heroic_config_home(
+            Some(Path::new("/custom/config")),
+            Some(Path::new("/home/test-user")),
+        );
+        assert_eq!(config, Some(PathBuf::from("/custom/config")));
+    }
+
+    #[test]
+    fn missing_absolute_config_locations_do_not_fall_back_to_current_directory() {
+        assert_eq!(super::linux_heroic_config_home(Some(Path::new("relative")), None), None);
+    }
 
     #[cfg(not(windows))]
     #[test]
