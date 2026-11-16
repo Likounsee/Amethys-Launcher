@@ -21,8 +21,11 @@ client can verify that a response belongs to its request.
 - `games add <name> <platform> <install-path> [executable]`: manually adds
   a game without a source-platform identifier.
 - `games remove <id>`: removes a game from the Amethys library only.
-- `games import <platform> <platform-id>`: imports a detected installation
+- `games import <platform> <platform-id>`: imports one detected installation
   and stores its original platform-specific identifier.
+- `games import-all`: explicitly imports every detected installation, skips
+  games already in the library, and reports a summary. Each item is processed
+  independently so one failed import does not stop the remaining items.
 - `games scan`: scans supported launcher metadata and prints detections
   without importing them automatically.
 
