@@ -22,7 +22,7 @@ impl Database {
     /// Opens or creates the database and applies all known schema migrations.
     pub fn open(path: impl AsRef<Path>) -> Result<Self, AmethysError> {
         let path = path.as_ref();
-        if let Some(parent) = path.parent() {
+        if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
             std::fs::create_dir_all(parent).map_err(|error| AmethysError::new(
                 ErrorCode::StorageOpen,
                 format!("Could not create {}: {error}", parent.display()),
@@ -141,6 +141,21 @@ mod tests {
         let path = std::env::temp_dir().join(format!("amethys-{}.sqlite", uuid::Uuid::new_v4()));
         let database = Database::open(&path).expect("database opens");
         (database, path)
+    }
+
+    #[test]
+    fn database_opens_from_a_relative_filename() {
+        let filename = format!("amethys-{}.sqlite", uuid::Uuid::new_v4());
+        let path = std::path::Path::new(&filename);
+        let database = Database::open(path).expect("relative database path opens");
+        let count: i64 = database.connection()
+            .query_row("SELECT COUNT(*) FROM schema_migrations", [], |row| row.get(0))
+            .expect("migration table readable");
+        assert_eq!(count, 2);
+        drop(database);
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(format!("{filename}-wal"));
+        let _ = std::fs::remove_file(format!("{filename}-shm"));
     }
 
     #[test]
