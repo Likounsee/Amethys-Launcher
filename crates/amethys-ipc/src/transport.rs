@@ -78,6 +78,24 @@ async fn remove_stale_socket(path: &std::path::Path) -> Result<(), AmethysError>
             error.kind(),
             std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::NotFound
         ) => {
+            // The pathname may have been replaced while the asynchronous
+            // connection probe was in progress. Re-check the socket identity
+            // before unlinking so we never delete a replacement file/socket.
+            use std::os::unix::fs::MetadataExt;
+            let current = match std::fs::symlink_metadata(path) {
+                Ok(metadata) => metadata,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+                Err(error) => return Err(io_error(error)),
+            };
+            if !current.file_type().is_socket()
+                || current.dev() != metadata.dev()
+                || current.ino() != metadata.ino()
+            {
+                return Err(io_error(std::io::Error::new(
+                    std::io::ErrorKind::AddrInUse,
+                    format!("IPC endpoint {} changed during stale-socket recovery", path.display()),
+                )));
+            }
             std::fs::remove_file(path).map_err(io_error)?;
             Ok(())
         }
