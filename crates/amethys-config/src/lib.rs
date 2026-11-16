@@ -30,10 +30,20 @@ impl AppConfig {
                 format!("Could not read {}: {error}", path.display()),
             )),
         };
-        serde_json::from_slice(&bytes).map_err(|error| AmethysError::new(
+        let config: Self = serde_json::from_slice(&bytes).map_err(|error| AmethysError::new(
             ErrorCode::ConfigurationRead,
             format!("Configuration file is invalid: {error}"),
-        ))
+        ))?;
+        if config.schema_version != 1 {
+            return Err(AmethysError::new(
+                ErrorCode::ConfigurationRead,
+                format!(
+                    "Unsupported configuration schema version {} (supported: 1).",
+                    config.schema_version
+                ),
+            ));
+        }
+        Ok(config)
     }
 
     /// Saves through a temporary file so an interrupted write cannot truncate the previous file.
@@ -74,6 +84,19 @@ mod tests {
     async fn missing_file_returns_defaults() {
         let path = std::env::temp_dir().join(format!("amethys-{}.json", uuid::Uuid::new_v4()));
         assert_eq!(AppConfig::load(path).await.expect("default config"), AppConfig::default());
+    }
+
+    #[tokio::test]
+    async fn load_rejects_unsupported_schema_versions() {
+        let path = std::env::temp_dir().join(format!("amethys-{}.json", uuid::Uuid::new_v4()));
+        tokio::fs::write(&path, r#"{"schema_version":2}"#)
+            .await
+            .expect("future-version fixture is written");
+
+        let error = AppConfig::load(&path).await.expect_err("unsupported schema must fail");
+        assert_eq!(error.code(), amethys_errors::ErrorCode::ConfigurationRead);
+        assert!(error.message().contains("Unsupported configuration schema version 2"));
+        tokio::fs::remove_file(path).await.expect("fixture is removed");
     }
 
     #[tokio::test]
