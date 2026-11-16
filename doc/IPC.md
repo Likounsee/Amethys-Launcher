@@ -1,40 +1,45 @@
 # IPC transport
 
-Amethys Core uses a local-only, versioned IPC stream between the agent and its
-workers. The transport is deliberately independent of the GUI.
+Amethys Core uses a local-only, versioned IPC stream between the CLI and the
+agent. The transport is independent of the graphical interface.
 
 ## Wire format
 
 Each message is a JSON-serialized `IpcEnvelope<T>` preceded by a 32-bit
 big-endian unsigned byte length. The current protocol version is `1` and the
-maximum serialized payload is 8 MiB. Receivers should use
-`read_envelope()`, not `read_message()`, for protocol envelopes so the
-version is checked before dispatch.
+maximum serialized payload is 8 MiB. Receivers use `read_envelope()` so the
+protocol version is checked before dispatch.
 
-Every envelope carries a UUID request ID. Handlers should preserve that ID in
-their response so callers can correlate concurrent requests.
+Every envelope carries a UUID request ID. Responses preserve that ID so the
+client can verify that a response belongs to its request.
 
-## Request and response messages
+## Supported commands
 
-The shared protocol types currently define two requests:
+- `ping`: checks whether the agent responds.
+- `get_status`: returns the core lifecycle state.
+- `games`: lists games saved in the local library.
+- `games add <name> <platform> <install-path> [executable]`: manually adds
+  a game without a source-platform identifier.
+- `games remove <id>`: removes a game from the Amethys library only.
+- `games import <platform> <platform-id>`: imports a detected installation
+  and stores its original platform-specific identifier.
+- `games scan`: scans supported launcher metadata and prints detections
+  without importing them automatically.
 
-- `ping`: checks whether the agent can answer.
-- `get_status`: asks for the core's current state.
-
-A response contains the original request ID and either a result (a pong or the
-core state) or a structured error code and message. These are message formats
-only: the agent does not yet execute these commands. A dispatcher and the
-connection between the agent and this protocol are still to be implemented.
+The storage-aware agent handles game creation, listing and removal. A detected
+game's platform ID is scoped to its source platform; identical IDs from two
+different platforms are not treated as the same game. The database enforces
+uniqueness for a platform/ID pair. Older saved games without a platform ID
+remain valid after the schema migration.
 
 ## Platform endpoints
 
 - Windows: named pipes, for example `\\\\.\\pipe\\amethys-core`.
-- Linux and macOS: Unix-domain sockets at an application-owned filesystem path.
+- Linux and macOS: Unix-domain sockets in the application data directory.
 
 Use `transport::IpcListener::bind()` to create a server endpoint and
-`accept()` to accept one client. Use `transport::connect()` for a client.
-The current listener abstraction accepts one connection per instance; create
-another listener instance when the server is ready to accept another client.
+`accept()` to accept clients. Use `transport::connect()` for a client.
+The agent runs a persistent accept loop and handles each local request.
 
 On Unix, the socket path is restricted to mode `0600` and is unlinked when the
 listener is dropped. On Windows, the named pipe uses the default security
@@ -43,11 +48,13 @@ review and, where necessary, explicitly configure its ACL.
 
 ## Security requirements
 
-A local endpoint is not proof that a peer is trusted. Before executing a
-command, the server must validate the envelope version, validate the payload,
-authorize the requested operation, and apply resource limits. Do not expose
-these endpoints over TCP or forward them outside the local machine.
+A local endpoint is not proof that a peer is trusted. The server validates
+the envelope version and applies a request timeout. Every new command must
+validate its inputs, authorize the requested operation, and apply resource
+limits. Do not expose these endpoints over TCP or forward them outside the
+local machine.
 
-The transport currently provides connection and framing primitives only. It
-does not yet implement peer authentication, command authorization, a request
-dispatcher, reconnection, or a persistent multi-client server loop.
+The current protocol is intended for local communication between the Amethys
+CLI and agent. Peer authentication and explicit per-command authorization
+remain hardening work before treating the IPC boundary as a security boundary
+against other local processes.
