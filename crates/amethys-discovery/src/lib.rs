@@ -1385,13 +1385,19 @@ mod tests {
         let manifests = root.join("Manifests");
         let installed = root.join("Installed").join("Example Game");
         let whitespace_install = root.join("Installed").join("Whitespace Game");
+        let duplicate_install = root.join("Installed").join("Duplicate Example");
         std::fs::create_dir_all(&manifests).expect("create manifests");
         std::fs::create_dir_all(&installed).expect("create game folder");
         std::fs::create_dir_all(&whitespace_install).expect("create whitespace game folder");
+        std::fs::create_dir_all(&duplicate_install).expect("create duplicate game folder");
         std::fs::write(manifests.join("installed.item"), format!(
             r#"{{"AppName":"ExampleApp","DisplayName":"Example Game","InstallLocation":{}}}"#,
             serde_json::to_string(&installed.to_string_lossy()).expect("encode path")
         )).expect("write manifest");
+        std::fs::write(manifests.join("duplicate.item"), format!(
+            r#"{{"AppName":"ExampleApp","DisplayName":"Duplicate Example","InstallLocation":{}}}"#,
+            serde_json::to_string(&duplicate_install.to_string_lossy()).expect("encode duplicate path")
+        )).expect("write duplicate app manifest");
         std::fs::write(manifests.join("missing.item"),
             r#"{"AppName":"Missing","DisplayName":"Missing Game","InstallLocation":"not-a-real-path"}"#
         ).expect("write stale manifest");
@@ -1407,7 +1413,7 @@ mod tests {
         let games = scan_epic_manifests(&manifests);
         assert_eq!(games.len(), 2);
         assert_eq!(games[0].platform, "Epic Games");
-        assert_eq!(games.iter().find(|game| game.install_path == installed).unwrap().platform_id.as_deref(), Some("ExampleApp"));
+        assert_eq!(games.iter().filter(|game| game.platform_id.as_deref() == Some("ExampleApp")).count(), 1);
         let whitespace_game = games.iter().find(|game| game.install_path == whitespace_install).unwrap();
         assert_eq!(whitespace_game.name, "Example Game");
         assert_eq!(whitespace_game.platform_id, None);
