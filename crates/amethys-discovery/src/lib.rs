@@ -1974,21 +1974,30 @@ mod tests {
         ));
         std::fs::create_dir_all(&root).expect("create fixture root");
         let installed = root.join("Hades");
+        let whitespace_install = root.join("Celeste");
+        let duplicate_install = root.join("Duplicate Hades");
         std::fs::create_dir_all(&installed).expect("create installed game");
+        std::fs::create_dir_all(&whitespace_install).expect("create whitespace fixture");
+        std::fs::create_dir_all(&duplicate_install).expect("create duplicate fixture");
         let database = root.join("installed.json");
         let contents = serde_json::json!({
-            "HadesApp": { "app_name": "HadesApp", "title": "Hades", "install_path": installed.to_string_lossy() },
+            "HadesApp": { "app_name": " HadesApp ", "title": " Hades ", "install_path": format!(" {} ", installed.display()) },
+            "DuplicateHades": { "app_name": "HadesApp", "title": "Duplicate Hades", "install_path": duplicate_install.to_string_lossy() },
+            "CelesteApp": { "app_name": " CelesteApp ", "title": " Celeste ", "install_path": format!(" {} ", whitespace_install.display()) },
             "RemovedApp": { "app_name": "RemovedApp", "title": "Removed Game", "install_path": root.join("Removed Game").to_string_lossy() },
             "BrokenApp": { "app_name": "BrokenApp", "title": "Broken Game" }
         });
         std::fs::write(&database, contents.to_string()).expect("write Legendary metadata");
 
         let games = super::scan_heroic_legendary_installed(&database);
-        assert_eq!(games.len(), 1);
-        assert_eq!(games[0].platform, "Heroic");
-        assert_eq!(games[0].platform_id.as_deref(), Some("HadesApp"));
-        assert_eq!(games[0].name, "Hades");
-        assert_eq!(games[0].install_path, installed);
+        assert_eq!(games.len(), 2);
+        assert!(games.iter().all(|game| game.platform == "Heroic"));
+        let hades = games.iter().find(|game| game.platform_id.as_deref() == Some("HadesApp")).unwrap();
+        assert_eq!(hades.name, "Hades");
+        assert_eq!(hades.install_path, installed);
+        let celeste = games.iter().find(|game| game.platform_id.as_deref() == Some("CelesteApp")).unwrap();
+        assert_eq!(celeste.name, "Celeste");
+        assert_eq!(celeste.install_path, whitespace_install);
         assert!(super::scan_heroic_legendary_installed(&root.join("missing.json")).is_empty());
         std::fs::remove_dir_all(root).expect("cleanup");
     }
