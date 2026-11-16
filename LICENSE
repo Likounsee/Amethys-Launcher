@@ -1,0 +1,87 @@
+AMETHYS LAUNCHER — PROPRIETARY LICENSE
+Copyright (c) 2026 Likounsee. All rights reserved.
+
+1. OWNERSHIP
+
+The original source code, documentation, designs, architecture, assets and other
+original materials in this repository (the "Project Materials") are the
+exclusive property of Likounsee, except for third-party materials that are
+identified as such and remain subject to their own applicable licenses.
+
+No ownership or other intellectual-property right is transferred by making
+this repository publicly viewable or by allowing access to it.
+
+2. NO LICENSE TO REUSE
+
+Unless Likounsee has given prior, express, written permission, you may not
+copy, reproduce, modify, adapt, translate, publish, distribute, sublicense,
+sell, commercially exploit, incorporate into another product, or create
+derivative works from the Project Materials, in whole or in part.
+
+Viewing the repository, opening an issue, submitting a pull request, or
+contributing code does not grant permission to reuse the Project Materials.
+No patent, trademark, or other license is granted by implication, exhaustion,
+estoppel, or otherwise.
+
+Unauthorized use may infringe intellectual-property rights. Likounsee
+reserves the right to seek any remedies available under applicable law,
+including injunctive relief and damages where available. Nothing in this
+paragraph guarantees a particular legal outcome; that depends on the facts
+and applicable law.
+
+3. CONTRIBUTIONS
+
+Bug reports and proposed fixes are welcome under the repository's
+CONTRIBUTING.md rules. Submitting a pull request does not guarantee acceptance
+or merging. Every proposed change must be reviewed and explicitly approved by
+the project maintainers before it can be incorporated.
+
+By submitting a contribution, you confirm that you have the right to submit
+it and that it does not knowingly violate another party's rights,
+confidentiality obligations, contractual restrictions, or applicable law.
+You grant Likounsee permission to review, test, modify, and, if accepted,
+include that contribution in Amethys Launcher under this proprietary license.
+You retain ownership of your contribution, subject to the rights you grant
+here and any separate written agreement.
+
+4. THIRD-PARTY MATERIALS AND PLATFORMS
+
+Third-party libraries, tools, trademarks, names, APIs, services and platform
+materials are not owned by Likounsee. They remain subject to their respective
+owners' terms, licenses and policies. This license does not grant permission
+to use Steam, Epic Games, EA, Ubisoft, GOG, Microsoft, Amazon, Battle.net or
+any other third party's intellectual property, APIs, credentials or services.
+
+Amethys Launcher is not endorsed by, affiliated with, or an official product
+of those platforms unless a separate, verifiable agreement expressly says so.
+
+5. CONFIDENTIAL AND SENSITIVE INFORMATION
+
+Credentials, access tokens, API keys, private endpoints, partner documentation,
+non-public platform data, user data, personal data, security details and any
+information subject to a confidentiality obligation must not be added to this
+public repository, issues, pull requests, commits, logs, screenshots or test
+fixtures.
+
+Do not access, collect, copy, alter, disclose, publish or otherwise handle
+confidential platform information unless the project owner has expressly
+authorized the specific handling and it is permitted by the relevant platform
+and applicable law. Never attempt to bypass platform access controls,
+authentication, DRM, anti-cheat, rate limits or contractual restrictions.
+
+6. DISCLAIMER
+
+The Project Materials are provided "AS IS", to the maximum extent permitted
+by applicable law, without warranties of any kind. Likounsee is not liable
+for damages arising from use of the Project Materials, except where such
+limitation is prohibited by law.
+
+7. GOVERNING LAW
+
+This license is subject to applicable intellectual-property and other
+mandatory laws. No choice of governing law or jurisdiction is made here;
+that must be determined with qualified legal advice for the rights holder
+and relevant circumstances.
+
+For written permission or licensing inquiries, contact the repository owner
+through the official GitHub profile: https://github.com/Likounsee
