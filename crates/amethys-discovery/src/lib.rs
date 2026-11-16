@@ -88,11 +88,11 @@ fn is_absolute_metadata_path(path: &Path) -> bool {
     let bytes = value.as_bytes();
     path.is_absolute()
         || value.starts_with('/')
-        || value.starts_with(r"\\\\")
+        || value.starts_with(r"\\")
         || (bytes.len() >= 3
             && bytes[0].is_ascii_alphabetic()
             && bytes[1] == b':'
-            && matches!(bytes[2], b'/' | b'\\\\'))
+            && matches!(bytes[2], b'/' | b'\\'))
 }
 
 /// Counts VDF braces outside quoted strings so braces in paths do not affect nesting.
