@@ -1333,6 +1333,76 @@ fn protobuf_varint(bytes: &[u8]) -> Option<(u64, usize)> {
     None
 }
 
+/// Scans Riot Client installation metadata for installed Riot games.
+pub fn scan_riot_client_installs(installs_json: &Path) -> Vec<DetectedGame> {
+    let Some(contents) = read_bounded_text(installs_json) else { return Vec::new(); };
+    let contents = contents.strip_prefix('\u{feff}').unwrap_or(&contents);
+    let Ok(document) = serde_json::from_str::<serde_json::Value>(contents) else {
+        return Vec::new();
+    };
+
+    fn collect_paths(value: &serde_json::Value, output: &mut Vec<PathBuf>) {
+        match value {
+            serde_json::Value::Object(object) => {
+                for (key, value) in object {
+                    if matches!(
+                        key.to_ascii_lowercase().as_str(),
+                        "product_install_root" | "install_path" | "install_dir" | "install_location"
+                    ) {
+                        if let Some(path) = value.as_str().map(str::trim).filter(|path| !path.is_empty()) {
+                            output.push(PathBuf::from(path));
+                        }
+                    }
+                    collect_paths(value, output);
+                }
+            }
+            serde_json::Value::Array(values) => {
+                for value in values { collect_paths(value, output); }
+            }
+            _ => {}
+        }
+    }
+
+    let mut candidates = Vec::new();
+    collect_paths(&document, &mut candidates);
+    candidates.sort();
+    candidates.dedup();
+
+    let mut games = Vec::new();
+    let mut seen = BTreeSet::new();
+    for path in candidates {
+        if !is_existing_absolute_directory(&path) { continue; }
+        let normalized = path.to_string_lossy().to_ascii_lowercase();
+        let (name, platform_id) = if normalized.contains("valorant") {
+            ("VALORANT", "valorant")
+        } else if normalized.contains("league of legends")
+            || path.join("LeagueClient.exe").is_file()
+        {
+            ("League of Legends", "league_of_legends")
+        } else {
+            // Riot Client and Vanguard folders are components, not games.
+            continue;
+        };
+        if !seen.insert(install_path_key(&path)) { continue; }
+        games.push(DetectedGame {
+            platform_id: Some(platform_id.to_owned()),
+            name: name.to_owned(),
+            install_path: path,
+            platform: "Riot Games",
+        });
+    }
+    games.sort_by_key(|game| (game.name.to_lowercase(), game.install_path.clone()));
+    games
+}
+
+/// Returns the standard machine-wide Riot Client installation metadata file.
+#[cfg(windows)]
+pub fn riot_client_installs_file() -> Option<PathBuf> {
+    let program_data = std::env::var_os("ProgramData").map(PathBuf::from)?;
+    let path = program_data.join("Riot Games/RiotClientInstalls.json");
+    path.is_file().then_some(path)
+}
+
 /// Collects read-only detections from supported launchers. Missing launchers
 /// simply contribute no results and never prevent other adapters from running.
 pub fn discover_all_games() -> Vec<DetectedGame> {
@@ -1366,6 +1436,9 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
         // Ubisoft is detected from its registry install records. A generic
         // folder scan could report manually-created or leftover directories.
         games.extend(discover_ubisoft_games());
+        if let Some(installs_file) = riot_client_installs_file() {
+            games.extend(scan_riot_client_installs(&installs_file));
+        }
         if let Some(database) = battlenet_product_database() {
             games.extend(scan_battlenet_product_db(&database));
         }
@@ -3279,6 +3352,53 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].platform_id.as_deref(), Some("EA:case-123"));
         assert_eq!(games[0].name, "EA Game");
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn discovers_riot_games_from_product_install_metadata() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-riot-discovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let valorant = root.join("VALORANT");
+        let league = root.join("League of Legends");
+        std::fs::create_dir_all(&valorant).expect("create VALORANT install");
+        std::fs::create_dir_all(&league).expect("create League install");
+        let metadata = root.join("RiotClientInstalls.json");
+        let document = serde_json::json!({
+            "valorant": { "product_install_root": valorant.to_string_lossy() },
+            "league": { "install_path": league.to_string_lossy() },
+            "riot_client": { "install_path": root.join("Riot Client").to_string_lossy() }
+        });
+        std::fs::write(&metadata, document.to_string()).expect("write Riot metadata");
+
+        let games = super::scan_riot_client_installs(&metadata);
+        assert_eq!(games.len(), 2);
+        assert!(games.iter().any(|game| game.name == "VALORANT" && game.platform_id.as_deref() == Some("valorant")));
+        assert!(games.iter().any(|game| game.name == "League of Legends"));
+        assert!(games.iter().all(|game| game.platform == "Riot Games"));
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn ignores_riot_client_metadata_with_missing_or_relative_game_paths() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-riot-invalid-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create fixture");
+        let metadata = root.join("RiotClientInstalls.json");
+        let document = serde_json::json!({
+            "valorant": { "product_install_root": root.join("missing/VALORANT").to_string_lossy() },
+            "relative": { "install_path": "C:/Games/VALORANT" }
+        });
+        std::fs::write(&metadata, document.to_string()).expect("write metadata");
+        assert!(super::scan_riot_client_installs(&metadata).is_empty());
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
