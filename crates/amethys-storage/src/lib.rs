@@ -294,7 +294,7 @@ impl Database {
     /// Inserts or replaces one application setting atomically.
     pub fn set_setting(&self, key: &str, value: &str) -> Result<(), AmethysError> {
         let key = validate_setting_key(key)?;
-        if value.contains('\\0') {
+        if value.contains('\0') {
             return Err(storage_error("Setting values must not contain NUL characters."));
         }
         const MAX_SETTING_VALUE_BYTES: usize = 64 * 1024;
@@ -354,7 +354,7 @@ fn validate_setting_key(key: &str) -> Result<&str, AmethysError> {
     if key.is_empty() {
         return Err(storage_error("Setting keys must not be empty."));
     }
-    if key.contains('\\0') {
+    if key.contains('\0') {
         return Err(storage_error("Setting keys must not contain NUL characters."));
     }
     if key.len() > MAX_SETTING_KEY_BYTES {
@@ -695,10 +695,10 @@ mod tests {
         let (database, path) = temporary_database();
         assert!(database.set_setting("", "value").is_err());
         assert!(database.set_setting("   ", "value").is_err());
-        assert!(database.set_setting("bad\\0key", "value").is_err());
-        assert!(database.set_setting("valid", "bad\\0value").is_err());
-        assert!(database.get_setting("bad\\0key").is_err());
-        assert!(database.remove_setting("bad\\0key").is_err());
+        assert!(database.set_setting("bad\0key", "value").is_err());
+        assert!(database.set_setting("valid", "bad\0value").is_err());
+        assert!(database.get_setting("bad\0key").is_err());
+        assert!(database.remove_setting("bad\0key").is_err());
         assert!(database.set_setting(&"k".repeat(257), "value").is_err());
         assert!(database.set_setting("valid", &"v".repeat(64 * 1024 + 1)).is_err());
         assert!(database.list_settings().expect("settings remain readable").is_empty());
