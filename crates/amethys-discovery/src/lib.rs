@@ -227,7 +227,8 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
         let Ok(manifest) = serde_json::from_str::<serde_json::Value>(contents) else {
             continue;
         };
-        let Some(install_location) = manifest.get("InstallLocation").and_then(|v| v.as_str()) else {
+        let Some(install_location) = manifest.get("InstallLocation").and_then(|v| v.as_str())
+            .map(str::trim).filter(|value| !value.is_empty()) else {
             continue;
         };
         let install_path = PathBuf::from(install_location);
@@ -235,12 +236,13 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
             continue;
         }
         let Some(name) = manifest.get("DisplayName").and_then(|v| v.as_str())
-            .filter(|value| !value.trim().is_empty())
+            .map(str::trim).filter(|value| !value.is_empty())
             .or_else(|| install_path.file_name().and_then(|value| value.to_str()))
         else {
             continue;
         };
-        let platform_id = manifest.get("AppName").and_then(|v| v.as_str()).map(str::to_owned);
+        let platform_id = manifest.get("AppName").and_then(|v| v.as_str())
+            .map(str::trim).filter(|value| !value.is_empty()).map(str::to_owned);
         if insert_unique_install_path(&mut seen_paths, &install_path) {
             games.push(DetectedGame {
                 platform_id,
@@ -1381,6 +1383,13 @@ mod tests {
             r#"{"AppName":"Missing","DisplayName":"Missing Game","InstallLocation":"not-a-real-path"}"#
         ).expect("write stale manifest");
         std::fs::write(manifests.join("broken.item"), "{broken").expect("write invalid manifest");
+        std::fs::write(
+            manifests.join("whitespace.item"),
+            format!(
+                r#"{{"AppName":"  ","DisplayName":"  Example Game  ","InstallLocation":"  {}  "}}"#,
+                installed.display()
+            ),
+        ).expect("write manifest with surrounding whitespace");
 
         let games = scan_epic_manifests(&manifests);
         assert_eq!(games.len(), 1);
