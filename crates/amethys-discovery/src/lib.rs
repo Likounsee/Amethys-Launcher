@@ -1235,11 +1235,36 @@ fn quoted_pair(line: &str) -> Option<(String, String)> {
 }
 
 fn unescape_vdf(value: &str) -> String {
-    value.replace("\\\\", "\\").replace("\\\"", "\"")
+    let mut decoded = String::with_capacity(value.len());
+    let mut characters = value.chars();
+    while let Some(character) = characters.next() {
+        if character == '\\\\' {
+            match characters.next() {
+                Some('\\\\') => decoded.push('\\\\'),
+                Some('"') => decoded.push('"'),
+                Some(next) => {
+                    decoded.push('\\\\');
+                    decoded.push(next);
+                }
+                None => decoded.push('\\\\'),
+            }
+        } else {
+            decoded.push(character);
+        }
+    }
+    decoded
 }
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn unescapes_vdf_sequences_without_consuming_adjacent_backslashes() {
+        assert_eq!(super::unescape_vdf(r#"C:\\Games\\Example"#), r#"C:\Games\Example"#);
+        assert_eq!(super::unescape_vdf(r#"quoted\\\"name"#), r#"quoted\"name"#);
+        assert_eq!(super::unescape_vdf(r#"unknown\q"#), r#"unknown\q"#);
+        assert_eq!(super::unescape_vdf("trailing\\"), "trailing\\");
+    }
+
     #[test]
     fn preserves_numeric_references_to_characters_forbidden_by_xml_10() {
         assert_eq!(
