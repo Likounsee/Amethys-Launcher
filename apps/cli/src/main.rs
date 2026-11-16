@@ -3,9 +3,6 @@ use std::error::Error;
 
 #[cfg(any(unix, windows))]
 use amethys_ipc::transport::{self, BoxedIpcStream};
-#[cfg(unix)]
-use std::path::PathBuf;
-
 fn parse_command(argument: Option<&str>) -> Result<IpcCommand, &'static str> {
     match argument {
         Some("ping") => Ok(IpcCommand::Ping),
@@ -16,19 +13,8 @@ fn parse_command(argument: Option<&str>) -> Result<IpcCommand, &'static str> {
 }
 
 #[cfg(unix)]
-fn data_directory() -> PathBuf {
-    std::env::var_os("AMETHYS_DATA_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join(".amethys")
-        })
-}
-
-#[cfg(unix)]
 async fn connect_to_core() -> Result<BoxedIpcStream, Box<dyn Error>> {
-    Ok(transport::connect(data_directory().join("amethys.sock")).await?)
+    Ok(transport::connect(amethys_config::data_directory()?.join("amethys.sock")).await?)
 }
 
 #[cfg(windows)]
