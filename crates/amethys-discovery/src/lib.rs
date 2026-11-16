@@ -692,26 +692,62 @@ pub fn scan_ea_games(roots: &[PathBuf]) -> Vec<DetectedGame> {
 }
 
 fn xml_element_text(contents: &str, element: &str) -> Option<String> {
-    let open_tag = format!("<{element}");
-    let mut search_from = 0;
-    let open_start = loop {
-        let relative = contents.get(search_from..)?.find(&open_tag)?;
-        let candidate = search_from + relative;
-        let after_name = candidate + open_tag.len();
-        let next = *contents.as_bytes().get(after_name)?;
-        if next == b'>' || next.is_ascii_whitespace() {
-            break candidate;
-        }
-        search_from = after_name;
-    };
-    let open_end = contents[open_start..].find('>')? + open_start + 1;
-    let close_tag = format!("</{element}>");
-    let close_start = contents[open_end..].find(&close_tag)? + open_end;
+    // EA metadata may contain tag-looking text in comments or CDATA.
+    let open_start = find_xml_tag(contents, element, false, 0)?;
+    let open_end = find_xml_tag_end(contents, open_start)?;
+    let close_start = find_xml_tag(contents, element, true, open_end)?;
     let raw = contents[open_end..close_start].trim();
     if raw.is_empty() {
         return None;
     }
     Some(decode_xml_entities(raw))
+}
+
+/// Finds an exact opening or closing tag while skipping comments, CDATA and
+/// processing instructions. This is a focused metadata reader, not a full XML parser.
+fn find_xml_tag(contents: &str, element: &str, closing: bool, mut from: usize) -> Option<usize> {
+    let tag = if closing { format!("</{element}") } else { format!("<{element}") };
+
+    while let Some(relative) = contents.get(from..)?.find('<') {
+        let start = from + relative;
+        let remaining = &contents[start..];
+        let skip_marker = if remaining.starts_with("<!--") {
+            Some("-->")
+        } else if remaining.starts_with("<![CDATA[") {
+            Some("]]>")
+        } else if remaining.starts_with("<?") {
+            Some("?>")
+        } else {
+            None
+        };
+        if let Some(marker) = skip_marker {
+            from = start + remaining.find(marker)? + marker.len();
+            continue;
+        }
+        if remaining.starts_with(&tag) {
+            let after_name = start + tag.len();
+            let next = *contents.as_bytes().get(after_name)?;
+            if next == b'>' || (!closing && next.is_ascii_whitespace()) {
+                return Some(start);
+            }
+        }
+        from = start + 1;
+    }
+    None
+}
+
+/// Finds the end of an opening tag without treating '>' inside attributes as markup.
+fn find_xml_tag_end(contents: &str, start: usize) -> Option<usize> {
+    let mut quote = None;
+    for (offset, character) in contents.get(start..)?.char_indices() {
+        match (quote, character) {
+            (Some(delimiter), current) if delimiter == current => quote = None,
+            (None, '"' | '\'') => quote = Some(character),
+            (None, '>') => return Some(start + offset + 1),
+            _ => {}
+        }
+    }
+    None
 }
 
 /// Decodes the five predefined XML entities and valid numeric character references.
@@ -1891,6 +1927,18 @@ mod tests {
             super::expand_windows_environment_variables_with("100%% complete", |_| None),
             "100%% complete",
         );
+    }
+
+    #[test]
+    fn ignores_ea_tag_text_inside_comments_and_cdata() {
+        let metadata = r#"
+            <!-- <gameTitle>Commented fake title</gameTitle> -->
+            <gameTitle data-note="a > b">Real &amp; Valid Title</gameTitle>
+            <![CDATA[ <contentID>fake-id</contentID> ]]>
+            <contentID>real-id</contentID>
+        "#;
+        assert_eq!(super::xml_element_text(metadata, "gameTitle").as_deref(), Some("Real & Valid Title"));
+        assert_eq!(super::xml_element_text(metadata, "contentID").as_deref(), Some("real-id"));
     }
 
     #[test]
