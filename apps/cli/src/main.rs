@@ -15,6 +15,7 @@ COMMANDES:
     ping                              Vérifie que le cœur Amethys répond
     status                            Affiche l'état du cœur
     games                             Liste la bibliothèque Amethys
+    games search <terme>              Recherche dans la bibliothèque Amethys
     games scan [--verbose|--json]      Détecte les jeux sans les importer
     games import <appid>              Importe un jeu Steam par son App ID
     games import <plateforme> <id>    Importe un jeu détecté par plateforme et ID
@@ -154,6 +155,58 @@ async fn load_saved_games() -> Result<Vec<amethys_ipc::IpcGameEntry>, Box<dyn Er
             "Amethys a envoyé une réponse inattendue en lisant la bibliothèque.".into(),
         ),
     }
+}
+
+/// Searches saved game metadata without requiring any launcher to be running.
+/// Every query word must match somewhere in the combined game metadata.
+fn search_saved_games<'a>(
+    games: &'a [amethys_ipc::IpcGameEntry],
+    query: &str,
+) -> Vec<&'a amethys_ipc::IpcGameEntry> {
+    let terms = query
+        .split_whitespace()
+        .map(str::to_lowercase)
+        .collect::<Vec<_>>();
+    if terms.is_empty() {
+        return Vec::new();
+    }
+
+    games.iter().filter(|game| {
+        let searchable = format!(
+            "{} {} {} {} {}",
+            game.name,
+            game.platform,
+            game.platform_id.as_deref().unwrap_or_default(),
+            game.install_path,
+            game.executable.as_deref().unwrap_or_default(),
+        ).to_lowercase();
+        terms.iter().all(|term| searchable.contains(term))
+    }).collect()
+}
+
+async fn search_library(query: &str) -> Result<(), Box<dyn Error>> {
+    if query.trim().is_empty() {
+        return Err("Indique un terme à rechercher : amethysctl games search <terme>.".into());
+    }
+
+    let games = load_saved_games().await?;
+    let matches = search_saved_games(&games, query);
+    if matches.is_empty() {
+        println!("Aucun jeu ne correspond à « {} ».", query.trim());
+        return Ok(());
+    }
+
+    println!("{} résultat(s) pour « {} » :", matches.len(), query.trim());
+    for game in matches {
+        println!(
+            "- {} ({}){} — {}",
+            game.name,
+            game.platform,
+            game.platform_id.as_deref().map(|id| format!(" — ID {id}")).unwrap_or_default(),
+            game.install_path,
+        );
+    }
+    Ok(())
 }
 
 async fn import_one_detected_game(
@@ -495,6 +548,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         println!("Amethys Launcher {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
+    if arguments.len() >= 2 && arguments[0] == "games" && arguments[1] == "search" {
+        return search_library(&arguments[2..].join(" ")).await;
+    }
     if arguments.as_slice() == ["games", "import-all"] {
         return import_detected_games(amethys_discovery::discover_all_games()).await;
     }
@@ -834,6 +890,43 @@ mod tests {
                 "scan summary must include the {platform} adapter"
             );
         }
+    }
+
+    #[test]
+    fn searches_library_metadata_case_insensitively_and_with_multiple_terms() {
+        let games = vec![
+            amethys_ipc::IpcGameEntry {
+                id: "steam-1".to_owned(),
+                name: "Clair Obscur: Expedition 33".to_owned(),
+                platform: "Steam".to_owned(),
+                platform_id: Some("1903340".to_owned()),
+                install_path: "A:/SteamLibrary/steamapps/common/Expedition 33".to_owned(),
+                executable: Some("Expedition33.exe".to_owned()),
+            },
+            amethys_ipc::IpcGameEntry {
+                id: "epic-1".to_owned(),
+                name: "Fortnite".to_owned(),
+                platform: "Epic Games".to_owned(),
+                platform_id: Some("Fortnite".to_owned()),
+                install_path: "A:/Epic Games/Fortnite".to_owned(),
+                executable: None,
+            },
+        ];
+
+        let by_name = super::search_saved_games(&games, "CLAIR obscur");
+        assert_eq!(by_name.len(), 1);
+        assert_eq!(by_name[0].id, "steam-1");
+
+        let by_platform_and_id = super::search_saved_games(&games, "steam 1903340");
+        assert_eq!(by_platform_and_id.len(), 1);
+        assert_eq!(by_platform_and_id[0].id, "steam-1");
+
+        let by_path = super::search_saved_games(&games, "epic games fortnite");
+        assert_eq!(by_path.len(), 1);
+        assert_eq!(by_path[0].id, "epic-1");
+
+        assert!(super::search_saved_games(&games, "missing title").is_empty());
+        assert!(super::search_saved_games(&games, "   ").is_empty());
     }
 
     #[test]
