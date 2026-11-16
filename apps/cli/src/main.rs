@@ -397,7 +397,7 @@ mod tests {
         };
 
         assert!(super::game_is_already_imported(std::slice::from_ref(&saved), &same_game));
-        assert!(!super::game_is_already_imported(&[saved.clone()], &other_store));
+        assert!(!super::game_is_already_imported(std::slice::from_ref(&saved), &other_store));
 
         // Store metadata can change (for example after a game is moved or
         // re-registered). A matching installation path must still prevent a
