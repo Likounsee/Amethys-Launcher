@@ -338,9 +338,6 @@ fn inspect_path(path: &std::path::Path, expect_directory: bool) -> PathCheck {
     }
 }
 
-fn installation_path_exists(path: &str) -> bool {
-    inspect_path(std::path::Path::new(path), true).is_available()
-}
 
 fn inspect_game_executable(game: &amethys_ipc::IpcGameEntry) -> Option<PathCheck> {
     let executable = game.executable.as_deref()?;
