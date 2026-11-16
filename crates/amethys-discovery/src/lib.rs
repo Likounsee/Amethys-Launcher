@@ -1475,9 +1475,11 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
         games.extend(discover_ubisoft_games());
         if let Some(installs_file) = riot_client_installs_file() {
             games.extend(scan_riot_client_installs(&installs_file));
-            if let Some(metadata_root) = installs_file.parent().map(|root| root.join("Metadata")) {
-                games.extend(scan_riot_product_settings(&metadata_root));
-            }
+        }
+        if let Some(program_data) = std::env::var_os("ProgramData").map(PathBuf::from) {
+            games.extend(scan_riot_product_settings(
+                &program_data.join("Riot Games/Metadata"),
+            ));
         }
         if let Some(database) = battlenet_product_database() {
             games.extend(scan_battlenet_product_db(&database));
