@@ -306,4 +306,102 @@ mod tests {
             "rejected mutation must not reach SQLite"
         );
     }
+
+    async fn round_trip(
+        database: &Arc<Mutex<Database>>,
+        state: &Arc<AtomicU8>,
+        command: IpcCommand,
+    ) -> IpcResponse {
+        let (mut client, mut server) = duplex(64 * 1024);
+        let request = IpcEnvelope::new(IpcRequest::new(command));
+        let server_database = Arc::clone(database);
+        let server_state = Arc::clone(state);
+        let server_task = tokio::spawn(async move {
+            serve_database_connection(&mut server, &server_state, &server_database)
+                .await
+                .expect("serve IPC request");
+        });
+
+        write_message(&mut client, &request).await.expect("write IPC request");
+        let response = read_message(&mut client).await.expect("read IPC response");
+        server_task.await.expect("IPC server task");
+        response
+    }
+
+    #[tokio::test]
+    async fn running_core_supports_detected_game_add_list_and_remove_over_ipc() {
+        let database = Arc::new(Mutex::new(Database::open(":memory:").expect("database opens")));
+        let state = Arc::new(AtomicU8::new(super::STATE_RUNNING));
+
+        let added = round_trip(
+            &database,
+            &state,
+            IpcCommand::AddDetectedGame {
+                name: "Dota 2".to_owned(),
+                platform: "Steam".to_owned(),
+                platform_id: Some("570".to_owned()),
+                install_path: "/games/dota2".to_owned(),
+                executable: Some("game/bin/win64/dota2.exe".to_owned()),
+            },
+        )
+        .await;
+        let added_game = match added.result.expect("detected game is added") {
+            amethys_ipc::IpcResponsePayload::GameAdded { game } => game,
+            other => panic!("unexpected add response: {other:?}"),
+        };
+        assert_eq!(added_game.name, "Dota 2");
+        assert_eq!(added_game.platform_id.as_deref(), Some("570"));
+
+        let listed = round_trip(&database, &state, IpcCommand::ListGames).await;
+        let games = match listed.result.expect("game library is listed") {
+            amethys_ipc::IpcResponsePayload::Games { games } => games,
+            other => panic!("unexpected list response: {other:?}"),
+        };
+        assert_eq!(games, vec![added_game.clone()]);
+
+        let removed = round_trip(
+            &database,
+            &state,
+            IpcCommand::RemoveGame {
+                id: added_game.id.clone(),
+            },
+        )
+        .await;
+        assert_eq!(
+            removed.result,
+            Ok(amethys_ipc::IpcResponsePayload::GameRemoved { removed: true })
+        );
+
+        let listed_after_remove =
+            round_trip(&database, &state, IpcCommand::ListGames).await;
+        assert_eq!(
+            listed_after_remove.result,
+            Ok(amethys_ipc::IpcResponsePayload::Games { games: Vec::new() })
+        );
+    }
+
+    #[tokio::test]
+    async fn invalid_game_metadata_is_rejected_without_partial_database_write() {
+        let database = Arc::new(Mutex::new(Database::open(":memory:").expect("database opens")));
+        let state = Arc::new(AtomicU8::new(super::STATE_RUNNING));
+
+        let response = round_trip(
+            &database,
+            &state,
+            IpcCommand::AddGame {
+                name: "   ".to_owned(),
+                platform: "Steam".to_owned(),
+                install_path: "/games/invalid".to_owned(),
+                executable: None,
+            },
+        )
+        .await;
+
+        assert!(response.result.is_err(), "invalid metadata must be rejected");
+        assert!(
+            database.lock().await.list_games().expect("list games").is_empty(),
+            "invalid metadata must not create a database row"
+        );
+    }
+
 }
