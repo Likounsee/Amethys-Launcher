@@ -549,6 +549,7 @@ fn expand_windows_environment_variables(value: &str) -> String {
 pub fn parse_ea_registry_output(contents: &str) -> Vec<DetectedGame> {
     let mut games = Vec::new();
     let mut current_id: Option<String> = None;
+    let mut seen_ids = BTreeSet::new();
     let prefixes = [
         r"HKEY_LOCAL_MACHINE\SOFTWARE\EA Games\",
         r"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\EA Games\",
@@ -583,6 +584,9 @@ pub fn parse_ea_registry_output(contents: &str) -> Vec<DetectedGame> {
         let platform_id = xml_element_text(&metadata, "contentID")
             .filter(|value| !value.trim().is_empty())
             .or_else(|| current_id.clone().filter(|value| !value.is_empty()));
+        if platform_id.as_ref().is_some_and(|id| !seen_ids.insert(id.clone())) {
+            continue;
+        }
         games.push(DetectedGame {
             platform_id,
             name,
@@ -1873,6 +1877,35 @@ mod tests {
         assert_eq!(games[0].platform_id.as_deref(), Some("44"));
         assert_eq!(games[0].name, "Assassins Creed");
         assert_eq!(games[0].install_path, install);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn deduplicates_ea_registry_records_by_content_id() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-ea-duplicates-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let first_install = root.join("Game");
+        let duplicate_install = root.join("Game-copy");
+        for install in [&first_install, &duplicate_install] {
+            std::fs::create_dir_all(install.join("__Installer"))
+                .expect("create installer metadata directory");
+            std::fs::write(
+                install.join("__Installer/installerdata.xml"),
+                "<gameTitle>Same Game</gameTitle><contentID>EA-123</contentID>",
+            ).expect("write EA installer metadata");
+        }
+        let output = format!(
+            "HKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\First\\n    Install Dir    REG_SZ    {}\\nHKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\EA Games\\Second\\n    Install Dir    REG_SZ    {}\\n",
+            first_install.display(), duplicate_install.display()
+        );
+        let games = super::parse_ea_registry_output(&output);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform_id.as_deref(), Some("EA-123"));
+        assert_eq!(games[0].install_path, first_install);
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
