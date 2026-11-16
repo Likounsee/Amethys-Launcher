@@ -40,7 +40,7 @@ fn resolve_data_directory(
                 "APPDATA or LOCALAPPDATA must be set to locate Amethys data",
             )
         })?;
-        return Ok(PathBuf::from(base).join("Amethys"));
+        Ok(PathBuf::from(base).join("Amethys"))
     }
 
     #[cfg(target_os = "macos")]
@@ -51,10 +51,10 @@ fn resolve_data_directory(
                 "HOME must be set to locate Amethys data",
             )
         })?;
-        return Ok(PathBuf::from(home)
+        PathBuf::from(home)
             .join("Library")
             .join("Application Support")
-            .join("Amethys"));
+            .join("Amethys")
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]
@@ -68,10 +68,10 @@ fn resolve_data_directory(
                 "HOME must be set to locate Amethys data",
             )
         })?;
-        return Ok(PathBuf::from(home)
+        PathBuf::from(home)
             .join(".local")
             .join("share")
-            .join("amethys"));
+            .join("amethys")
     }
 
     #[cfg(not(any(windows, unix)))]
