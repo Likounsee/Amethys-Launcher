@@ -1882,6 +1882,54 @@ mod tests {
     }
 
     #[test]
+    fn skips_malformed_gog_rows_without_losing_valid_games() {
+        use rusqlite::{params, Connection};
+
+        let root = std::env::temp_dir().join(format!(
+            "amethys-gog-malformed-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let installed = root.join("Valid GOG Game");
+        std::fs::create_dir_all(&installed).expect("create install");
+        let database = root.join("galaxy-2.0.db");
+        let connection = Connection::open(&database).expect("create database");
+        connection.execute_batch(
+            "CREATE TABLE InstalledBaseProducts (productId, installationPath);
+             CREATE TABLE GamePieces (releaseKey, gamePieceTypeId, value);
+             CREATE TABLE GamePieceTypes (id, type);"
+        ).expect("create GOG metadata tables");
+        connection.execute(
+            "INSERT INTO GamePieceTypes VALUES (?1, ?2)",
+            params![1_i64, "originalTitle"],
+        ).expect("insert title type");
+        connection.execute(
+            "INSERT INTO InstalledBaseProducts VALUES (?1, ?2)",
+            params![42_i64, installed.to_string_lossy()],
+        ).expect("insert malformed product row");
+        connection.execute(
+            "INSERT INTO InstalledBaseProducts VALUES (?1, ?2)",
+            params!["valid-product", installed.to_string_lossy()],
+        ).expect("insert valid product row");
+        connection.execute(
+            "INSERT INTO GamePieces VALUES (?1, ?2, ?3)",
+            params!["gog_42", 1_i64, r#"{"title":"Malformed Game"}"#],
+        ).expect("insert malformed title metadata");
+        connection.execute(
+            "INSERT INTO GamePieces VALUES (?1, ?2, ?3)",
+            params!["gog_valid-product", 1_i64, r#"{"title":"Valid GOG Game"}"#],
+        ).expect("insert valid title metadata");
+        drop(connection);
+
+        let games = super::scan_gog_galaxy(&database);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform_id.as_deref(), Some("valid-product"));
+        assert_eq!(games[0].name, "Valid GOG Game");
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
     fn skips_malformed_amazon_rows_without_losing_valid_games() {
         use rusqlite::{params, Connection};
 
