@@ -23,6 +23,21 @@ Amethys discovery is read-only. A scan reports installed games; it does not add 
 | Battle.net | `%ProgramData%/Battle.net/Agent/product.db` protobuf metadata | Windows read-only adapter; extracts product codes, install paths and the launcher's explicit installed flag; it validates directories and ignores launcher records, uninstalled entries and malformed/stale data. Known product codes get friendly names; unknown products fall back to the install-folder name. |
 | Amazon Games | `GameInstallInfo.sqlite` (`DbSet`) | Read-only metadata detection; returns installed rows only when the directory exists. Windows path discovery is implemented. |
 
+## Importing into the Amethys library
+
+Detected games are imported only when the user explicitly requests
+`amethysctl games import <platform> <platform-id>`. The import stores the
+source platform's identifier separately from Amethys' own local library ID.
+This preserves the identifier namespace: the same platform ID may identify
+different products on different stores.
+
+The local database schema migration adds an optional `platform_id` field and
+a uniqueness constraint on the case-insensitive platform name plus the
+platform-specific ID. Existing library entries are preserved and receive a
+null platform ID; they remain addressable by their Amethys library ID and
+installation path. Detection remains read-only: importing changes only the
+Amethys database and never modifies the original launcher or game installation.
+
 ## Development priorities
 
 1. Keep discovery read-only and require launcher metadata or another reliable installation record; do not infer games from generic folder names.
