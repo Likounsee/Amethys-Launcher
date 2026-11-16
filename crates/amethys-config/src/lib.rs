@@ -51,10 +51,10 @@ fn resolve_data_directory(
                 "HOME must be set to locate Amethys data",
             )
         })?;
-        PathBuf::from(home)
+        Ok(PathBuf::from(home)
             .join("Library")
             .join("Application Support")
-            .join("Amethys")
+            .join("Amethys"))
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]
@@ -68,10 +68,10 @@ fn resolve_data_directory(
                 "HOME must be set to locate Amethys data",
             )
         })?;
-        PathBuf::from(home)
+        Ok(PathBuf::from(home)
             .join(".local")
             .join("share")
-            .join("amethys")
+            .join("amethys"))
     }
 
     #[cfg(not(any(windows, unix)))]
