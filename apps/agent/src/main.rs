@@ -4,7 +4,6 @@ use amethys_runtime::{CoreRuntime, RuntimeState};
 use amethys_storage::Database;
 use std::{
     error::Error,
-    path::PathBuf,
     sync::{
         Arc,
         atomic::{AtomicU8, Ordering},
@@ -15,16 +14,6 @@ const STATE_CREATED: u8 = 0;
 const STATE_RUNNING: u8 = 1;
 const STATE_STOPPING: u8 = 2;
 const STATE_STOPPED: u8 = 3;
-
-fn data_directory() -> PathBuf {
-    std::env::var_os("AMETHYS_DATA_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| {
-            std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join(".amethys")
-        })
-}
 
 fn ipc_status(state: &AtomicU8) -> IpcCoreStatus {
     match state.load(Ordering::Acquire) {
@@ -122,7 +111,7 @@ fn store_runtime_state(shared: &AtomicU8, state: RuntimeState) {
 async fn main() -> Result<(), Box<dyn Error>> {
     amethys_logging::initialize()?;
 
-    let data_dir = data_directory();
+    let data_dir = amethys_config::data_directory()?;
     std::fs::create_dir_all(&data_dir)?;
     let database = Database::open(data_dir.join("amethys.sqlite"))?;
 
