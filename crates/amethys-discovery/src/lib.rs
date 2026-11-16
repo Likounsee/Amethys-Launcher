@@ -418,10 +418,9 @@ pub fn heroic_legendary_installed_files() -> Vec<PathBuf> {
 
     #[cfg(target_os = "linux")]
     {
-        let config_home = std::env::var_os("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .filter(|path| path.is_absolute())
-            .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")));
+        let xdg_config_home = std::env::var_os("XDG_CONFIG_HOME").map(PathBuf::from);
+        let home = std::env::var_os("HOME").map(PathBuf::from);
+        let config_home = linux_heroic_config_home(xdg_config_home.as_deref(), home.as_deref());
 
         if let Some(config_home) = config_home {
             files.insert(config_home.join("heroic/legendaryConfig/legendary/installed.json"));
@@ -1481,7 +1480,7 @@ mod tests {
         parse_app_manifest, parse_library_folders, scan_epic_manifests, scan_game_folders,
         scan_steam_libraries,
     };
-    use std::{collections::BTreeSet, path::Path};
+    use std::{collections::BTreeSet, path::{Path, PathBuf}};
 
     #[test]
     fn relative_xdg_config_home_is_ignored_in_favor_of_absolute_home_fallback() {
