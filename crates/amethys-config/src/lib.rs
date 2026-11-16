@@ -27,7 +27,14 @@ fn resolve_data_directory(
     local_app_data: Option<std::ffi::OsString>,
     home: Option<std::ffi::OsString>,
     xdg_data_home: Option<std::ffi::OsString>,
-) -> io::Result<PathBuf> {
+ ) -> io::Result<PathBuf> {
+    #[cfg(unix)]
+    let _ = (&app_data, &local_app_data);
+    #[cfg(target_os = "macos")]
+    let _ = &xdg_data_home;
+    #[cfg(windows)]
+    let _ = (&home, &xdg_data_home);
+
     if let Some(path) = override_path.filter(|value| !value.is_empty()) {
         return Ok(PathBuf::from(path));
     }
