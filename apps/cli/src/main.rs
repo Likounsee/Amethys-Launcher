@@ -772,6 +772,28 @@ mod tests {
     }
 
     #[test]
+    fn scan_summary_includes_every_discovery_adapter() {
+        let platforms = super::supported_platforms();
+        for platform in [
+            "Steam",
+            "Epic Games",
+            "Heroic",
+            "GOG Galaxy",
+            "Amazon Games",
+            "EA app",
+            "Ubisoft Connect",
+            "Battle.net",
+            "Riot Games",
+            "Xbox app",
+        ] {
+            assert!(
+                platforms.iter().any(|supported| supported.eq_ignore_ascii_case(platform)),
+                "scan summary must include the {platform} adapter"
+            );
+        }
+    }
+
+    #[test]
     fn accepts_supported_commands() {
         assert_eq!(parse_command(Some("ping")), Ok(IpcCommand::Ping));
         assert_eq!(parse_command(Some("status")), Ok(IpcCommand::GetStatus));
