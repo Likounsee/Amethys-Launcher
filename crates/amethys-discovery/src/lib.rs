@@ -224,7 +224,9 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
 
     for entry in entries {
         let path = entry.path();
-        if path.extension().and_then(|value| value.to_str()) != Some("item") {
+        if !path.extension().and_then(|value| value.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("item"))
+        {
             continue;
         }
         let Ok(contents) = fs::read_to_string(&path) else {
@@ -1430,6 +1432,32 @@ mod tests {
         let whitespace_game = games.iter().find(|game| game.install_path == whitespace_install).unwrap();
         assert_eq!(whitespace_game.name, "Example Game");
         assert_eq!(whitespace_game.platform_id, None);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn reads_epic_manifests_with_uppercase_item_extension() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-epic-extension-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let manifests = root.join("Manifests");
+        let install = root.join("Installed Game");
+        std::fs::create_dir_all(&manifests).expect("create manifests");
+        std::fs::create_dir_all(&install).expect("create install");
+        let json = format!(
+            r#"{{"AppName":"UppercaseExtension","DisplayName":"Uppercase Extension","InstallLocation":{}}}"#,
+            serde_json::to_string(&install.to_string_lossy()).expect("encode path")
+        );
+        std::fs::write(manifests.join("uppercase.ITEM"), json)
+            .expect("write manifest");
+
+        let games = scan_epic_manifests(&manifests);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].name, "Uppercase Extension");
+        assert_eq!(games[0].platform_id.as_deref(), Some("UppercaseExtension"));
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
