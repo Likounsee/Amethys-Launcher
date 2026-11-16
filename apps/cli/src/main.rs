@@ -15,7 +15,7 @@ COMMANDES:
     ping                              Vérifie que le cœur Amethys répond
     status                            Affiche l'état du cœur
     games                             Liste la bibliothèque Amethys
-    games scan [--verbose]            Détecte les jeux sans les importer
+    games scan [--verbose|--json]      Détecte les jeux sans les importer
     games import <appid>              Importe un jeu Steam par son App ID
     games import <plateforme> <id>    Importe un jeu détecté par plateforme et ID
     games import-all                  Importe les jeux détectés non encore enregistrés
@@ -248,6 +248,28 @@ fn supported_platforms() -> &'static [&'static str] {
     }
 }
 
+/// Builds a versioned, machine-readable report from actual local discovery results.
+/// Paths are emitted as strings so the report can be consumed by support tools on any OS.
+fn build_scan_report(games: &[amethys_discovery::DetectedGame]) -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": 1,
+        "total_detected": games.len(),
+        "read_only": true,
+        "detected_games": games.iter().map(|game| serde_json::json!({
+            "name": game.name,
+            "platform": game.platform,
+            "platform_id": game.platform_id,
+            "install_path": game.install_path.to_string_lossy(),
+        })).collect::<Vec<_>>(),
+    })
+}
+
+fn print_scan_json(games: &[amethys_discovery::DetectedGame]) -> Result<(), Box<dyn Error>> {
+    let report = build_scan_report(games);
+    println!("{}", serde_json::to_string_pretty(&report)?);
+    Ok(())
+}
+
 /// Prints a real discovery result, optionally including zero-result adapters.
 fn print_scan_results(games: &[amethys_discovery::DetectedGame], verbose: bool) {
     if games.is_empty() {
@@ -356,10 +378,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
     if arguments.as_slice() == ["games", "scan"]
         || arguments.as_slice() == ["games", "scan", "--verbose"]
+        || arguments.as_slice() == ["games", "scan", "--json"]
     {
-        let verbose = arguments.len() == 3;
         let games = amethys_discovery::discover_all_games();
-        print_scan_results(&games, verbose);
+        if arguments.last().is_some_and(|argument| argument == "--json") {
+            return print_scan_json(&games);
+        }
+        print_scan_results(&games, arguments.len() == 3);
         return Ok(());
     }
 
@@ -526,6 +551,24 @@ mod tests {
         assert_eq!(std::fs::read(&file).expect("file remains"), b"sentinel");
 
         std::fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn scan_json_report_has_a_versioned_read_only_schema() {
+        let game = amethys_discovery::DetectedGame {
+            platform_id: Some("123".to_owned()),
+            name: "Example".to_owned(),
+            install_path: std::path::PathBuf::from("/games/example"),
+            platform: "Steam",
+        };
+        let report = super::build_scan_report(&[game]);
+        assert_eq!(report["schema_version"], 1);
+        assert_eq!(report["total_detected"], 1);
+        assert_eq!(report["read_only"], true);
+        assert_eq!(report["detected_games"][0]["name"], "Example");
+        assert_eq!(report["detected_games"][0]["platform"], "Steam");
+        assert_eq!(report["detected_games"][0]["platform_id"], "123");
+        assert_eq!(report["detected_games"][0]["install_path"], "/games/example");
     }
 
     #[test]
