@@ -95,15 +95,21 @@ pub fn parse_app_manifest(contents: &str) -> Option<(String, String, String)> {
 pub fn scan_steam_libraries(libraries: &[PathBuf]) -> Vec<DetectedGame> {
     let mut games = Vec::new();
     let mut seen = BTreeSet::new();
+    // Configuration and filesystem enumeration order can vary. Sort both so
+    // duplicate AppIDs resolve consistently across scans and platforms.
+    let mut libraries = libraries.to_vec();
+    libraries.sort_by(|left, right| left.as_os_str().cmp(right.as_os_str()));
 
-    for library in libraries {
+    for library in &libraries {
         let manifests = library.join("steamapps");
         let entries = match fs::read_dir(&manifests) {
             Ok(entries) => entries,
             Err(_) => continue,
         };
+        let mut entries: Vec<_> = entries.flatten().collect();
+        entries.sort_by(|left, right| left.file_name().cmp(&right.file_name()));
 
-        for entry in entries.flatten() {
+        for entry in entries {
             let path = entry.path();
             let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
                 continue;
@@ -1532,6 +1538,45 @@ mod tests {
         assert_eq!(games[0].install_path, game_dir);
 
         std::fs::remove_dir_all(root).expect("remove temporary Steam library");
+    }
+
+    #[test]
+    fn steam_duplicate_app_ids_resolve_independently_of_library_input_order() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-steam-library-order-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let first_library = root.join("a-library");
+        let second_library = root.join("z-library");
+        for (library, folder, title) in [
+            (&first_library, "First Copy", "First Copy"),
+            (&second_library, "Second Copy", "Second Copy"),
+        ] {
+            let steamapps = library.join("steamapps");
+            std::fs::create_dir_all(steamapps.join("common").join(folder))
+                .expect("create Steam install");
+            std::fs::write(
+                steamapps.join("appmanifest_570.acf"),
+                format!(
+                    "\\"appid\\" \\"570\\"\\n\\"name\\" \\"{title}\\"\\n\\"installdir\\" \\"{folder}\\""
+                ),
+            ).expect("write Steam manifest");
+        }
+
+        let forward = super::scan_steam_libraries(&[
+            second_library.clone(),
+            first_library.clone(),
+        ]);
+        let reverse = super::scan_steam_libraries(&[
+            first_library.clone(),
+            second_library.clone(),
+        ]);
+        assert_eq!(forward, reverse);
+        assert_eq!(forward.len(), 1);
+        assert_eq!(forward[0].name, "First Copy");
+        std::fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]
