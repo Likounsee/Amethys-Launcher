@@ -49,7 +49,8 @@ fn vdf_update_depth(depth: usize, line: &str) -> usize {
     let mut in_quotes = false;
     let mut escaped = false;
 
-    for character in line.chars() {
+    let mut characters = line.chars().peekable();
+    while let Some(character) = characters.next() {
         if in_quotes {
             if escaped {
                 escaped = false;
@@ -61,6 +62,7 @@ fn vdf_update_depth(depth: usize, line: &str) -> usize {
         } else {
             match character {
                 '"' => in_quotes = true,
+                '/' if characters.peek() == Some(&'/') => break,
                 '{' => depth = depth.saturating_add(1),
                 '}' => depth = depth.saturating_sub(1),
                 _ => {}
@@ -1487,6 +1489,27 @@ mod tests {
         );
         assert!(libraries.contains(&PathBuf::from("/real/library")));
         assert!(!libraries.contains(&PathBuf::from("/ignored/library")));
+    }
+
+    #[test]
+    fn ignores_braces_inside_vdf_comments_when_reading_library_depth() {
+        let libraries = super::parse_library_folders(
+            r#"
+            "libraryfolders"
+            {
+                // { "9" "/commented/library" }
+                "1"
+                {
+                    "path" "/real/library"
+                    // } extra closing brace must not end the object
+                }
+            }
+            "#,
+            Path::new("/steam"),
+        );
+
+        assert!(libraries.contains(&PathBuf::from("/real/library")));
+        assert!(!libraries.contains(&PathBuf::from("/commented/library")));
     }
 
     #[test]
