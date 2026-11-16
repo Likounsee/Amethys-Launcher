@@ -14,7 +14,7 @@ Amethys performs read-only discovery from local launcher metadata. A launcher be
 | EA app | Installer metadata and Windows registry install records | Implemented |
 | Ubisoft Connect | Windows registry install records | Implemented |
 | Battle.net | Local Agent product metadata | Implemented |
-| Riot Games | Riot Client installation JSON; validate existing VALORANT and League of Legends directories | Initial adapter; validate against real installations |
+| Riot Games | Riot Client JSON and per-product product_settings.yaml metadata (VALORANT, League of Legends, LoR, 2XKO) | Initial adapter; validate against real installations |
 
 ## Planned adapters and investigations
 
