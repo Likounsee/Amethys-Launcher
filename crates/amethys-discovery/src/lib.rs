@@ -115,6 +115,15 @@ pub fn scan_steam_libraries(libraries: &[PathBuf]) -> Vec<DetectedGame> {
             let Some((app_id, name, install_dir)) = parse_app_manifest(&contents) else {
                 continue;
             };
+            // Steam's manifest filename and embedded AppID must agree. A stale,
+            // copied or malformed manifest must not attribute another game's
+            // installation directory to the wrong platform identifier.
+            let filename_app_id = filename
+                .strip_prefix("appmanifest_")
+                .and_then(|value| value.strip_suffix(".acf"));
+            if filename_app_id != Some(app_id.as_str()) {
+                continue;
+            }
             let install_path = manifests.join("common").join(install_dir);
             if install_path.is_dir()
                 && !is_steam_runtime_component(&app_id, &name)
@@ -1293,6 +1302,28 @@ mod tests {
         assert_eq!(games[0].install_path, game_dir);
 
         std::fs::remove_dir_all(root).expect("remove temporary Steam library");
+    }
+
+    #[test]
+    fn steam_manifest_filename_must_match_embedded_app_id() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-steam-mismatched-id-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let steamapps = root.join("steamapps");
+        let install = steamapps.join("common").join("Example");
+        std::fs::create_dir_all(&install).expect("create game install");
+        std::fs::write(
+            steamapps.join("appmanifest_570.acf"),
+            "\n                \"appid\" \"730\"\n                \"name\" \"Wrong attribution\"\n                \"installdir\" \"Example\"\n            ",
+        ).expect("write mismatched manifest");
+
+        assert!(scan_steam_libraries(std::slice::from_ref(&root)).is_empty());
+        std::fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]
