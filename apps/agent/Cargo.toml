@@ -6,6 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+amethys-config.workspace = true
 amethys-events.workspace = true
 amethys-ipc.workspace = true
 amethys-logging.workspace = true
