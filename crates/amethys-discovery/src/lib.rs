@@ -211,10 +211,15 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
         Ok(entries) => entries,
         Err(_) => return Vec::new(),
     };
+    // Filesystem directory iteration order is unspecified. Sort manifests so
+    // duplicate metadata always produces the same result across scans.
+    let mut entries: Vec<_> = entries.flatten().collect();
+    entries.sort_by_key(|entry| entry.file_name());
     let mut games = Vec::new();
     let mut seen_paths = BTreeSet::new();
+    let mut seen_app_ids = BTreeSet::new();
 
-    for entry in entries.flatten() {
+    for entry in entries {
         let path = entry.path();
         if path.extension().and_then(|value| value.to_str()) != Some("item") {
             continue;
@@ -243,7 +248,13 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
         };
         let platform_id = manifest.get("AppName").and_then(|v| v.as_str())
             .map(str::trim).filter(|value| !value.is_empty()).map(str::to_owned);
+        if platform_id.as_ref().is_some_and(|id| seen_app_ids.contains(id)) {
+            continue;
+        }
         if insert_unique_install_path(&mut seen_paths, &install_path) {
+            if let Some(id) = platform_id.as_ref() {
+                seen_app_ids.insert(id.clone());
+            }
             games.push(DetectedGame {
                 platform_id,
                 name: name.to_owned(),
