@@ -1,8 +1,10 @@
 use amethys_errors::{AmethysError, ErrorCode};
 use serde::{Deserialize, Serialize};
-use std::{io, path::{Path, PathBuf}};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 use tokio::fs;
-
 
 /// Resolves the shared per-user data directory used by both the agent and CLI.
 ///
@@ -20,20 +22,27 @@ pub fn data_directory() -> io::Result<PathBuf> {
     {
         let base = std::env::var_os("APPDATA")
             .or_else(|| std::env::var_os("LOCALAPPDATA"))
-            .ok_or_else(|| io::Error::new(
-                io::ErrorKind::NotFound,
-                "APPDATA or LOCALAPPDATA must be set to locate Amethys data",
-            ))?;
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::NotFound,
+                    "APPDATA or LOCALAPPDATA must be set to locate Amethys data",
+                )
+            })?;
         return Ok(PathBuf::from(base).join("Amethys"));
     }
 
     #[cfg(target_os = "macos")]
     {
-        let home = std::env::var_os("HOME").ok_or_else(|| io::Error::new(
-            io::ErrorKind::NotFound,
-            "HOME must be set to locate Amethys data",
-        ))?;
-        return Ok(PathBuf::from(home).join("Library").join("Application Support").join("Amethys"));
+        let home = std::env::var_os("HOME").ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "HOME must be set to locate Amethys data",
+            )
+        })?;
+        return Ok(PathBuf::from(home)
+            .join("Library")
+            .join("Application Support")
+            .join("Amethys"));
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]
@@ -43,11 +52,16 @@ pub fn data_directory() -> io::Result<PathBuf> {
         {
             return Ok(PathBuf::from(xdg).join("amethys"));
         }
-        let home = std::env::var_os("HOME").ok_or_else(|| io::Error::new(
-            io::ErrorKind::NotFound,
-            "HOME must be set to locate Amethys data",
-        ))?;
-        return Ok(PathBuf::from(home).join(".local").join("share").join("amethys"));
+        let home = std::env::var_os("HOME").ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::NotFound,
+                "HOME must be set to locate Amethys data",
+            )
+        })?;
+        return Ok(PathBuf::from(home)
+            .join(".local")
+            .join("share")
+            .join("amethys"));
     }
 
     #[cfg(not(any(windows, unix)))]
