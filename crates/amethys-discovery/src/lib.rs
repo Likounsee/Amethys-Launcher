@@ -2977,5 +2977,32 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
+    #[test]
+    fn equal_name_folder_results_are_ordered_by_install_path() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-stable-name-order-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let first = root.join("a-library").join("Same Game");
+        let second = root.join("z-library").join("Same Game");
+        std::fs::create_dir_all(&second).expect("create second install");
+        std::fs::create_dir_all(&first).expect("create first install");
+
+        let games = scan_game_folders(
+            "EA app",
+            &[root.join("z-library"), root.join("a-library")],
+        );
+        assert_eq!(games.len(), 2);
+        assert_eq!(games[0].name, games[1].name);
+        assert_eq!(games[0].install_path, first);
+        assert_eq!(games[1].install_path, second);
+
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
 
 }
