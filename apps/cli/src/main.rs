@@ -664,7 +664,7 @@ mod tests {
         let file = root.join("not-a-game-folder.exe");
         std::fs::write(&file, b"sentinel").expect("create regular file");
 
-        assert!(!installation_path_exists(file.to_str().expect("UTF-8 test path")));
+        assert_eq!(inspect_path(&file, true), PathCheck::WrongType);
         assert_eq!(std::fs::read(&file).expect("file remains"), b"sentinel");
 
         std::fs::remove_dir_all(root).expect("remove test root");
