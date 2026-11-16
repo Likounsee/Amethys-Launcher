@@ -344,13 +344,13 @@ fn inspect_path(path: &std::path::Path, expect_directory: bool) -> PathCheck {
 /// Rejects relative executable paths that could escape the registered game directory.
 fn is_safe_relative_executable(executable: &str) -> bool {
     let trimmed = executable.trim();
-    if trimmed.is_empty() || trimmed.starts_with(['/', '\\']) {
+    if trimmed.is_empty() || trimmed.starts_with('/') || trimmed.starts_with('\\') {
         return false;
     }
 
     // Check both separator styles so Windows metadata is validated consistently
     // even when fixtures are evaluated on a non-Windows CI runner.
-    let mut components = trimmed.split(['/', '\\']);
+    let mut components = trimmed.split(|character| character == '/' || character == '\\');
     let Some(first) = components.next() else { return false; };
     !first.contains(':')
         && !components
