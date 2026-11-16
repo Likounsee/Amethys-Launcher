@@ -13,7 +13,7 @@ Amethys discovery is read-only. A scan reports installed games; it does not add 
 
 | Platform | Current method | Notes |
 | --- | --- | --- |
-| Steam | `libraryfolders.vdf` and `appmanifest_*.acf` | Metadata-based detection; checks install directories and filters known Steam runtimes/redistributables. |
+| Steam | `libraryfolders.vdf` and `appmanifest_*.acf` | Metadata-based detection; checks install directories, filters known Steam runtimes/redistributables, and parses escaped quotes in VDF values. |
 | Epic Games | Launcher `.item` JSON manifests | Metadata-based on Windows. Heroic/Legendary is handled by its own adapter on supported OSes. |
 | EA app | `__Installer/installerdata.xml` plus Windows `HKLM\\SOFTWARE\\EA Games` install records | Reads title and content ID when present; registry paths allow custom game locations outside `Program Files/EA Games`. A registry record is accepted only when the install directory and EA installer metadata exist. |
 | GOG | Galaxy `galaxy-2.0.db` | Reads installed product IDs, original titles and installation paths from Galaxy metadata; opens the database read-only, skips malformed titles and stale paths, and de-duplicates canonical install paths without folding case on case-sensitive filesystems. Generic `GOG Games` folders are deliberately not scanned because folder names alone can produce false positives. |
