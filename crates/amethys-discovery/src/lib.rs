@@ -1577,8 +1577,10 @@ mod tests {
             std::fs::write(
                 steamapps.join("appmanifest_570.acf"),
                 format!(
-                    "\\"appid\\" \\"570\\"\\n\\"name\\" \\"{title}\\"\\n\\"installdir\\" \\"{folder}\\""
-                ),
+                    r#""appid" "570"
+"name" "{title}"
+"installdir" "{folder}""#
+                )
             ).expect("write Steam manifest");
         }
 
