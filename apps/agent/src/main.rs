@@ -37,60 +37,77 @@ where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
 {
     let request: IpcEnvelope<IpcRequest> = read_envelope(stream).await?;
-    let result = {
-        let database = database.lock().await;
-        match request.payload.command {
+    let result = match request.payload.command {
         IpcCommand::Ping => Ok(IpcResponsePayload::Pong),
         IpcCommand::GetStatus => Ok(IpcResponsePayload::CoreStatus { state }),
-        IpcCommand::ListGames => database.list_games().map(|entries| {
-            IpcResponsePayload::Games {
-                games: entries.into_iter().map(|game| IpcGameEntry {
-                    id: game.id,
-                    name: game.name,
-                    platform: game.platform,
-                    platform_id: game.platform_id,
-                    install_path: game.install_path,
-                    executable: game.executable,
-                }).collect(),
+        command => {
+            let database = database.lock().await;
+            match command {
+                IpcCommand::ListGames => database.list_games().map(|entries| {
+                    IpcResponsePayload::Games {
+                        games: entries
+                            .into_iter()
+                            .map(|game| IpcGameEntry {
+                                id: game.id,
+                                name: game.name,
+                                platform: game.platform,
+                                platform_id: game.platform_id,
+                                install_path: game.install_path,
+                                executable: game.executable,
+                            })
+                            .collect(),
+                    }
+                }),
+                IpcCommand::AddGame {
+                    name,
+                    platform,
+                    install_path,
+                    executable,
+                } => database
+                    .add_game(&name, &platform, &install_path, executable.as_deref())
+                    .map(|game| {
+                        IpcResponsePayload::GameAdded {
+                            game: IpcGameEntry {
+                                id: game.id,
+                                name: game.name,
+                                platform: game.platform,
+                                platform_id: game.platform_id,
+                                install_path: game.install_path,
+                                executable: game.executable,
+                            },
+                        }
+                    }),
+                IpcCommand::AddDetectedGame {
+                    name,
+                    platform,
+                    platform_id,
+                    install_path,
+                    executable,
+                } => database
+                    .add_game_with_platform_id(
+                        &name,
+                        &platform,
+                        platform_id.as_deref(),
+                        &install_path,
+                        executable.as_deref(),
+                    )
+                    .map(|game| {
+                        IpcResponsePayload::GameAdded {
+                            game: IpcGameEntry {
+                                id: game.id,
+                                name: game.name,
+                                platform: game.platform,
+                                platform_id: game.platform_id,
+                                install_path: game.install_path,
+                                executable: game.executable,
+                            },
+                        }
+                    }),
+                IpcCommand::RemoveGame { id } => database
+                    .remove_game(&id)
+                    .map(|removed| IpcResponsePayload::GameRemoved { removed }),
+                IpcCommand::Ping | IpcCommand::GetStatus => unreachable!("handled above"),
             }
-        }),
-        IpcCommand::AddGame { name, platform, install_path, executable } => {
-            database.add_game(&name, &platform, &install_path, executable.as_deref()).map(|game| {
-                IpcResponsePayload::GameAdded {
-                    game: IpcGameEntry {
-                        id: game.id,
-                        name: game.name,
-                        platform: game.platform,
-                        platform_id: game.platform_id,
-                        install_path: game.install_path,
-                        executable: game.executable,
-                    },
-                }
-            })
-        },
-        IpcCommand::AddDetectedGame { name, platform, platform_id, install_path, executable } => {
-            database.add_game_with_platform_id(
-                &name,
-                &platform,
-                platform_id.as_deref(),
-                &install_path,
-                executable.as_deref(),
-            ).map(|game| {
-                IpcResponsePayload::GameAdded {
-                    game: IpcGameEntry {
-                        id: game.id,
-                        name: game.name,
-                        platform: game.platform,
-                        platform_id: game.platform_id,
-                        install_path: game.install_path,
-                        executable: game.executable,
-                    },
-                }
-            })
-        }
-        IpcCommand::RemoveGame { id } => database.remove_game(&id).map(|removed| {
-            IpcResponsePayload::GameRemoved { removed }
-        }),
         }
     };
     let response = match result {
@@ -149,6 +166,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 signal?;
                 tracing::info!("Shutdown signal received");
                 break;
+            }
+            completed = connections.join_next(), if !connections.is_empty() => {
+                if let Some(Err(error)) = completed {
+                    tracing::error!(%error, "IPC connection task failed");
+                }
             }
             accepted = listener.accept() => {
                 match accepted {
