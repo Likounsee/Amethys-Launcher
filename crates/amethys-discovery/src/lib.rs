@@ -1395,6 +1395,43 @@ pub fn scan_riot_client_installs(installs_json: &Path) -> Vec<DetectedGame> {
     games
 }
 
+/// Reads Riot product_settings.yaml files for known installed Riot titles.
+pub fn scan_riot_product_settings(metadata_root: &Path) -> Vec<DetectedGame> {
+    const PRODUCTS: [(&str, &str, &str); 4] = [
+        ("valorant.live", "VALORANT", "valorant"),
+        ("league_of_legends.live", "League of Legends", "league_of_legends"),
+        ("lor.live", "Legends of Runeterra", "lor"),
+        ("2xko.live", "2XKO", "2xko"),
+    ];
+    let mut games = Vec::new();
+    let mut seen = BTreeSet::new();
+
+    for (directory, name, product_id) in PRODUCTS {
+        let file = metadata_root.join(directory).join(format!("{directory}.product_settings.yaml"));
+        let Some(contents) = read_bounded_text(&file) else { continue; };
+        let install_root = contents.lines().find_map(|line| {
+            let (key, value) = line.split_once(':')?;
+            if !key.trim().eq_ignore_ascii_case("product_install_root") {
+                return None;
+            }
+            let value = value.trim().trim_matches('"').trim_matches('\'').trim();
+            (!value.is_empty()).then(|| PathBuf::from(value))
+        });
+        let Some(install_path) = install_root else { continue; };
+        if !is_existing_absolute_directory(&install_path) { continue; }
+        if !seen.insert(install_path_key(&install_path)) { continue; }
+        games.push(DetectedGame {
+            platform_id: Some(product_id.to_owned()),
+            name: name.to_owned(),
+            install_path,
+            platform: "Riot Games",
+        });
+    }
+
+    games.sort_by_key(|game| (game.name.to_lowercase(), game.install_path.clone()));
+    games
+}
+
 /// Returns the standard machine-wide Riot Client installation metadata file.
 #[cfg(windows)]
 pub fn riot_client_installs_file() -> Option<PathBuf> {
@@ -1438,6 +1475,9 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
         games.extend(discover_ubisoft_games());
         if let Some(installs_file) = riot_client_installs_file() {
             games.extend(scan_riot_client_installs(&installs_file));
+            if let Some(metadata_root) = installs_file.parent().map(|root| root.join("Metadata")) {
+                games.extend(scan_riot_product_settings(&metadata_root));
+            }
         }
         if let Some(database) = battlenet_product_database() {
             games.extend(scan_battlenet_product_db(&database));
@@ -3380,6 +3420,31 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         assert!(games.iter().any(|game| game.name == "VALORANT" && game.platform_id.as_deref() == Some("valorant")));
         assert!(games.iter().any(|game| game.name == "League of Legends"));
         assert!(games.iter().all(|game| game.platform == "Riot Games"));
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn discovers_riot_titles_from_product_settings_yaml() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-riot-yaml-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let metadata = root.join("Metadata/valorant.live");
+        let install = root.join("A Games/VALORANT");
+        std::fs::create_dir_all(&metadata).expect("create metadata");
+        std::fs::create_dir_all(&install).expect("create game install");
+        std::fs::write(
+            metadata.join("valorant.live.product_settings.yaml"),
+            format!("product_install_root: \"{}\"\n", install.display()),
+        ).expect("write Riot product settings");
+
+        let games = super::scan_riot_product_settings(&root.join("Metadata"));
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].name, "VALORANT");
+        assert_eq!(games[0].platform_id.as_deref(), Some("valorant"));
+        assert_eq!(games[0].install_path, install);
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
