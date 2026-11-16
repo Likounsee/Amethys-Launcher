@@ -203,6 +203,7 @@ fn unsupported_platform() -> AmethysError {
 #[cfg(all(test, unix))]
 mod tests {
     use super::{IpcListener, connect};
+    use std::os::unix::fs::FileTypeExt;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     #[tokio::test]
