@@ -913,7 +913,9 @@ fn protobuf_length_delimited_fields(bytes: &[u8], wanted: u32) -> Option<Vec<&[u
         offset = offset.checked_add(tag_len)?;
         let field = u32::try_from(tag >> 3).ok()?;
         let wire = (tag & 0x07) as u8;
-        if field == 0 {
+        // Protobuf reserves field numbers above 2^29 - 1. Reject invalid
+        // tags instead of interpreting malformed bytes as product metadata.
+        if field == 0 || field > 0x1fff_ffff {
             return None;
         }
         match wire {
@@ -951,7 +953,7 @@ fn protobuf_varint_field(bytes: &[u8], wanted: u32) -> Option<u64> {
         offset = offset.checked_add(tag_len)?;
         let field = u32::try_from(tag >> 3).ok()?;
         let wire = (tag & 7) as u8;
-        if field == 0 { return None; }
+        if field == 0 || field > 0x1fff_ffff { return None; }
         match wire {
             0 => { let (value, len) = protobuf_varint(&bytes[offset..])?; offset = offset.checked_add(len)?; if field == wanted { found = Some(value); } }
             1 => offset = offset.checked_add(8)?,
@@ -1011,9 +1013,9 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
         // Ubisoft is detected from its registry install records. A generic
         // folder scan could report manually-created or leftover directories.
         games.extend(discover_ubisoft_games());
-    if let Some(database) = battlenet_product_database() {
-        games.extend(scan_battlenet_product_db(&database));
-    }
+        if let Some(database) = battlenet_product_database() {
+            games.extend(scan_battlenet_product_db(&database));
+        }
     }
 
     // Do not infer installed games from generic `GOG Games` directories.
@@ -1785,6 +1787,21 @@ mod tests {
         bytes.extend(encode_varint(value.len() as u64));
         bytes.extend(value);
         bytes
+    }
+
+    #[test]
+    fn rejects_protobuf_field_numbers_above_the_specification_limit() {
+        let invalid_field = 0x2000_0000u64;
+        let length_delimited_tag = (invalid_field << 3) | 2;
+        let varint_tag = invalid_field << 3;
+
+        let mut length_delimited = encode_varint(length_delimited_tag);
+        length_delimited.push(0);
+        assert!(super::protobuf_length_delimited_fields(&length_delimited, 1).is_none());
+
+        let mut varint = encode_varint(varint_tag);
+        varint.push(1);
+        assert!(super::protobuf_varint_field(&varint, 1).is_none());
     }
 
     #[test]
