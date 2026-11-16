@@ -131,10 +131,10 @@ fn game_is_already_imported(
 ) -> bool {
     saved_games.iter().any(|saved| {
         saved.platform.eq_ignore_ascii_case(detected.platform)
-            && match (&saved.platform_id, &detected.platform_id) {
-                (Some(saved_id), Some(detected_id)) => saved_id == detected_id,
-                _ => same_install_location(&saved.install_path, &detected.install_path),
-            }
+            && (matches!(
+                (&saved.platform_id, &detected.platform_id),
+                (Some(saved_id), Some(detected_id)) if saved_id == detected_id
+            ) || same_install_location(&saved.install_path, &detected.install_path))
     })
 }
 
@@ -397,7 +397,32 @@ mod tests {
         };
 
         assert!(super::game_is_already_imported(std::slice::from_ref(&saved), &same_game));
-        assert!(!super::game_is_already_imported(&[saved], &other_store));
+        assert!(!super::game_is_already_imported(&[saved.clone()], &other_store));
+
+        // Store metadata can change (for example after a game is moved or
+        // re-registered). A matching installation path must still prevent a
+        // duplicate even when both platform identifiers are present.
+        let same_path_different_id = amethys_discovery::DetectedGame {
+            platform_id: Some("999".to_owned()),
+            name: "Example".to_owned(),
+            install_path: std::path::PathBuf::from("/games/example"),
+            platform: "Steam",
+        };
+        assert!(super::game_is_already_imported(
+            std::slice::from_ref(&saved),
+            &same_path_different_id
+        ));
+
+        let different_path_different_id = amethys_discovery::DetectedGame {
+            platform_id: Some("999".to_owned()),
+            name: "Example".to_owned(),
+            install_path: std::path::PathBuf::from("/another/game"),
+            platform: "Steam",
+        };
+        assert!(!super::game_is_already_imported(
+            &[saved],
+            &different_path_different_id
+        ));
     }
 
     #[test]
