@@ -106,7 +106,7 @@ impl Database {
             transaction.execute_batch(
                 "ALTER TABLE games ADD COLUMN platform_id TEXT;
                  CREATE UNIQUE INDEX IF NOT EXISTS idx_games_platform_identity
-                     ON games(platform, platform_id)
+                     ON games(platform COLLATE NOCASE, platform_id)
                      WHERE platform_id IS NOT NULL;
                  INSERT OR IGNORE INTO schema_migrations (version) VALUES (3);"
             ).map_err(|error| AmethysError::new(
@@ -392,7 +392,7 @@ mod tests {
         let count: i64 = database.connection()
             .query_row("SELECT COUNT(*) FROM schema_migrations", [], |row| row.get(0))
             .expect("migration table readable");
-        assert_eq!(count, 2);
+        assert_eq!(count, 3);
         drop(database);
         let _ = std::fs::remove_file(path);
     }
