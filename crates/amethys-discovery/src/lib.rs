@@ -302,7 +302,10 @@ pub fn epic_manifest_roots() -> Vec<PathBuf> {
 /// are returned; malformed entries and stale paths are ignored.
 pub fn scan_heroic_legendary_installed(installed_json: &Path) -> Vec<DetectedGame> {
     let Ok(contents) = fs::read_to_string(installed_json) else { return Vec::new(); };
-    let Ok(entries) = serde_json::from_str::<serde_json::Value>(&contents) else { return Vec::new(); };
+    // Some Windows tools export UTF-8 JSON with a BOM. Accept the same
+    // harmless prefix already handled by the Epic manifest reader.
+    let contents = contents.strip_prefix('\u{feff}').unwrap_or(&contents);
+    let Ok(entries) = serde_json::from_str::<serde_json::Value>(contents) else { return Vec::new(); };
     let Some(entries) = entries.as_object() else { return Vec::new(); };
 
     let mut games = Vec::new();
@@ -2730,7 +2733,7 @@ mod tests {
             "RemovedApp": { "app_name": "RemovedApp", "title": "Removed Game", "install_path": root.join("Removed Game").to_string_lossy() },
             "BrokenApp": { "app_name": "BrokenApp", "title": "Broken Game" }
         });
-        std::fs::write(&database, contents.to_string()).expect("write Legendary metadata");
+        std::fs::write(&database, format!("\\u{feff}{}", contents)).expect("write BOM-prefixed Legendary metadata");
 
         let games = super::scan_heroic_legendary_installed(&database);
         assert_eq!(games.len(), 2);
