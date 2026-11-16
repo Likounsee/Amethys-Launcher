@@ -558,7 +558,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{installation_path_exists, parse_arguments, parse_command, same_install_location, status_label};
+    use super::{inspect_path, parse_arguments, parse_command, same_install_location, status_label, PathCheck};
     use amethys_ipc::{IpcCommand, IpcCoreStatus};
 
     #[test]
@@ -645,8 +645,8 @@ mod tests {
         let existing = root.to_string_lossy().into_owned();
         let missing = root.join("missing-game").to_string_lossy().into_owned();
 
-        assert!(installation_path_exists(&existing));
-        assert!(!installation_path_exists(&missing));
+        assert_eq!(inspect_path(std::path::Path::new(&existing), true), PathCheck::Available);
+        assert_eq!(inspect_path(std::path::Path::new(&missing), true), PathCheck::Missing);
         assert!(root.is_dir(), "verification must leave the installation untouched");
 
         std::fs::remove_dir_all(root).expect("cleanup");
