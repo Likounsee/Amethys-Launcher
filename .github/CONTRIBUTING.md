@@ -60,7 +60,7 @@ Issue instead. Code contributions and Pull Requests are not accepted through the
 ## 4. Recognition and planned rewards
 
 People whose Issues, reports, investigations or technical proposals
-materially help the project may be recognised in CONTRIBUTORS.md. Recognition
+materially help the project may be recognised in ../doc/community/CONTRIBUTORS.md. Recognition
 may describe the issue, investigation, proposed resolution or feature
 specification they contributed.
 
