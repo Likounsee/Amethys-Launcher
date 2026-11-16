@@ -42,20 +42,16 @@ The desktop GUI, Amethys online store/catalogue, downloads, save synchronization
 
 This repository is currently named `Amethys-Launcher`. The project/product name is **Amethys Launcher**; the repository name can be changed separately later if desired.
 
-## License and contributions
+## Ownership, contributions and rewards
 
-Amethys Launcher is proprietary software. All rights are reserved by Likounsee,
-except for third-party materials governed by their own licenses. Public
-visibility does not grant permission to copy, reuse, modify or redistribute
-project materials. See [LICENSE](LICENSE) for the terms.
+Amethys Launcher and the original project materials are currently owned by **Likounsee**. The project is proprietary; public repository visibility does not grant permission to reuse its code. See [LICENSE](LICENSE).
 
-Bug reports and proposed fixes are welcome. Pull requests are reviewed before
-any merge, including checks for source-code provenance, copyright, security,
-privacy and platform compliance. Code contributions require an explicit
-policy acknowledgement and a signed, contribution-specific rights assignment
-agreement before they can be merged. See [CONTRIBUTING.md](CONTRIBUTING.md),
-[CLA.md](CLA.md), and [SECURITY.md](SECURITY.md).
+Individual contributors are welcome. Before proposing code, read [CONTRIBUTING.md](CONTRIBUTING.md), identify the files you intend to add or change, and open an Issue if you need specifications or further information. Code is not merged until its origin and rights have been checked, the contribution-specific written assignment has been signed, and the maintainer has accepted it. Contributors whose work is accepted are credited in [CONTRIBUTORS.md](CONTRIBUTORS.md), including the files or features they worked on where practical.
 
-Never publish credentials, personal data, private platform responses or
-confidential information from Steam, Epic Games or other services in this
-repository.
+The project intends to establish a **gift-card reward programme** when Amethys Launcher is completed with its Store and integrated wallets. Rewards are intended to reflect each contributor's involvement and accepted work. Eligibility, assessment criteria, available budget, gift-card types and distribution terms will be published before awards are determined. See [CONTRIBUTING.md](CONTRIBUTING.md). This programme is a project intention, not a promise of a specific amount or payment date.
+
+Official collaborations with Steam, Epic Games and other platform companies are handled under separate written agreements. Those companies may retain intellectual-property rights in code or materials they provide, as set out in those agreements.
+
+Pull requests are reviewed before any merge, including checks for source-code provenance, copyright, security, privacy and platform compliance. See [CLA.md](CLA.md) for the individual contribution agreement and [SECURITY.md](SECURITY.md) for private vulnerability reporting.
+
+Never publish credentials, personal data, private platform responses or confidential information from Steam, Epic Games or other services in this repository.
