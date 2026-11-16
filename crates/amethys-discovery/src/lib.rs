@@ -481,7 +481,7 @@ pub fn parse_ea_registry_output(contents: &str) -> Vec<DetectedGame> {
         let Some((name, value)) = trimmed.split_once("REG_SZ")
             .or_else(|| trimmed.split_once("REG_EXPAND_SZ")) else { continue; };
         if !["Install Dir", "InstallDir"].iter().any(|candidate| name.trim().eq_ignore_ascii_case(candidate)) { continue; }
-        let install_path = PathBuf::from(value.trim());
+        let install_path = PathBuf::from(value.trim().trim_matches('"'));
         if !install_path.is_dir() || !install_path.join("__Installer/installerdata.xml").is_file() {
             continue;
         }
