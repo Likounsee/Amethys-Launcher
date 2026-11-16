@@ -19,7 +19,7 @@ COMMANDES:
     games import <appid>              Importe un jeu Steam par son App ID
     games import <plateforme> <id>    Importe un jeu détecté par plateforme et ID
     games import-all                  Importe les jeux détectés non encore enregistrés
-    games verify                      Vérifie les chemins sans modifier les installations
+    games verify [--json]             Vérifie les chemins sans modifier les installations
     games add <nom> <plateforme> <dossier> [exécutable]
     games remove <id>                 Retire un jeu de la bibliothèque Amethys
 
@@ -104,7 +104,7 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
         [group, action, id] if group == "games" && action == "remove" => {
             Ok(IpcCommand::RemoveGame { id: id.clone() })
         }
-        _ => Err("Utilisation : amethysctl games add <nom> <plateforme> <dossier> [executable] | games remove <id> | games scan | games import <appid> | games import <plateforme> <id> | games import-all | games verify"),
+        _ => Err("Utilisation : amethysctl games add <nom> <plateforme> <dossier> [executable] | games remove <id> | games scan | games import <appid> | games import <plateforme> <id> | games import-all | games verify [--json]"),
     }
 }
 
@@ -304,28 +304,63 @@ fn installation_path_exists(path: &str) -> bool {
     std::path::Path::new(path).is_dir()
 }
 
-async fn verify_saved_games() -> Result<(), Box<dyn Error>> {
+/// Creates a versioned, read-only report of saved installation directories.
+fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value {
+    let entries = games.iter().map(|game| {
+        let available = installation_path_exists(&game.install_path);
+        serde_json::json!({
+            "id": game.id,
+            "name": game.name,
+            "platform": game.platform,
+            "platform_id": game.platform_id,
+            "install_path": game.install_path,
+            "directory_available": available,
+        })
+    }).collect::<Vec<_>>();
+    let available = entries.iter()
+        .filter(|entry| entry["directory_available"] == true)
+        .count();
+    json_verify_summary(games.len(), available, entries)
+}
+
+fn json_verify_summary(
+    total: usize,
+    available: usize,
+    games: Vec<serde_json::Value>,
+) -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": 1,
+        "read_only": true,
+        "total_games": total,
+        "available": available,
+        "missing": total - available,
+        "games": games,
+    })
+}
+
+async fn verify_saved_games(json_output: bool) -> Result<(), Box<dyn Error>> {
     let games = load_saved_games().await?;
-    if games.is_empty() {
+    let report = build_verify_report(&games);
+    let total = games.len();
+    let available = report["available"].as_u64().unwrap_or(0) as usize;
+    let missing = total - available;
+
+    if json_output {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else if games.is_empty() {
         println!("Aucun jeu enregistré à vérifier.");
-        return Ok(());
-    }
-
-    let mut missing = 0usize;
-    for game in &games {
-        if installation_path_exists(&game.install_path) {
-            println!("[OK] {} ({}) — {}", game.name, game.platform, game.install_path);
-        } else {
-            missing += 1;
-            println!("[ABSENT] {} ({}) — {}", game.name, game.platform, game.install_path);
+    } else {
+        for game in &games {
+            if installation_path_exists(&game.install_path) {
+                println!("[OK] {} ({}) — {}", game.name, game.platform, game.install_path);
+            } else {
+                println!("[ABSENT] {} ({}) — {}", game.name, game.platform, game.install_path);
+            }
         }
+        println!(
+            "Vérification terminée : {available}/{total} chemin(s) d'installation disponible(s), {missing} absent(s). Aucun fichier n'a été modifié."
+        );
     }
-
-    let available = games.len() - missing;
-    println!(
-        "Vérification terminée : {available}/{} chemin(s) d'installation disponible(s), {missing} absent(s). Aucun fichier n'a été modifié.",
-        games.len()
-    );
 
     if missing == 0 {
         Ok(())
@@ -363,7 +398,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         return import_detected_games(amethys_discovery::discover_all_games()).await;
     }
     if arguments.as_slice() == ["games", "verify"] {
-        return verify_saved_games().await;
+        return verify_saved_games(false).await;
+    }
+    if arguments.as_slice() == ["games", "verify", "--json"] {
+        return verify_saved_games(true).await;
     }
     if let [group, action, app_id] = arguments.as_slice() {
         if group == "games" && action == "import" {
@@ -551,6 +589,33 @@ mod tests {
         assert_eq!(std::fs::read(&file).expect("file remains"), b"sentinel");
 
         std::fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn verification_json_report_is_versioned_and_read_only() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-verify-json-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create installation");
+        let game = amethys_ipc::IpcGameEntry {
+            id: "game-1".to_owned(),
+            name: "Example".to_owned(),
+            platform: "Steam".to_owned(),
+            platform_id: Some("123".to_owned()),
+            install_path: root.to_string_lossy().into_owned(),
+            executable: None,
+        };
+        let report = super::build_verify_report(&[game]);
+        assert_eq!(report["schema_version"], 1);
+        assert_eq!(report["read_only"], true);
+        assert_eq!(report["total_games"], 1);
+        assert_eq!(report["available"], 1);
+        assert_eq!(report["missing"], 0);
+        assert_eq!(report["games"][0]["directory_available"], true);
+        std::fs::remove_dir_all(root).expect("remove test installation");
     }
 
     #[test]
