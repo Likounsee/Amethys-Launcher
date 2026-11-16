@@ -1414,8 +1414,9 @@ mod tests {
         std::fs::write(
             manifests.join("whitespace.item"),
             format!(
-                r#"{{"AppName":"  ","DisplayName":"  Example Game  ","InstallLocation":"  {}  "}}"#,
-                whitespace_install.display()
+                r#"{{"AppName":"  ","DisplayName":"  Example Game  ","InstallLocation":{}}}"#,
+                serde_json::to_string(&format!("  {}  ", whitespace_install.display()))
+                    .expect("encode whitespace install path")
             ),
         ).expect("write manifest with surrounding whitespace");
 
