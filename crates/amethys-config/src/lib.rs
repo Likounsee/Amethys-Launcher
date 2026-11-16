@@ -181,10 +181,13 @@ impl AppConfig {
         // A unique sibling avoids collisions between concurrent saves and keeps the
         // final rename on the same filesystem.
         let temporary = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
-        fs::write(&temporary, bytes).await.map_err(|error| AmethysError::new(
-            ErrorCode::ConfigurationWrite,
-            format!("Could not write {}: {error}", temporary.display()),
-        ))?;
+        if let Err(error) = fs::write(&temporary, bytes).await {
+            let _cleanup_result = fs::remove_file(&temporary).await;
+            return Err(AmethysError::new(
+                ErrorCode::ConfigurationWrite,
+                format!("Could not write {}: {error}", temporary.display()),
+            ));
+        }
         if let Err(error) = fs::rename(&temporary, path).await {
             let _cleanup_result = fs::remove_file(&temporary).await;
             return Err(AmethysError::new(
