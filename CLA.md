@@ -1,6 +1,6 @@
-# Amethys Launcher — Individual Contribution Rights Agreement
+# Amethys Launcher — Exceptional Individual Code Contribution Agreement
 
-> **Draft template for legal review.** Do not use as a final agreement until
+> **Exceptional-use draft only — not part of the ordinary community contribution process.** Amethys Launcher accepts community participation through Issues, not code or Pull Requests. This template may be considered only if the maintainer explicitly authorises a separate code contribution in writing. It remains a draft for legal review. Do not use as a final agreement until
 > reviewed by qualified counsel for the contributor's country, the rights
 > holder's status and the identified contribution. Complete every applicable
 > field before signature. This agreement covers one identified contribution,
@@ -20,7 +20,7 @@ lead of Amethys Launcher ("Recipient").
 ## 2. Identified contribution
 
 - Repository: Likounsee/Amethys-Launcher
-- Pull request URL and number: [TO BE COMPLETED]
+- Written maintainer authorisation / reference: [TO BE COMPLETED]
 - Commit hash(es): [TO BE COMPLETED]
 - Exact files / components: [TO BE COMPLETED]
 - Description of the original work: [TO BE COMPLETED]
@@ -160,7 +160,7 @@ Date: ___________________________________
 ## Maintainer checklist — not part of the contributor's declarations
 
 - [ ] Identity and authority of contributor reasonably verified.
-- [ ] Exact PR, commit hashes and files recorded.
+- [ ] Written exceptional authorisation, exact commit hashes and files recorded.
 - [ ] Source, third-party materials and restrictions reviewed.
 - [ ] Each assigned right, purpose, territory, duration and consideration
       completed as required by applicable law.
