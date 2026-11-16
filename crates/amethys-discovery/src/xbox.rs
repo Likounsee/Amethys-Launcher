@@ -90,7 +90,7 @@ fn parse_microsoft_game_config(contents: &str) -> Option<(String, String, String
     let executable = xml_attribute(&executable_tag, "Name")?;
     let executable_path = Path::new(&executable);
     if executable.trim().is_empty()
-        || executable.contains('\\\\')
+        || executable.contains('\\')
         || executable_path.is_absolute()
         || executable_path.components().any(|component| {
             !matches!(component, std::path::Component::Normal(_))
