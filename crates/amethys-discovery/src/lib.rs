@@ -2179,4 +2179,33 @@ mod tests {
             None
         );
     }
+    #[test]
+    fn falls_back_to_install_folder_for_unknown_battlenet_products() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-battlenet-unknown-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                .expect("clock").as_nanos()
+        ));
+        let install = root.join("CustomGame");
+        std::fs::create_dir_all(&install).expect("create install");
+
+        let settings = encode_bytes_field(1, install.to_string_lossy().as_bytes());
+        let base_state = encode_varint(8).into_iter().chain(encode_varint(1)).collect::<Vec<_>>();
+        let cached_state = encode_bytes_field(1, &base_state);
+        let mut product = encode_bytes_field(2, b"future_product_code");
+        product.extend(encode_bytes_field(3, &settings));
+        product.extend(encode_bytes_field(4, &cached_state));
+        let database = root.join("product.db");
+        std::fs::write(&database, encode_bytes_field(1, &product))
+            .expect("write protobuf fixture");
+
+        let games = super::scan_battlenet_product_db(&database);
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform_id.as_deref(), Some("future_product_code"));
+        assert_eq!(games[0].name, "CustomGame");
+        assert_eq!(games[0].install_path, install);
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
 }
