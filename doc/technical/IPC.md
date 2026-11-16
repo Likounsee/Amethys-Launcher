@@ -28,6 +28,8 @@ client can verify that a response belongs to its request.
   independently so one failed import does not stop the remaining items.
 - `games scan`: scans supported launcher metadata and prints detections
   without importing them automatically.
+- `games verify`: checks whether each saved installation path exists; it never
+  modifies or repairs installed game files.
 
 The storage-aware agent handles game creation, listing and removal. A detected
 game's platform ID is scoped to its source platform; identical IDs from two
@@ -40,14 +42,23 @@ remain valid after the schema migration.
 - Windows: named pipes, for example `\\\\.\\pipe\\amethys-core`.
 - Linux and macOS: Unix-domain sockets in the application data directory.
 
+The agent and CLI resolve the same per-user data directory through
+`amethys_config::data_directory()`. `AMETHYS_DATA_DIR` overrides the default.
+Otherwise, Windows uses `%APPDATA%\\Amethys` (falling back to `%LOCALAPPDATA%`),
+macOS uses `~/Library/Application Support/Amethys`, and Linux/other Unix systems
+use `$XDG_DATA_HOME/amethys` or `~/.local/share/amethys`. The current working
+directory is never used as an implicit data location.
+
 Use `transport::IpcListener::bind()` to create a server endpoint and
 `accept()` to accept clients. Use `transport::connect()` for a client.
 The agent runs a persistent accept loop and handles each local request.
 
 On Unix, the socket path is restricted to mode `0600` and is unlinked when the
-listener is dropped. On Windows, the named pipe uses the default security
-descriptor associated with the creating process; production deployment must
-review and, where necessary, explicitly configure its ACL.
+listener is dropped. On Windows, remote named-pipe clients are explicitly
+rejected. The pipe still uses the default security descriptor associated with
+the creating process, so local-user access follows that inherited DACL; an
+explicit restrictive DACL remains required before claiming isolation between
+multiple local Windows users.
 
 ## Security requirements
 
