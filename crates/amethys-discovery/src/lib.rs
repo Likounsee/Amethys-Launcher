@@ -452,17 +452,24 @@ pub fn scan_amazon_games(database: &Path) -> Vec<DetectedGame> {
     };
 
     let mut games = Vec::new();
-    let mut seen = BTreeSet::new();
+    let mut seen_products = BTreeSet::new();
+    let mut seen_paths = BTreeSet::new();
     for row in rows.flatten() {
         let (platform_id, name, install_location) = row;
-        if platform_id.trim().is_empty() || name.trim().is_empty() || install_location.trim().is_empty() {
+        let platform_id = platform_id.trim();
+        let name = name.trim();
+        let install_location = install_location.trim();
+        if platform_id.is_empty() || name.is_empty() || install_location.is_empty() {
             continue;
         }
         let install_path = PathBuf::from(install_location);
-        if install_path.is_dir() && seen.insert(platform_id.clone()) {
+        if install_path.is_dir()
+            && seen_products.insert(platform_id.to_owned())
+            && seen_paths.insert(install_path_key(&install_path))
+        {
             games.push(DetectedGame {
-                platform_id: Some(platform_id),
-                name,
+                platform_id: Some(platform_id.to_owned()),
+                name: name.to_owned(),
                 install_path,
                 platform: "Amazon Games",
             });
@@ -1697,6 +1704,11 @@ mod tests {
              VALUES (?1, ?2, ?3)",
             rusqlite::params!["amzn1.other", not_installed.to_string_lossy(), "Not Installed"],
         ).expect("insert uninstalled game");
+        connection.execute(
+            "INSERT INTO DbSet (Id, InstallDirectory, ProductTitle)
+             VALUES (?1, ?2, ?3)",
+            rusqlite::params!["amzn1.blue-fire-alias", installed.to_string_lossy(), "Duplicate Blue Fire"],
+        ).expect("insert duplicate installation path");
         drop(connection);
 
         let games = super::scan_amazon_games(&database);
