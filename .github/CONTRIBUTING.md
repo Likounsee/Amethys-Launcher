@@ -60,7 +60,7 @@ Issue instead. Code contributions and Pull Requests are not accepted through the
 ## 4. Recognition and planned rewards
 
 People whose Issues, reports, investigations or technical proposals
-materially help the project may be recognised in ../doc/community/CONTRIBUTORS.md. Recognition
+materially help the project may be recognised in [the community contributors list](../doc/community/CONTRIBUTORS.md). Recognition
 may describe the issue, investigation, proposed resolution or feature
 specification they contributed.
 
@@ -98,7 +98,7 @@ documentation, data or credentials without permission.
   rate limits or platform restrictions.
 - Never publish credentials, tokens, private keys, personal data or
   confidential platform responses.
-- Report vulnerabilities privately using SECURITY.md. Do not disclose
+- Report vulnerabilities privately using the [security policy](SECURITY.md). Do not disclose
   vulnerability details in a public Issue.
 
 ## 7. Questions
