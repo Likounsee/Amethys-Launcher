@@ -69,11 +69,14 @@ fn vdf_update_depth(depth: usize, line: &str) -> usize {
 
 /// Extracts the small set of fields needed from an appmanifest_*.acf file.
 pub fn parse_app_manifest(contents: &str) -> Option<(String, String, String)> {
-    let app_id = find_vdf_value(contents, "appid")?;
-    let name = find_vdf_value(contents, "name")?;
-    let install_dir = find_vdf_value(contents, "installdir")?;
+    // Launcher metadata can contain accidental padding around values. Trim it
+    // before validating IDs or constructing paths so valid installs are not
+    // silently missed because of harmless whitespace.
+    let app_id = find_vdf_value(contents, "appid")?.trim().to_owned();
+    let name = find_vdf_value(contents, "name")?.trim().to_owned();
+    let install_dir = find_vdf_value(contents, "installdir")?.trim().to_owned();
 
-    if app_id.is_empty() || name.trim().is_empty() || install_dir.trim().is_empty() {
+    if app_id.is_empty() || name.is_empty() || install_dir.is_empty() {
         return None;
     }
 
@@ -2023,6 +2026,22 @@ mod tests {
                 "appid" "570"
                 "name" "Dota 2"
                 "installdir" "Dota 2"
+            }
+        "#;
+        assert_eq!(
+            parse_app_manifest(contents),
+            Some(("570".to_owned(), "Dota 2".to_owned(), "Dota 2".to_owned()))
+        );
+    }
+
+    #[test]
+    fn trims_whitespace_from_required_app_manifest_values() {
+        let contents = r#"
+            "AppState"
+            {
+                "appid" " 570 "
+                "name" " Dota 2 "
+                "installdir" " Dota 2 "
             }
         "#;
         assert_eq!(
