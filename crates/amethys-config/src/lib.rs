@@ -1,7 +1,63 @@
 use amethys_errors::{AmethysError, ErrorCode};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::{io, path::{Path, PathBuf}};
 use tokio::fs;
+
+
+/// Resolves the shared per-user data directory used by both the agent and CLI.
+///
+/// AMETHYS_DATA_DIR is an explicit override. Otherwise, the platform's
+/// conventional per-user application-data location is used; the current
+/// working directory is never used as a fallback.
+pub fn data_directory() -> io::Result<PathBuf> {
+    if let Some(path) = std::env::var_os("AMETHYS_DATA_DIR")
+        .filter(|value| !value.is_empty())
+    {
+        return Ok(PathBuf::from(path));
+    }
+
+    #[cfg(windows)]
+    {
+        let base = std::env::var_os("APPDATA")
+            .or_else(|| std::env::var_os("LOCALAPPDATA"))
+            .ok_or_else(|| io::Error::new(
+                io::ErrorKind::NotFound,
+                "APPDATA or LOCALAPPDATA must be set to locate Amethys data",
+            ))?;
+        return Ok(PathBuf::from(base).join("Amethys"));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let home = std::env::var_os("HOME").ok_or_else(|| io::Error::new(
+            io::ErrorKind::NotFound,
+            "HOME must be set to locate Amethys data",
+        ))?;
+        return Ok(PathBuf::from(home).join("Library").join("Application Support").join("Amethys"));
+    }
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        if let Some(xdg) = std::env::var_os("XDG_DATA_HOME")
+            .filter(|value| Path::new(value).is_absolute())
+        {
+            return Ok(PathBuf::from(xdg).join("amethys"));
+        }
+        let home = std::env::var_os("HOME").ok_or_else(|| io::Error::new(
+            io::ErrorKind::NotFound,
+            "HOME must be set to locate Amethys data",
+        ))?;
+        return Ok(PathBuf::from(home).join(".local").join("share").join("amethys"));
+    }
+
+    #[cfg(not(any(windows, unix)))]
+    {
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "Amethys data directories are not defined for this operating system",
+        ))
+    }
+}
 
 /// User-level application settings.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
