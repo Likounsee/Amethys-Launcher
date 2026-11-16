@@ -3,6 +3,7 @@ use std::error::Error;
 
 #[cfg(any(unix, windows))]
 use amethys_ipc::transport::{self, BoxedIpcStream};
+
 fn parse_command(argument: Option<&str>) -> Result<IpcCommand, &'static str> {
     match argument {
         Some("ping") => Ok(IpcCommand::Ping),
