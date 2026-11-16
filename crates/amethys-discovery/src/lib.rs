@@ -1904,7 +1904,7 @@ mod tests {
         std::fs::create_dir_all(&first_install).expect("create first install");
         std::fs::create_dir_all(&duplicate_install).expect("create duplicate install");
         let output = format!(
-            "HKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\44\\n    InstallDir    REG_SZ    {}\\nHKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Ubisoft\\Launcher\\Installs\\44\\n    InstallDir    REG_SZ    {}\\n",
+            "HKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\44\n    InstallDir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Ubisoft\\Launcher\\Installs\\44\n    InstallDir    REG_SZ    {}\n",
             first_install.display(), duplicate_install.display()
         );
         let games = super::parse_ubisoft_registry_output(&output);
