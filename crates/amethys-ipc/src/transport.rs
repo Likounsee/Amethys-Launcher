@@ -208,8 +208,8 @@ mod tests {
 
     #[tokio::test]
     async fn listener_removes_a_stale_socket_before_binding() {
-        let path = std::env::temp_dir().join(format!(
-            "amethys-ipc-stale-{}.sock",
+        let path = std::path::PathBuf::from(format!(
+            "/tmp/amethys-ipc-stale-{}.sock",
             uuid::Uuid::new_v4()
         ));
         {
@@ -226,8 +226,8 @@ mod tests {
 
     #[tokio::test]
     async fn dropping_listener_does_not_remove_a_replacement_path() {
-        let path = std::env::temp_dir().join(format!(
-            "amethys-ipc-replaced-{}.sock",
+        let path = std::path::PathBuf::from(format!(
+            "/tmp/amethys-ipc-replaced-{}.sock",
             uuid::Uuid::new_v4()
         ));
         let moved_path = path.with_extension("original.sock");
@@ -265,8 +265,8 @@ mod tests {
 
     #[tokio::test]
     async fn listener_does_not_replace_an_active_socket() {
-        let path = std::env::temp_dir().join(format!(
-            "amethys-ipc-active-{}.sock",
+        let path = std::path::PathBuf::from(format!(
+            "/tmp/amethys-ipc-active-{}.sock",
             uuid::Uuid::new_v4()
         ));
         let mut first = IpcListener::bind(&path).await.expect("first listener binds");
