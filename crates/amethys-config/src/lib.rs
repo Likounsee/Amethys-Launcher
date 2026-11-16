@@ -202,7 +202,9 @@ impl AppConfig {
 #[cfg(test)]
 mod tests {
     use super::{AppConfig, resolve_data_directory};
-    use std::{ffi::OsString, io, path::Path};
+    use std::{ffi::OsString, path::Path};
+    #[cfg(any(windows, all(unix, not(target_os = "macos"))))]
+    use std::io;
 
     #[cfg(all(unix, not(target_os = "macos")))]
     #[test]
