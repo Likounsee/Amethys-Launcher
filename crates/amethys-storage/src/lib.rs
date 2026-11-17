@@ -334,6 +334,37 @@ impl Database {
             .map_err(|error| storage_error(format!("Could not read game list: {error}")))
     }
 
+    /// Updates the executable configured for an existing game.
+    pub fn set_game_executable(
+        &self,
+        id: &str,
+        executable: &str,
+    ) -> Result<Option<GameEntry>, AmethysError> {
+        let executable = executable.trim();
+        if id.trim().is_empty() || executable.is_empty() {
+            return Err(storage_error(
+                "Game ID and executable path must not be empty.",
+            ));
+        }
+        if executable.contains('\\0') {
+            return Err(storage_error(
+                "Executable paths must not contain NUL characters.",
+            ));
+        }
+        if executable.len() > MAX_GAME_PATH_BYTES {
+            return Err(storage_error(format!(
+                "Executable path must not exceed {MAX_GAME_PATH_BYTES} bytes."
+            )));
+        }
+        self.connection
+            .execute(
+                "UPDATE games SET executable = ?1 WHERE id = ?2",
+                params![executable, id],
+            )
+            .map_err(|error| storage_error(format!("Could not update game executable: {error}")))?;
+        self.get_game(id)
+    }
+
     /// Removes a game. Returns false when its identifier was not present.
     pub fn remove_game(&self, id: &str) -> Result<bool, AmethysError> {
         let changed = self
