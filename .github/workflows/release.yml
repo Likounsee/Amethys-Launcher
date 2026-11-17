@@ -75,8 +75,9 @@ jobs:
           New-Item -ItemType Directory -Force dist | Out-Null
           Copy-Item "target/${{ matrix.target }}/release/amethys-agent.exe" dist/
           Copy-Item "target/${{ matrix.target }}/release/amethysctl.exe" dist/
+          Copy-Item README.md,LICENSE,doc/technical/RELEASES.md -Destination dist/
           $archive = "amethys-$($env:RELEASE_TAG)-${{ matrix.target }}.zip"
-          Compress-Archive -Path dist/amethys-agent.exe,dist/amethysctl.exe -DestinationPath $archive
+          Compress-Archive -Path dist/* -DestinationPath $archive
 
       - name: Stage Unix binaries
         if: runner.os != 'Windows'
@@ -87,8 +88,9 @@ jobs:
           mkdir -p dist
           cp "target/${{ matrix.target }}/release/amethys-agent" dist/
           cp "target/${{ matrix.target }}/release/amethysctl" dist/
+          cp README.md LICENSE doc/technical/RELEASES.md dist/
           archive="amethys-${RELEASE_TAG}-${{ matrix.target }}.tar.gz"
-          tar -czf "$archive" -C dist amethys-agent amethysctl
+          tar -czf "$archive" -C dist amethys-agent amethysctl README.md LICENSE RELEASES.md
 
       - name: Upload platform archive
         uses: actions/upload-artifact@v4
