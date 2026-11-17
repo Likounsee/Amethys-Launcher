@@ -414,3 +414,69 @@ mod tests {
         assert_eq!(&client_task.await.expect("client task"), b"pong");
     }
 }
+
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::{IpcListener, connect};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    fn test_endpoint() -> String {
+        format!(r"\\.\pipe\amethys-test-{}", uuid::Uuid::new_v4())
+    }
+
+    #[tokio::test]
+    async fn named_pipe_accepts_a_client_and_exchanges_bytes() {
+        let endpoint = test_endpoint();
+        let mut listener = IpcListener::bind(&endpoint)
+            .await
+            .expect("bind named pipe");
+
+        let client_endpoint = endpoint.clone();
+        let client_task = tokio::spawn(async move {
+            let mut client = connect(client_endpoint).await.expect("connect client");
+            client.write_all(b"ping").await.expect("send request");
+            let mut response = [0_u8; 4];
+            client
+                .read_exact(&mut response)
+                .await
+                .expect("read response");
+            response
+        });
+
+        let mut server = listener.accept().await.expect("accept client");
+        let mut request = [0_u8; 4];
+        server
+            .read_exact(&mut request)
+            .await
+            .expect("read request");
+        assert_eq!(&request, b"ping");
+        server.write_all(b"pong").await.expect("write response");
+        assert_eq!(&client_task.await.expect("client task"), b"pong");
+    }
+
+    #[tokio::test]
+    async fn named_pipe_listener_accepts_multiple_clients() {
+        let endpoint = test_endpoint();
+        let mut listener = IpcListener::bind(&endpoint)
+            .await
+            .expect("bind named pipe");
+
+        for expected in [b"one".as_slice(), b"two".as_slice()] {
+            let client_endpoint = endpoint.clone();
+            let client_task = tokio::spawn(async move {
+                let mut client = connect(client_endpoint).await.expect("connect client");
+                client.write_all(expected).await.expect("send request");
+            });
+
+            let mut server = listener.accept().await.expect("accept client");
+            let mut received = vec![0_u8; expected.len()];
+            server
+                .read_exact(&mut received)
+                .await
+                .expect("read request");
+            assert_eq!(received, expected);
+            client_task.await.expect("client task");
+        }
+    }
+}
