@@ -2186,8 +2186,8 @@ mod tests {
     }
 
     use super::{
-        parse_app_manifest, parse_library_folders, scan_epic_manifests, scan_game_folders,
-        scan_steam_libraries,
+        epic_launch_executable, parse_app_manifest, parse_library_folders, scan_epic_manifests,
+        scan_game_folders, scan_steam_libraries,
     };
     use std::{
         collections::BTreeSet,
