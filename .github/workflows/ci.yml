@@ -67,5 +67,5 @@ jobs:
           cp target/release/amethys-agent target/release/amethysctl README.md LICENSE doc/technical/RELEASES.md dist/
           tar -czf amethys-ci-linux.tar.gz -C dist amethys-agent amethysctl README.md LICENSE RELEASES.md
           tar -tzf amethys-ci-linux.tar.gz | sort > archive-contents.txt
-          printf '%s\\n' LICENSE README.md RELEASES.md amethys-agent amethysctl | sort > expected-contents.txt
+          printf '%s\n' LICENSE README.md RELEASES.md amethys-agent amethysctl | sort > expected-contents.txt
           diff -u expected-contents.txt archive-contents.txt
