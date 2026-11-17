@@ -859,7 +859,7 @@ mod tests {
         assert!(database.set_game_executable(&game.id, " ").is_err());
         assert!(
             database
-                .set_game_executable(&game.id, "bad\\0path")
+                .set_game_executable(&game.id, "bad\0path")
                 .is_err()
         );
         drop(database);
