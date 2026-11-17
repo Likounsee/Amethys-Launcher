@@ -87,6 +87,7 @@ fn status_label(status: IpcCoreStatus) -> &'static str {
 fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
     match arguments {
         [command] => parse_command(Some(command)),
+        [group, action] if group == "games" && action == "list" => Ok(IpcCommand::ListGames),
         [group, action, name, platform, install_path] if group == "games" && action == "add" => {
             Ok(IpcCommand::AddGame {
                 name: name.clone(),
@@ -1340,6 +1341,9 @@ mod tests {
 
     #[test]
     fn parses_game_management_commands() {
+        let list = vec!["games".to_owned(), "list".to_owned()];
+        assert_eq!(parse_arguments(&list), Ok(IpcCommand::ListGames));
+
         let add = vec![
             "games".to_owned(),
             "add".to_owned(),
