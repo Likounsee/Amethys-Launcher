@@ -454,6 +454,39 @@ mod windows_tests {
     }
 
     #[tokio::test]
+    async fn named_pipe_peer_identity_matches_the_current_user_and_process() {
+        let endpoint = test_endpoint();
+        let dacl = weida_winpipe::OwnerOnlyDacl::for_current_user()
+            .expect("build current-user-only DACL");
+        let mut server = weida_winpipe::create_instance(
+            std::ffi::OsStr::new(&endpoint),
+            &dacl,
+            true,
+        )
+        .expect("create protected named pipe");
+
+        let client_endpoint = endpoint.clone();
+        let client_task = tokio::spawn(async move {
+            let mut client = weida_winpipe::open_client(std::ffi::OsStr::new(&client_endpoint))
+                .expect("open protected pipe");
+            client.write_all(b"identity").await.expect("send identity probe");
+            weida_winpipe::server_peer(&client).expect("read server identity")
+        });
+
+        server.connect().await.expect("accept protected client");
+        let mut probe = [0_u8; 8];
+        server.read_exact(&mut probe).await.expect("read identity probe");
+        assert_eq!(&probe, b"identity");
+
+        let client_peer = weida_winpipe::client_peer(&server)
+            .expect("read authenticated client identity");
+        let server_peer = client_task.await.expect("client task");
+
+        assert_eq!(client_peer.sid, server_peer.sid);
+        assert_eq!(client_peer.pid, std::process::id());
+        assert_eq!(server_peer.pid, std::process::id());
+    }
+    #[tokio::test]
     async fn named_pipe_listener_accepts_multiple_clients() {
         let endpoint = test_endpoint();
         let mut listener = IpcListener::bind(&endpoint).await.expect("bind named pipe");
