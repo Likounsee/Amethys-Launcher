@@ -256,6 +256,37 @@ fn parse_steam_registry_output(output: &str) -> Option<PathBuf> {
     })
 }
 
+/// Builds per-user Steam roots for Unix layouts without reading process-global
+/// environment state. This keeps Linux distro/Flatpak and macOS path rules
+/// independently testable on every CI host.
+#[cfg(any(target_os = "linux", target_os = "macos", test))]
+fn unix_steam_roots(
+    home: &Path,
+    xdg_data_home: Option<&Path>,
+    target_os: &str,
+) -> Vec<PathBuf> {
+    if !home.is_absolute() {
+        return Vec::new();
+    }
+
+    let mut roots = BTreeSet::new();
+    match target_os {
+        "linux" => {
+            roots.insert(home.join(".steam/steam"));
+            roots.insert(home.join(".local/share/Steam"));
+            roots.insert(home.join(".var/app/com.valvesoftware.Steam/.local/share/Steam"));
+            if let Some(data_home) = xdg_data_home.filter(|path| path.is_absolute()) {
+                roots.insert(data_home.join("Steam"));
+            }
+        }
+        "macos" => {
+            roots.insert(home.join("Library/Application Support/Steam"));
+        }
+        _ => return Vec::new(),
+    }
+    roots.into_iter().collect()
+}
+
 /// Finds common Steam installation roots for the current operating system.
 pub fn steam_install_roots() -> Vec<PathBuf> {
     let mut roots = BTreeSet::new();
@@ -268,8 +299,6 @@ pub fn steam_install_roots() -> Vec<PathBuf> {
         if let Some(program_files) = std::env::var_os("ProgramFiles") {
             roots.insert(PathBuf::from(program_files).join("Steam"));
         }
-        // Steam may be installed outside Program Files. Its per-user registry
-        // value is the authoritative root and can be read without elevation.
         if let Ok(output) = std::process::Command::new("reg")
             .args(["query", r"HKCU\Software\Valve\Steam", "/v", "SteamPath"])
             .output()
@@ -284,26 +313,20 @@ pub fn steam_install_roots() -> Vec<PathBuf> {
         }
     }
 
-    #[cfg(target_os = "macos")]
-    if let Some(home) = std::env::var_os("HOME") {
-        roots.insert(PathBuf::from(home).join("Library/Application Support/Steam"));
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
+    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
+        #[cfg(target_os = "linux")]
+        let xdg_data_home = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from);
+        #[cfg(target_os = "macos")]
+        let xdg_data_home: Option<PathBuf> = None;
+        roots.extend(unix_steam_roots(&home, xdg_data_home.as_deref(), std::env::consts::OS));
     }
 
-    #[cfg(target_os = "linux")]
-    if let Some(home) = std::env::var_os("HOME") {
-        let home = PathBuf::from(home);
-        roots.insert(home.join(".steam/steam"));
-        roots.insert(home.join(".local/share/Steam"));
-    }
-
-    // Never interpret a relative registry/config value against the launcher current directory.
-    // Every supported Steam root is expected to be an absolute existing directory.
     roots
         .into_iter()
         .filter(|path| path.is_absolute() && path.is_dir())
         .collect()
 }
-
 /// Reads libraryfolders.vdf files and returns their declared library roots.
 pub fn discover_steam_libraries() -> Vec<PathBuf> {
     let mut libraries = BTreeSet::new();
@@ -1876,6 +1899,40 @@ fn unescape_vdf(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn linux_steam_roots_cover_native_flatpak_and_custom_xdg_layouts() {
+        let home = std::path::Path::new("/home/player");
+        let xdg = std::path::Path::new("/mnt/data/player");
+        let roots = super::unix_steam_roots(home, Some(xdg), "linux");
+        assert!(roots.contains(&home.join(".steam/steam")));
+        assert!(roots.contains(&home.join(".local/share/Steam")));
+        assert!(roots.contains(&home.join(".var/app/com.valvesoftware.Steam/.local/share/Steam")));
+        assert!(roots.contains(&xdg.join("Steam")));
+    }
+
+    #[test]
+    fn macos_steam_root_uses_application_support() {
+        let home = std::path::Path::new("/Users/player");
+        let roots = super::unix_steam_roots(home, None, "macos");
+        assert_eq!(roots, vec![home.join("Library/Application Support/Steam")]);
+    }
+
+    #[test]
+    fn unix_steam_roots_reject_relative_home_and_xdg_paths() {
+        assert!(super::unix_steam_roots(
+            std::path::Path::new("relative/home"),
+            Some(std::path::Path::new("relative/data")),
+            "linux",
+        )
+        .is_empty());
+        let roots = super::unix_steam_roots(
+            std::path::Path::new("/home/player"),
+            Some(std::path::Path::new("relative/data")),
+            "linux",
+        );
+        assert!(!roots.contains(&std::path::PathBuf::from("relative/data/Steam")));
+    }
+
     #[test]
     fn bounded_metadata_reader_accepts_small_files_and_rejects_oversized_files() {
         let root = std::env::temp_dir().join(format!(
