@@ -862,12 +862,12 @@ mod tests {
         assert!(database.get_game_by_platform_id("Steam", " ").is_err());
         assert!(
             database
-                .get_game_by_platform_id("bad\\0platform", "570")
+                .get_game_by_platform_id("bad\0platform", "570")
                 .is_err()
         );
         assert!(
             database
-                .get_game_by_platform_id("Steam", "bad\\0id")
+                .get_game_by_platform_id("Steam", "bad\0id")
                 .is_err()
         );
         assert!(
