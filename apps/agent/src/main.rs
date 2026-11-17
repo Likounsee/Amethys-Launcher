@@ -52,6 +52,7 @@ where
             &request.payload.command,
             IpcCommand::AddGame { .. }
                 | IpcCommand::AddDetectedGame { .. }
+                | IpcCommand::SetGameExecutable { .. }
                 | IpcCommand::RemoveGame { .. }
         )
     {
@@ -128,6 +129,26 @@ where
                             install_path: game.install_path,
                             executable: game.executable,
                         },
+                    }),
+                IpcCommand::SetGameExecutable { id, executable } => database
+                    .set_game_executable(&id, &executable)
+                    .and_then(|game| {
+                        game.map(|game| IpcResponsePayload::GameAdded {
+                            game: IpcGameEntry {
+                                id: game.id,
+                                name: game.name,
+                                platform: game.platform,
+                                platform_id: game.platform_id,
+                                install_path: game.install_path,
+                                executable: game.executable,
+                            },
+                        })
+                        .ok_or_else(|| {
+                            amethys_errors::AmethysError::new(
+                                amethys_errors::ErrorCode::StorageQuery,
+                                "Game not found.",
+                            )
+                        })
                     }),
                 IpcCommand::RemoveGame { id } => database
                     .remove_game(&id)
