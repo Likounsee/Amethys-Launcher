@@ -48,3 +48,17 @@ Amethys performs read-only discovery from local launcher metadata. A launcher be
 ## Important limitation
 
 A successful directory check confirms only that the installation directory exists. It does not verify game-file integrity, launcher ownership, updates, or whether the game can start.
+
+## Real-install validation checklist
+
+Synthetic fixtures validate parsers and edge cases, but they cannot prove that a launcher version stores metadata at the expected path on a real machine. Keep these two kinds of evidence separate in reviews and release notes.
+
+When a maintainer does not own a game on a platform (for example, Battle.net), do not mark that adapter as locally validated and do not install or purchase a game solely for this test. Ask community testers to opt in and report:
+
+1. Windows version and launcher version (if known).
+2. Whether at least one game is installed through that launcher.
+3. Whether `games scan --json` detects it, including the platform name and install path (redact personal usernames and private directory names before sharing).
+4. Whether a second scan returns the same result and whether an uninstalled/stale entry is correctly ignored.
+5. Any relevant Amethys error output. Never request account credentials, tokens, launcher databases, or other private metadata files.
+
+A platform should be labelled **real-install validated** only after a reproducible report from a real installation. Otherwise label it **fixture/CI tested; real-install validation pending**. Missing local games are a testing limitation, not a reason to remove an otherwise useful adapter.
