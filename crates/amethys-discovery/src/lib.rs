@@ -503,9 +503,7 @@ pub fn epic_launch_executable(
         }
         let candidate = install_path.join(relative);
         let canonical_candidate = candidate.canonicalize().ok()?;
-        if !canonical_candidate.is_file()
-            || !canonical_candidate.starts_with(&canonical_root)
-        {
+        if !canonical_candidate.is_file() || !canonical_candidate.starts_with(&canonical_root) {
             return None;
         }
         return canonical_candidate
@@ -2736,7 +2734,8 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let install = root.join("Installed").join("Example");
         std::fs::create_dir_all(&manifests).expect("create manifests");
         std::fs::create_dir_all(install.join("Binaries")).expect("create binaries");
-        std::fs::write(install.join("Binaries").join("Game.exe"), b"test").expect("create executable");
+        std::fs::write(install.join("Binaries").join("Game.exe"), b"test")
+            .expect("create executable");
         std::fs::write(
             manifests.join("game.item"),
             format!(
