@@ -1466,6 +1466,45 @@ mod tests {
         std::fs::remove_dir_all(root).expect("cleanup install");
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn launch_path_rejects_symlinks_that_escape_the_registered_install() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-launch-symlink-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create install");
+        let outside = root
+            .parent()
+            .expect("temporary directory has a parent")
+            .join(format!("amethys-launch-target-{}", std::process::id()));
+        std::fs::write(&outside, b"outside").expect("create external target");
+        let link = root.join("linked-game");
+        std::os::unix::fs::symlink(&outside, &link).expect("create escaping symlink");
+
+        let game = amethys_ipc::IpcGameEntry {
+            id: "game-id".into(),
+            name: "Example".into(),
+            platform: "Test".into(),
+            platform_id: None,
+            install_path: root.to_string_lossy().into_owned(),
+            executable: Some("linked-game".into()),
+        };
+
+        assert!(
+            super::resolve_launch_executable(&game).is_err(),
+            "an executable symlink resolving outside the install must be rejected"
+        );
+
+        std::fs::remove_file(link).expect("remove symlink");
+        std::fs::remove_file(outside).expect("remove external target");
+        std::fs::remove_dir_all(root).expect("remove install");
+    }
+
     #[test]
     fn explains_core_states_in_french() {
         assert_eq!(status_label(IpcCoreStatus::Running), "en fonctionnement");
