@@ -2,10 +2,11 @@
 //!
 //! Unix-domain sockets are used on Linux/macOS and named pipes on Windows.
 //! Unix sockets are restricted to the owning user (0600). Windows named-pipe
-//! access uses the process token's default security descriptor. Remote pipe
-//! clients are explicitly rejected and the number of pipe instances is capped;
-//! local-user access still depends on the inherited Windows DACL. A dedicated
-//! restrictive DACL is still required before multi-user isolation can be claimed.
+//! access currently uses the process token's default security descriptor. Remote
+//! pipe clients are rejected and client opens use identification-level QoS to
+//! prevent accidental server-side impersonation. Local-user access still depends
+//! on the inherited Windows DACL; a restrictive DACL remains required before
+//! multi-user isolation can be claimed.
 //! Callers must validate the peer's protocol and authorize every command.
 
 use crate::{AmethysError, ErrorCode};
@@ -198,7 +199,12 @@ pub async fn connect(
 /// Connects to a Windows named pipe, for example \\.\pipe\amethys-core.
 #[cfg(windows)]
 pub async fn connect(endpoint: impl AsRef<str>) -> Result<BoxedIpcStream, AmethysError> {
+    // SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION. Keep the client at
+    // identification level: opening a pipe must never grant the server an
+    // impersonation token capable of acting as this client.
+    const SECURITY_IDENTIFICATION_QOS: u32 = 0x0011_0000;
     tokio::net::windows::named_pipe::ClientOptions::new()
+        .security_qos_flags(SECURITY_IDENTIFICATION_QOS)
         .open(endpoint.as_ref())
         .map(|stream| Box::new(stream) as BoxedIpcStream)
         .map_err(io_error)
