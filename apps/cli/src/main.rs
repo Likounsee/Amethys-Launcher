@@ -499,9 +499,7 @@ fn is_safe_relative_executable(executable: &str) -> bool {
     };
     components
         .chain(std::iter::once(first))
-        .all(|component| {
-            !component.contains(':') && component != "." && component != ".."
-        })
+        .all(|component| !component.contains(':') && component != "." && component != "..")
 }
 
 /// Resolves a configured executable and guarantees it stays inside the registered install.
