@@ -1052,7 +1052,10 @@ mod tests {
             std::fs::remove_file(link).expect("remove symlink");
         }
 
-        assert_eq!(std::fs::read(&executable).expect("game file remains"), b"game");
+        assert_eq!(
+            std::fs::read(&executable).expect("game file remains"),
+            b"game"
+        );
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
