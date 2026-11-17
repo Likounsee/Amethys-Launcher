@@ -849,13 +849,7 @@ mod tests {
     fn platform_identity_lookup_rejects_invalid_input() {
         let (database, path) = temporary_database();
         let game = database
-            .add_game_with_platform_id(
-                "Example",
-                "Steam",
-                Some("570"),
-                "/games/example",
-                None,
-            )
+            .add_game_with_platform_id("Example", "Steam", Some("570"), "/games/example", None)
             .expect("game is added");
 
         assert_eq!(
@@ -866,8 +860,16 @@ mod tests {
         );
         assert!(database.get_game_by_platform_id("", "570").is_err());
         assert!(database.get_game_by_platform_id("Steam", " ").is_err());
-        assert!(database.get_game_by_platform_id("bad\\0platform", "570").is_err());
-        assert!(database.get_game_by_platform_id("Steam", "bad\\0id").is_err());
+        assert!(
+            database
+                .get_game_by_platform_id("bad\\0platform", "570")
+                .is_err()
+        );
+        assert!(
+            database
+                .get_game_by_platform_id("Steam", "bad\\0id")
+                .is_err()
+        );
         assert!(
             database
                 .get_game_by_platform_id(&"p".repeat(super::MAX_PLATFORM_NAME_BYTES + 1), "570")
