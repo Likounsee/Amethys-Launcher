@@ -47,4 +47,4 @@ A release candidate is not ready merely because compilation succeeded. Before pu
 
 macOS is temporarily out of scope for the 0.1 release because it cannot currently be tested on physical Apple hardware. Its development can resume when a suitable Mac test machine is available.
 
-Windows named-pipe access currently uses the creating process' default security descriptor. Do not describe the 0.1 IPC endpoint as isolated from other local Windows users until an explicit restrictive DACL and the corresponding security tests are implemented.
+Windows named-pipe access currently uses the Windows default named-pipe security descriptor: LocalSystem, administrators and the creator owner receive full control, while Everyone and anonymous users receive read access. Remote clients are rejected, but this is not an explicit per-user DACL. Do not claim that the 0.1 IPC endpoint is isolated from other local Windows users until a restrictive DACL and corresponding access-control tests are implemented.
