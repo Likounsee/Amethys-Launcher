@@ -36,7 +36,14 @@ fn resolve_data_directory(
     let _ = (&home, &xdg_data_home);
 
     if let Some(path) = override_path.filter(|value| !value.is_empty()) {
-        return Ok(PathBuf::from(path));
+        let path = PathBuf::from(path);
+        if !path.is_absolute() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "AMETHYS_DATA_DIR must be an absolute path",
+            ));
+        }
+        return Ok(path);
     }
 
     #[cfg(windows)]
@@ -312,6 +319,20 @@ mod tests {
             & 0o777;
         assert_eq!(mode, 0o700);
         std::fs::remove_dir(path).expect("temporary directory is removed");
+    }
+
+    #[test]
+    fn data_directory_rejects_a_relative_override() {
+        let error = resolve_data_directory(
+            Some(OsString::from("relative/amethys")),
+            Some(OsString::from("/unused/appdata")),
+            Some(OsString::from("/unused/local")),
+            Some(OsString::from("/unused/home")),
+            Some(OsString::from("/unused/xdg")),
+        )
+        .expect_err("relative data directory overrides must be rejected");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        assert!(error.to_string().contains("AMETHYS_DATA_DIR"));
     }
 
     #[test]
