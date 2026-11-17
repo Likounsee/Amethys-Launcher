@@ -23,6 +23,7 @@ COMMANDES:
     games import-all                  Importe les jeux détectés non encore enregistrés
     games verify [--json]             Vérifie les chemins sans modifier les installations
     games launch <id>                 Démarre un exécutable configuré et vérifié
+    games set-executable <id> <chemin> Configure l'exécutable d'un jeu importé
     games add <nom> <plateforme> <dossier> [exécutable]
     games remove <id>                 Retire un jeu de la bibliothèque Amethys
 
@@ -107,8 +108,16 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
         [group, action, id] if group == "games" && action == "remove" => {
             Ok(IpcCommand::RemoveGame { id: id.clone() })
         }
+        [group, action, id, executable]
+            if group == "games" && action == "set-executable" =>
+        {
+            Ok(IpcCommand::SetGameExecutable {
+                id: id.clone(),
+                executable: executable.clone(),
+            })
+        }
         _ => Err(
-            "Utilisation : amethysctl games add <nom> <plateforme> <dossier> [executable] | games remove <id> | games scan | games import <appid> | games import <plateforme> <id> | games import-all | games verify [--json]",
+            "Utilisation : amethysctl games add <nom> <plateforme> <dossier> [executable] | games set-executable <id> <chemin> | games remove <id> | games scan | games import <appid> | games import <plateforme> <id> | games import-all | games verify [--json]",
         ),
     }
 }
@@ -618,8 +627,11 @@ async fn launch_saved_game(id: &str) -> Result<(), Box<dyn Error>> {
     let executable = resolve_launch_executable(game)
         .map_err(|error| format!("Impossible de démarrer « {} » : {error}", game.name))?;
 
+    let install_root = std::path::Path::new(&game.install_path)
+        .canonicalize()
+        .map_err(|error| format!("Dossier du jeu indisponible : {error}"))?;
     let child = std::process::Command::new(&executable)
-        .current_dir(&game.install_path)
+        .current_dir(&install_root)
         .spawn()
         .map_err(|error| format!("Le système n'a pas pu démarrer le jeu : {error}"))?;
     println!(
@@ -721,6 +733,23 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if let [group, action, id] = arguments.as_slice() {
         if group == "games" && action == "launch" {
             return launch_saved_game(id).await;
+        }
+    }
+    if let [group, action, id, executable] = arguments.as_slice() {
+        if group == "games" && action == "set-executable" {
+            let response = request_core(IpcCommand::SetGameExecutable {
+                id: id.clone(),
+                executable: executable.clone(),
+            })
+            .await?;
+            return match response.result {
+                Ok(IpcResponsePayload::GameAdded { game }) => {
+                    println!("Exécutable configuré pour {}.", game.name);
+                    Ok(())
+                }
+                Err(error) => Err(format!("Configuration impossible ({}): {}", error.code, error.message).into()),
+                Ok(_) => Err("Réponse inattendue du cœur Amethys.".into()),
+            };
         }
     }
     if arguments.as_slice() == ["games", "import-all"] {
@@ -1233,6 +1262,18 @@ mod tests {
         assert!(parse_command(None).is_err());
         assert!(parse_command(Some("launch")).is_err());
         assert!(parse_arguments(&["games".into(), "launch".into()]).is_err());
+        assert_eq!(
+            parse_arguments(&[
+                "games".into(),
+                "set-executable".into(),
+                "game-id".into(),
+                "bin/game".into(),
+            ]),
+            Ok(IpcCommand::SetGameExecutable {
+                id: "game-id".into(),
+                executable: "bin/game".into(),
+            })
+        );
     }
 
     #[test]
