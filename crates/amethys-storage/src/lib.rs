@@ -295,11 +295,12 @@ impl Database {
         platform: &str,
         platform_id: &str,
     ) -> Result<Option<GameEntry>, AmethysError> {
+        let (platform, platform_id) = validate_platform_identity(platform, platform_id)?;
         self.connection
             .query_row(
                 "SELECT id, name, platform, platform_id, install_path, executable, added_at
              FROM games WHERE platform = ?1 COLLATE NOCASE AND platform_id = ?2",
-                params![platform.trim(), platform_id.trim()],
+                params![platform, platform_id],
                 game_from_row,
             )
             .optional()
@@ -468,6 +469,35 @@ fn validate_game_id(id: &str) -> Result<&str, AmethysError> {
         )));
     }
     Ok(id)
+}
+
+fn validate_platform_identity<'a>(
+    platform: &'a str,
+    platform_id: &'a str,
+) -> Result<(&'a str, &'a str), AmethysError> {
+    let platform = platform.trim();
+    let platform_id = platform_id.trim();
+    if platform.is_empty() || platform_id.is_empty() {
+        return Err(storage_error(
+            "Platform name and platform game ID must not be empty.",
+        ));
+    }
+    if platform.contains('\0') || platform_id.contains('\0') {
+        return Err(storage_error(
+            "Platform identity must not contain NUL characters.",
+        ));
+    }
+    if platform.len() > MAX_PLATFORM_NAME_BYTES {
+        return Err(storage_error(format!(
+            "Platform name exceeds the {MAX_PLATFORM_NAME_BYTES}-byte limit."
+        )));
+    }
+    if platform_id.len() > MAX_PLATFORM_ID_BYTES {
+        return Err(storage_error(format!(
+            "Platform game ID exceeds the {MAX_PLATFORM_ID_BYTES}-byte limit."
+        )));
+    }
+    Ok((platform, platform_id))
 }
 
 fn validate_setting_key(key: &str) -> Result<&str, AmethysError> {
@@ -816,6 +846,52 @@ mod tests {
     }
 
     #[test]
+    fn platform_identity_lookup_rejects_invalid_input() {
+        let (database, path) = temporary_database();
+        let game = database
+            .add_game_with_platform_id(
+                "Example",
+                "Steam",
+                Some("570"),
+                "/games/example",
+                None,
+            )
+            .expect("game is added");
+
+        assert_eq!(
+            database
+                .get_game_by_platform_id(" Steam ", " 570 ")
+                .expect("trimmed identity lookup succeeds"),
+            Some(game)
+        );
+        assert!(database.get_game_by_platform_id("", "570").is_err());
+        assert!(database.get_game_by_platform_id("Steam", " ").is_err());
+        assert!(database.get_game_by_platform_id("bad\\0platform", "570").is_err());
+        assert!(database.get_game_by_platform_id("Steam", "bad\\0id").is_err());
+        assert!(
+            database
+                .get_game_by_platform_id(
+                    &"p".repeat(super::MAX_PLATFORM_NAME_BYTES + 1),
+                    "570"
+                )
+                .is_err()
+        );
+        assert!(
+            database
+                .get_game_by_platform_id(
+                    "Steam",
+                    &"i".repeat(super::MAX_PLATFORM_ID_BYTES + 1)
+                )
+                .is_err()
+        );
+
+        drop(database);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[test]
     fn database_uses_full_synchronous_commits_for_durability() {
         let (database, path) = temporary_database();
         let synchronous: i64 = database
@@ -877,16 +953,22 @@ mod tests {
                 .is_some()
         );
         assert!(
-            database
-                .get_game("")
-                .is_err(),
+            database.get_game("").is_err(),
             "empty identifiers must be rejected"
         );
         assert!(database.get_game("bad\0id").is_err());
-        assert!(database.get_game(&"x".repeat(super::MAX_GAME_ID_BYTES + 1)).is_err());
+        assert!(
+            database
+                .get_game(&"x".repeat(super::MAX_GAME_ID_BYTES + 1))
+                .is_err()
+        );
         assert!(database.remove_game(" ").is_err());
         assert!(database.remove_game("bad\0id").is_err());
-        assert!(database.remove_game(&"x".repeat(super::MAX_GAME_ID_BYTES + 1)).is_err());
+        assert!(
+            database
+                .remove_game(&"x".repeat(super::MAX_GAME_ID_BYTES + 1))
+                .is_err()
+        );
 
         drop(database);
         let _ = std::fs::remove_file(&path);
