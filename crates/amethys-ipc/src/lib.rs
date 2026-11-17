@@ -31,6 +31,8 @@ pub enum IpcCommand {
         install_path: String,
         executable: Option<String>,
     },
+    /// Configures the executable path for a game already in the library.
+    SetGameExecutable { id: String, executable: String },
     /// Removes a game by its identifier.
     RemoveGame { id: String },
 }
@@ -178,6 +180,7 @@ pub fn dispatch_request_with_games(
         },
         IpcCommand::AddGame { .. }
         | IpcCommand::AddDetectedGame { .. }
+        | IpcCommand::SetGameExecutable { .. }
         | IpcCommand::RemoveGame { .. } => {
             return IpcResponse::failure(
                 request.request_id,
