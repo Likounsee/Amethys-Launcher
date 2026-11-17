@@ -1418,6 +1418,28 @@ mod tests {
     }
 
     #[test]
+    fn relative_executable_validation_rejects_cross_platform_traversal() {
+        assert!(super::is_safe_relative_executable("bin/game.exe"));
+        assert!(super::is_safe_relative_executable("game"));
+        for invalid in [
+            "",
+            ".",
+            "./game",
+            "../outside",
+            r"..\outside",
+            r"C:\outside\game.exe",
+            r"\\server\share\game.exe",
+            "bin/../outside",
+            "bin:alternate/game",
+        ] {
+            assert!(
+                !super::is_safe_relative_executable(invalid),
+                "unsafe executable path should be rejected: {invalid:?}"
+            );
+        }
+    }
+
+    #[test]
     fn launch_path_must_resolve_inside_the_registered_install() {
         let root = std::env::temp_dir().join(format!(
             "amethys-launch-{}-{}",
