@@ -346,7 +346,7 @@ impl Database {
                 "Game ID and executable path must not be empty.",
             ));
         }
-        if executable.contains('\\0') {
+        if executable.contains('\0') {
             return Err(storage_error(
                 "Executable paths must not contain NUL characters.",
             ));
