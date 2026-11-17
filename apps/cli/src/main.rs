@@ -369,7 +369,7 @@ fn supported_platforms() -> &'static [&'static str] {
     }
     #[cfg(target_os = "macos")]
     {
-        &["Steam", "Heroic", "GOG Galaxy"]
+        &["Steam", "Epic Games", "Heroic", "GOG Galaxy"]
     }
     #[cfg(target_os = "linux")]
     {
