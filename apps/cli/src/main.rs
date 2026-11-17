@@ -22,6 +22,7 @@ COMMANDES:
     games import <plateforme> <id>    Importe un jeu détecté par plateforme et ID
     games import-all                  Importe les jeux détectés non encore enregistrés
     games verify [--json]             Vérifie les chemins sans modifier les installations
+    games launch <id>                 Démarre un exécutable configuré et vérifié
     games add <nom> <plateforme> <dossier> [exécutable]
     games remove <id>                 Retire un jeu de la bibliothèque Amethys
 
@@ -499,6 +500,42 @@ fn is_safe_relative_executable(executable: &str) -> bool {
             .any(|component| component == "." || component == "..")
 }
 
+/// Resolves a configured executable and guarantees it stays inside the registered install.
+fn resolve_launch_executable(
+    game: &amethys_ipc::IpcGameEntry,
+) -> Result<std::path::PathBuf, String> {
+    let executable = game
+        .executable
+        .as_deref()
+        .ok_or_else(|| "Aucun exécutable n'est configuré pour ce jeu.".to_owned())?;
+    let root = std::path::Path::new(&game.install_path)
+        .canonicalize()
+        .map_err(|error| format!("Dossier du jeu indisponible : {error}"))?;
+    if !root.is_dir() {
+        return Err("Le chemin d'installation n'est pas un dossier.".to_owned());
+    }
+
+    let candidate = std::path::Path::new(executable);
+    let candidate = if candidate.is_absolute() {
+        candidate.to_path_buf()
+    } else {
+        if !is_safe_relative_executable(executable) {
+            return Err("Chemin d'exécutable relatif non sûr.".to_owned());
+        }
+        root.join(candidate)
+    };
+    let resolved = candidate
+        .canonicalize()
+        .map_err(|error| format!("Exécutable introuvable ou inaccessible : {error}"))?;
+    if !resolved.starts_with(&root) {
+        return Err("L'exécutable se trouve en dehors du dossier du jeu ; démarrage refusé.".to_owned());
+    }
+    if !resolved.is_file() {
+        return Err("Le chemin configuré ne désigne pas un fichier exécutable.".to_owned());
+    }
+    Ok(resolved)
+}
+
 fn inspect_game_executable(game: &amethys_ipc::IpcGameEntry) -> Option<PathCheck> {
     let executable = game.executable.as_deref()?;
     let executable_path = std::path::Path::new(executable);
@@ -569,6 +606,31 @@ fn json_verify_summary(
         "issues": issues,
         "games": games,
     })
+}
+
+async fn launch_saved_game(id: &str) -> Result<(), Box<dyn Error>> {
+    if id.trim().is_empty() {
+        return Err("Indique l'identifiant du jeu : amethysctl games launch <id>.".into());
+    }
+    let games = load_saved_games().await?;
+    let game = games
+        .iter()
+        .find(|game| game.id == id)
+        .ok_or_else(|| "Aucun jeu ne correspond à cet identifiant.".to_owned())?;
+    let executable = resolve_launch_executable(game).map_err(|error| {
+        format!("Impossible de démarrer « {} » : {error}", game.name)
+    })?;
+
+    let child = std::process::Command::new(&executable)
+        .current_dir(&game.install_path)
+        .spawn()
+        .map_err(|error| format!("Le système n'a pas pu démarrer le jeu : {error}"))?;
+    println!(
+        "Démarrage demandé : {} (processus {}).",
+        game.name,
+        child.id()
+    );
+    Ok(())
 }
 
 async fn verify_saved_games(json_output: bool) -> Result<(), Box<dyn Error>> {
@@ -658,6 +720,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
     if arguments.len() >= 2 && arguments[0] == "games" && arguments[1] == "search" {
         return search_library(&arguments[2..].join(" ")).await;
+    }
+    if let [group, action, id] = arguments.as_slice() {
+        if group == "games" && action == "launch" {
+            return launch_saved_game(id).await;
+        }
     }
     if arguments.as_slice() == ["games", "import-all"] {
         return import_detected_games(amethys_discovery::discover_all_games()).await;
@@ -1168,6 +1235,50 @@ mod tests {
     fn rejects_missing_or_unknown_commands() {
         assert!(parse_command(None).is_err());
         assert!(parse_command(Some("launch")).is_err());
+        assert!(parse_arguments(&["games".into(), "launch".into()]).is_err());
+    }
+
+    #[test]
+    fn launch_path_must_resolve_inside_the_registered_install() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-launch-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create install");
+        let executable = root.join(if cfg!(windows) { "game.exe" } else { "game" });
+        std::fs::write(&executable, b"test executable").expect("create executable");
+        let game = amethys_ipc::IpcGameEntry {
+            id: "game-id".into(),
+            name: "Example".into(),
+            platform: "Test".into(),
+            platform_id: None,
+            install_path: root.to_string_lossy().into_owned(),
+            executable: Some(executable.file_name().unwrap().to_string_lossy().into_owned()),
+        };
+        assert_eq!(
+            super::resolve_launch_executable(&game).expect("safe executable resolves"),
+            executable.canonicalize().expect("canonical executable")
+        );
+
+        let mut traversal = game.clone();
+        traversal.executable = Some("../outside".into());
+        assert!(super::resolve_launch_executable(&traversal).is_err());
+
+        let outside = root.parent().expect("parent").join(format!(
+            "amethys-outside-{}",
+            std::process::id()
+        ));
+        std::fs::write(&outside, b"outside").expect("create outside file");
+        let mut absolute_outside = game.clone();
+        absolute_outside.executable = Some(outside.to_string_lossy().into_owned());
+        assert!(super::resolve_launch_executable(&absolute_outside).is_err());
+
+        std::fs::remove_file(outside).expect("remove outside fixture");
+        std::fs::remove_dir_all(root).expect("cleanup install");
     }
 
     #[test]
