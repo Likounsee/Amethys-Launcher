@@ -260,11 +260,7 @@ fn parse_steam_registry_output(output: &str) -> Option<PathBuf> {
 /// environment state. This keeps Linux distro/Flatpak and macOS path rules
 /// independently testable on every CI host.
 #[cfg(any(target_os = "linux", target_os = "macos", test))]
-fn unix_steam_roots(
-    home: &Path,
-    xdg_data_home: Option<&Path>,
-    target_os: &str,
-) -> Vec<PathBuf> {
+fn unix_steam_roots(home: &Path, xdg_data_home: Option<&Path>, target_os: &str) -> Vec<PathBuf> {
     if !is_absolute_metadata_path(home) {
         return Vec::new();
     }
@@ -319,7 +315,11 @@ pub fn steam_install_roots() -> Vec<PathBuf> {
         let xdg_data_home = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from);
         #[cfg(target_os = "macos")]
         let xdg_data_home: Option<PathBuf> = None;
-        roots.extend(unix_steam_roots(&home, xdg_data_home.as_deref(), std::env::consts::OS));
+        roots.extend(unix_steam_roots(
+            &home,
+            xdg_data_home.as_deref(),
+            std::env::consts::OS,
+        ));
     }
 
     roots
@@ -1919,12 +1919,14 @@ mod tests {
 
     #[test]
     fn unix_steam_roots_reject_relative_home_and_xdg_paths() {
-        assert!(super::unix_steam_roots(
-            std::path::Path::new("relative/home"),
-            Some(std::path::Path::new("relative/data")),
-            "linux",
-        )
-        .is_empty());
+        assert!(
+            super::unix_steam_roots(
+                std::path::Path::new("relative/home"),
+                Some(std::path::Path::new("relative/data")),
+                "linux",
+            )
+            .is_empty()
+        );
         let roots = super::unix_steam_roots(
             std::path::Path::new("/home/player"),
             Some(std::path::Path::new("relative/data")),
