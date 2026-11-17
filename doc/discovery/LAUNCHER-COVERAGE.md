@@ -7,7 +7,7 @@ Amethys performs read-only discovery from local launcher metadata. A launcher be
 | Service | Detection source | Status |
 |---|---|---|
 | Steam | Steam library folders and app manifests; native Windows/macOS/Linux roots, Linux Flatpak root and custom XDG data root | Implemented |
-| Epic Games Launcher | Epic .item manifests | Implemented |
+| Epic Games Launcher | Epic .item manifests; Windows ProgramData and macOS per-user Application Support roots | Implemented on Windows/macOS; Linux uses Heroic/Legendary metadata |
 | Heroic / Legendary | installed.json | Implemented |
 | GOG Galaxy | Local installed-product database, opened read-only | Implemented |
 | Amazon Games | Local launcher database, opened read-only | Implemented |
