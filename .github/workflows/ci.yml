@@ -73,6 +73,28 @@ jobs:
             if ($LASTEXITCODE -ne 0 -or $scan.schema_version -ne 1 -or $scan.read_only -ne $true) {
               throw "CLI JSON scan did not return the expected read-only schema."
             }
+
+            $installDir = Join-Path $dataDir "Smoke Game"
+            New-Item -ItemType Directory -Force (Join-Path $installDir "bin") | Out-Null
+            Set-Content -Path (Join-Path $installDir "bin/game.exe") -Value "smoke"
+            $addOutput = & "$PWD/target/release/amethysctl.exe" games add "Smoke Game" "CI" $installDir
+            if ($LASTEXITCODE -ne 0) { throw "CLI game add failed." }
+            if ($addOutput -notmatch 'identifiant : ([^)]+)') { throw "CLI game add did not return a game ID." }
+            $gameId = $Matches[1]
+            & "$PWD/target/release/amethysctl.exe" games set-executable $gameId "bin/game.exe"
+            if ($LASTEXITCODE -ne 0) { throw "CLI executable configuration failed." }
+            $search = & "$PWD/target/release/amethysctl.exe" games search "smoke game"
+            if ($LASTEXITCODE -ne 0 -or ($search -join " ") -notmatch "Smoke Game") { throw "CLI game search failed." }
+            & "$PWD/target/release/amethysctl.exe" games list --platform CI
+            if ($LASTEXITCODE -ne 0) { throw "CLI platform-filtered game list failed." }
+            $populatedVerify = & "$PWD/target/release/amethysctl.exe" games verify --json | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0 -or $populatedVerify.total_games -ne 1 -or $populatedVerify.healthy -ne 1 -or $populatedVerify.games[0].executable_status -ne "available") {
+              throw "CLI verification did not recognize the healthy smoke-test installation."
+            }
+            & "$PWD/target/release/amethysctl.exe" games remove $gameId
+            if ($LASTEXITCODE -ne 0) { throw "CLI game removal failed." }
+            $finalVerify = & "$PWD/target/release/amethysctl.exe" games verify --json | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0 -or $finalVerify.total_games -ne 0) { throw "CLI game removal did not clear the library." }
           }
           finally {
             if (-not $agent.HasExited) { Stop-Process -Id $agent.Id -Force }
@@ -116,6 +138,22 @@ jobs:
           printf '%s' "$verify_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["schema_version"] == 2 and d["read_only"] is True and d["total_games"] == 0 and d["issues"] == 0'
           scan_json="$(target/release/amethysctl games scan --json)"
           printf '%s' "$scan_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["schema_version"] == 1 and d["read_only"] is True'
+
+          install_dir="$data_dir/Smoke Game"
+          mkdir -p "$install_dir/bin"
+          printf 'smoke' > "$install_dir/bin/game"
+          add_output="$(target/release/amethysctl games add "Smoke Game" CI "$install_dir")"
+          game_id="$(printf '%s' "$add_output" | sed -n 's/.*identifiant : \([^)]*\).*/\1/p')"
+          if [ -z "$game_id" ]; then echo "CLI game add did not return a game ID."; exit 1; fi
+          target/release/amethysctl games set-executable "$game_id" bin/game
+          search_output="$(target/release/amethysctl games search "smoke game")"
+          printf '%s' "$search_output" | grep -q "Smoke Game"
+          target/release/amethysctl games list --platform CI
+          populated_verify="$(target/release/amethysctl games verify --json)"
+          printf '%s' "$populated_verify" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["total_games"] == 1 and d["healthy"] == 1 and d["games"][0]["executable_status"] == "available"'
+          target/release/amethysctl games remove "$game_id"
+          final_verify="$(target/release/amethysctl games verify --json)"
+          printf '%s' "$final_verify" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["total_games"] == 0'
       - name: Smoke-test Windows release archive
         if: runner.os == 'Windows'
         shell: pwsh
