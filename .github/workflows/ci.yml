@@ -42,6 +42,65 @@ jobs:
           cargo run --release -p amethys-cli --bin amethysctl -- --version
           cargo run --release -p amethys-cli --bin amethysctl -- --help
 
+      - name: Smoke-test Windows agent and CLI IPC
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $dataDir = Join-Path $env:RUNNER_TEMP ("amethys-smoke-" + [guid]::NewGuid())
+          New-Item -ItemType Directory -Force $dataDir | Out-Null
+          $env:AMETHYS_DATA_DIR = $dataDir
+          $agent = Start-Process -FilePath "$PWD/target/release/amethys-agent.exe" -PassThru -NoNewWindow
+          try {
+            $ready = $false
+            for ($attempt = 0; $attempt -lt 30; $attempt++) {
+              if ($agent.HasExited) { throw "Amethys agent exited during startup (code $($agent.ExitCode))." }
+              & "$PWD/target/release/amethysctl.exe" ping *> $null
+              if ($LASTEXITCODE -eq 0) { $ready = $true; break }
+              Start-Sleep -Seconds 1
+            }
+            if (-not $ready) { throw "Amethys agent did not become ready within 30 seconds." }
+            & "$PWD/target/release/amethysctl.exe" status
+            if ($LASTEXITCODE -ne 0) { throw "CLI status request failed." }
+            & "$PWD/target/release/amethysctl.exe" games
+            if ($LASTEXITCODE -ne 0) { throw "CLI game-list request failed." }
+          }
+          finally {
+            if (-not $agent.HasExited) { Stop-Process -Id $agent.Id -Force }
+            Wait-Process -Id $agent.Id -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $dataDir -Recurse -Force -ErrorAction SilentlyContinue
+          }
+      - name: Smoke-test Linux agent and CLI IPC
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          data_dir="$(mktemp -d)"
+          export AMETHYS_DATA_DIR="$data_dir"
+          target/release/amethys-agent &
+          agent_pid=$!
+          cleanup() {
+            kill "$agent_pid" 2>/dev/null || true
+            wait "$agent_pid" 2>/dev/null || true
+            rm -rf "$data_dir"
+          }
+          trap cleanup EXIT
+          ready=false
+          for attempt in $(seq 1 30); do
+            if ! kill -0 "$agent_pid" 2>/dev/null; then
+              echo "Amethys agent exited during startup."
+              exit 1
+            fi
+            if target/release/amethysctl ping >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            echo "Amethys agent did not become ready within 30 seconds."
+            exit 1
+          fi
+          target/release/amethysctl status
+          target/release/amethysctl games
       - name: Smoke-test Windows release archive
         if: runner.os == 'Windows'
         shell: pwsh
