@@ -30,25 +30,30 @@ The project is at **Core Foundation 0.1**. The Rust foundation is being built al
 1. Rust workspace and project conventions.
 2. Core runtime and lifecycle.
 3. Typed internal event system.
-6. Cross-platform IPC protocol foundation.
-7. Module, task and worker management foundations.
-8. SQLite storage and configuration.
-9. Structured logging, error codes and diagnostics.
-10. Read-only discovery of installed games from multiple PC launchers.
+4. Cross-platform IPC protocol foundation.
+5. Module, task and worker management foundations.
+6. SQLite storage and configuration.
+7. Structured logging, error codes and diagnostics.
+8. Read-only discovery of installed games from multiple PC launchers.
+9. Explicit import, local library management and read-only path verification.
+10. Cross-platform CI and release archive generation.
 
-The desktop GUI, Amethys online store/catalogue, downloads, save synchronization and account system are intentionally out of scope for this foundation stage. Local game discovery is a separate feature and is part of the current development.
+The desktop GUI, Amethys online store/catalogue, downloads, save synchronization and account system are intentionally out of scope for this foundation stage.
 
-## Repository structure
+## Build and test
 
-- `apps/` — executable applications (CLI and agent).
-- `crates/` — reusable Rust components.
-- `doc/` — project documentation, technical references and assets.
-- `.github/workflows/` — GitHub Actions CI workflows.
-- `.github/ISSUE_TEMPLATE/` — community Issue templates.
+Install the stable Rust toolchain with the `rustfmt` and `clippy` components, then run:
 
-The files kept at the repository root are the essential entry points and build configuration: `README.md`, `LICENSE`, `Cargo.toml`, `rust-toolchain.toml` and `.gitignore`.
+```sh
+cargo fmt --all -- --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo build --workspace
+cargo test --workspace --all-targets
+```
 
-See [the documentation index](doc/README.md) for the full guide.
+The CI workflow runs these quality checks on Windows, Linux and macOS.
+
+See [the documentation index](doc/README.md) for technical details, including [builds and releases](doc/technical/RELEASES.md).
 
 ## Ownership, contributions and rewards
 

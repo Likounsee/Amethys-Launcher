@@ -10,6 +10,8 @@ project overview and [LICENSE](../LICENSE) for usage and ownership terms.
   endpoints and security considerations.
 - [Game discovery](technical/game-discovery.md) — supported launchers,
   detection methods, identifier rules and current limitations.
+- [Builds and releases](technical/RELEASES.md) — release targets, archive
+  contents, first-run procedure and publication checklist.
 
 ## Community
 
@@ -26,5 +28,6 @@ project overview and [LICENSE](../LICENSE) for usage and ownership terms.
 ## CI
 
 GitHub Actions workflows must remain in `.github/workflows/` for GitHub to
-discover and execute them. The current cross-platform checks are defined in
-[ci.yml](../.github/workflows/ci.yml).
+discover and execute them. The cross-platform checks are defined in
+[ci.yml](../.github/workflows/ci.yml); release packaging is defined in
+[release.yml](../.github/workflows/release.yml).
