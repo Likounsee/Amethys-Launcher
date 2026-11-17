@@ -882,10 +882,10 @@ mod tests {
                 .is_err(),
             "empty identifiers must be rejected"
         );
-        assert!(database.get_game("bad\\0id").is_err());
+        assert!(database.get_game("bad\0id").is_err());
         assert!(database.get_game(&"x".repeat(super::MAX_GAME_ID_BYTES + 1)).is_err());
         assert!(database.remove_game(" ").is_err());
-        assert!(database.remove_game("bad\\0id").is_err());
+        assert!(database.remove_game("bad\0id").is_err());
         assert!(database.remove_game(&"x".repeat(super::MAX_GAME_ID_BYTES + 1)).is_err());
 
         drop(database);
