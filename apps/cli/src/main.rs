@@ -1117,14 +1117,12 @@ mod tests {
         assert_eq!(missing["games"][0]["executable_status"], "missing");
         assert_eq!(missing["games"][0]["healthy"], false);
 
-        let outside = root.parent().expect("parent").join(format!(
-            "amethys-verify-outside-{}.exe",
-            std::process::id()
-        ));
+        let outside = root
+            .parent()
+            .expect("parent")
+            .join(format!("amethys-verify-outside-{}.exe", std::process::id()));
         std::fs::write(&outside, b"outside").expect("create outside executable");
-        let external = super::build_verify_report(&[make_game(
-            &outside.to_string_lossy(),
-        )]);
+        let external = super::build_verify_report(&[make_game(&outside.to_string_lossy())]);
         assert_eq!(external["games"][0]["executable_status"], "invalid_path");
         assert_eq!(external["games"][0]["healthy"], false);
         std::fs::remove_file(&outside).expect("remove outside executable");
