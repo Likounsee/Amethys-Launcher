@@ -208,13 +208,14 @@ async fn list_games_for_platform(platform: &str) -> Result<(), Box<dyn Error>> {
     );
     for game in matches {
         println!(
-            "- {}{} — {}",
+            "- {}{} — {} — ID interne : {}",
             game.name,
             game.platform_id
                 .as_deref()
                 .map(|id| format!(" — ID {id}"))
                 .unwrap_or_default(),
-            game.install_path
+            game.install_path,
+            game.id
         );
     }
     Ok(())
@@ -266,7 +267,7 @@ async fn search_library(query: &str) -> Result<(), Box<dyn Error>> {
     println!("{} résultat(s) pour « {} » :", matches.len(), query.trim());
     for game in matches {
         println!(
-            "- {} ({}){} — {}",
+            "- {} ({}){} — {} — ID interne : {}",
             game.name,
             game.platform,
             game.platform_id
@@ -274,6 +275,7 @@ async fn search_library(query: &str) -> Result<(), Box<dyn Error>> {
                 .map(|id| format!(" — ID {id}"))
                 .unwrap_or_default(),
             game.install_path,
+            game.id,
         );
     }
     Ok(())
@@ -844,14 +846,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 println!("Jeux enregistrés :");
                 for game in games {
                     println!(
-                        "- {} ({}){} — {}",
+                        "- {} ({}){} — {} — ID interne : {}",
                         game.name,
                         game.platform,
                         game.platform_id
                             .as_deref()
                             .map(|id| format!(" — ID {id}"))
                             .unwrap_or_default(),
-                        game.install_path
+                        game.install_path,
+                        game.id
                     );
                 }
             }
