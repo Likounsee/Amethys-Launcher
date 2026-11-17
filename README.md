@@ -3,7 +3,7 @@
 <p align="center">
   <a href="https://github.com/Likounsee/Amethys-Launcher/actions/workflows/ci.yml"><img src="https://github.com/Likounsee/Amethys-Launcher/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <img src="https://img.shields.io/badge/Rust-2024-orange?logo=rust" alt="Rust 2024">
-  <img src="https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux%20%7C%20macOS-blue" alt="Windows, Linux and macOS">
+  <img src="https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux-blue" alt="Windows, Linux and macOS">
 </p>
 
 A free, community-driven, cross-platform game library and launcher client.
@@ -16,7 +16,7 @@ The project is at **Core Foundation 0.1**. The Rust foundation is being built al
 
 ## Principles
 
-- Windows, Linux and macOS are first-class targets.
+- Windows and Linux are the supported targets for version 0.1. macOS development is paused until a Mac test machine is available.
 - The core remains independent from any graphical interface.
 - Official platform APIs and permitted mechanisms only; no DRM, licensing, authentication or anti-cheat circumvention.
 - SQLite is the initial local database.
@@ -51,7 +51,7 @@ cargo build --workspace
 cargo test --workspace --all-targets
 ```
 
-The CI workflow runs these quality checks on Windows, Linux and macOS.
+The CI workflow runs these quality checks on Windows and Linux.
 
 See [the documentation index](doc/README.md) for technical details, including [builds and releases](doc/technical/RELEASES.md).
 
