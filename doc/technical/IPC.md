@@ -26,6 +26,7 @@ client can verify that a response belongs to its request.
   Search is local to the Amethys library and does not query online services.
 - `games add <name> <platform> <install-path> [executable]`: manually adds
   a game without a source-platform identifier.
+- `games set-executable <id> <path>`: configures the executable path for an imported game. The path is stored as metadata only; it is canonicalized and constrained to the registered installation directory when launch is requested.
 - `games remove <id>`: removes a game from the Amethys library only.
 - `games import <platform> <platform-id>`: imports one detected installation
   and stores its original platform-specific identifier.
@@ -36,6 +37,7 @@ client can verify that a response belongs to its request.
   without importing them automatically.
 - `games verify`: checks whether each saved installation path exists; it never
   modifies or repairs installed game files.
+- `games launch <id>`: starts the configured executable directly, without a shell. Launch is refused if the executable is missing, cannot be resolved, or resolves outside the registered installation directory.
 
 The storage-aware agent handles game creation, listing and removal. A detected
 game's platform ID is scoped to its source platform; identical IDs from two
