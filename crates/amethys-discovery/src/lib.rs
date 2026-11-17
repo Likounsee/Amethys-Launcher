@@ -1736,7 +1736,34 @@ pub fn scan_riot_client_installs(installs_json: &Path) -> Vec<DetectedGame> {
 fn parse_yaml_scalar(raw: &str) -> Option<String> {
     let value = raw.trim();
     if value.starts_with('"') {
-        return serde_json::from_str::<String>(value).ok();
+        let inner = value.strip_prefix('"')?.strip_suffix('"')?;
+        let mut output = String::with_capacity(inner.len());
+        let mut chars = inner.chars();
+        while let Some(character) = chars.next() {
+            if character != '\\\\' {
+                if character == '"' {
+                    return None;
+                }
+                output.push(character);
+                continue;
+            }
+            match chars.next() {
+                // YAML escapes recognized here; preserve unknown backslash
+                // sequences because Riot metadata commonly contains raw
+                // Windows paths such as C:\\Riot Games\\VALORANT.
+                Some('\\\\') => output.push('\\\\'),
+                Some('"') => output.push('"'),
+                Some('n') => output.push('\\n'),
+                Some('r') => output.push('\\r'),
+                Some('t') => output.push('\\t'),
+                Some(other) => {
+                    output.push('\\\\');
+                    output.push(other);
+                }
+                None => return None,
+            }
+        }
+        return Some(output);
     }
     if value.starts_with('\'') {
         let inner = value.strip_prefix('\'')?.strip_suffix('\'')?;
@@ -4287,6 +4314,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         assert_eq!(
             super::parse_yaml_scalar(r#""C:\\Riot Games\\VALORANT""#),
             Some(r"C:\Riot Games\VALORANT".to_owned())
+        );
+        assert_eq!(
+            super::parse_yaml_scalar(r#""C:\\Riot Games\\VALORANT""#),
+            Some(r"C:\\Riot Games\\VALORANT".to_owned())
         );
         assert_eq!(
             super::parse_yaml_scalar("'C:/Riot Games/Player''s VALORANT'"),
