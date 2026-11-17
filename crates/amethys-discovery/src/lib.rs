@@ -2143,8 +2143,12 @@ mod tests {
     #[test]
     fn epic_manifest_roots_reject_relative_environment_paths_and_skip_linux_launcher() {
         assert!(
-            super::epic_manifest_roots_for("windows", None, Some(Path::new("relative/ProgramData")),)
-                .is_empty()
+            super::epic_manifest_roots_for(
+                "windows",
+                None,
+                Some(Path::new("relative/ProgramData")),
+            )
+            .is_empty()
         );
         assert!(
             super::epic_manifest_roots_for("macos", Some(Path::new("relative/home")), None,)
