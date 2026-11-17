@@ -1153,18 +1153,27 @@ mod tests {
 
     #[test]
     fn verification_rejects_relative_executable_path_traversal() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-verify-traversal-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create installation root");
         let game = |executable: &str| amethys_ipc::IpcGameEntry {
             id: "game-path".to_owned(),
             name: "Example".to_owned(),
             platform: "Test".to_owned(),
             platform_id: None,
-            install_path: "C:/Games/Example".to_owned(),
+            install_path: root.to_string_lossy().into_owned(),
             executable: Some(executable.to_owned()),
         };
 
         for unsafe_path in [
             "../outside.exe",
-            r"..\outside.exe",
+            r"..\\outside.exe",
             "bin/../../outside.exe",
             r"C:outside.exe",
         ] {
@@ -1175,6 +1184,7 @@ mod tests {
             );
         }
         assert!(super::is_safe_relative_executable("bin/game.exe"));
+        std::fs::remove_dir_all(root).expect("remove installation root");
     }
 
     #[test]
