@@ -524,7 +524,9 @@ fn resolve_launch_executable(
         .canonicalize()
         .map_err(|error| format!("Exécutable introuvable ou inaccessible : {error}"))?;
     if !resolved.starts_with(&root) {
-        return Err("L'exécutable se trouve en dehors du dossier du jeu ; démarrage refusé.".to_owned());
+        return Err(
+            "L'exécutable se trouve en dehors du dossier du jeu ; démarrage refusé.".to_owned(),
+        );
     }
     if !resolved.is_file() {
         return Err("Le chemin configuré ne désigne pas un fichier exécutable.".to_owned());
@@ -613,9 +615,8 @@ async fn launch_saved_game(id: &str) -> Result<(), Box<dyn Error>> {
         .iter()
         .find(|game| game.id == id)
         .ok_or_else(|| "Aucun jeu ne correspond à cet identifiant.".to_owned())?;
-    let executable = resolve_launch_executable(game).map_err(|error| {
-        format!("Impossible de démarrer « {} » : {error}", game.name)
-    })?;
+    let executable = resolve_launch_executable(game)
+        .map_err(|error| format!("Impossible de démarrer « {} » : {error}", game.name))?;
 
     let child = std::process::Command::new(&executable)
         .current_dir(&game.install_path)
@@ -1253,7 +1254,13 @@ mod tests {
             platform: "Test".into(),
             platform_id: None,
             install_path: root.to_string_lossy().into_owned(),
-            executable: Some(executable.file_name().unwrap().to_string_lossy().into_owned()),
+            executable: Some(
+                executable
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
         };
         assert_eq!(
             super::resolve_launch_executable(&game).expect("safe executable resolves"),
@@ -1264,10 +1271,10 @@ mod tests {
         traversal.executable = Some("../outside".into());
         assert!(super::resolve_launch_executable(&traversal).is_err());
 
-        let outside = root.parent().expect("parent").join(format!(
-            "amethys-outside-{}",
-            std::process::id()
-        ));
+        let outside = root
+            .parent()
+            .expect("parent")
+            .join(format!("amethys-outside-{}", std::process::id()));
         std::fs::write(&outside, b"outside").expect("create outside file");
         let mut absolute_outside = game.clone();
         absolute_outside.executable = Some(outside.to_string_lossy().into_owned());
