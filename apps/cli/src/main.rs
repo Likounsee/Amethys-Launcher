@@ -1368,6 +1368,34 @@ mod tests {
                 id: "game-id".to_owned()
             })
         );
+        let add_without_executable = vec![
+            "games".to_owned(),
+            "add".to_owned(),
+            "Game".to_owned(),
+            "Steam".to_owned(),
+            "/games/game".to_owned(),
+        ];
+        assert_eq!(
+            parse_arguments(&add_without_executable),
+            Ok(IpcCommand::AddGame {
+                name: "Game".to_owned(),
+                platform: "Steam".to_owned(),
+                install_path: "/games/game".to_owned(),
+                executable: None,
+            })
+        );
+        assert!(
+            parse_arguments(&[
+                "games".into(),
+                "add".into(),
+                "Game".into(),
+                "Steam".into(),
+                "/games/game".into(),
+                "game.exe".into(),
+                "unexpected".into(),
+            ])
+            .is_err()
+        );
     }
 
     #[test]
