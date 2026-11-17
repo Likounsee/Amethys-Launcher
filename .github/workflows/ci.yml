@@ -63,6 +63,12 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "CLI status request failed." }
             & "$PWD/target/release/amethysctl.exe" games
             if ($LASTEXITCODE -ne 0) { throw "CLI game-list request failed." }
+            & "$PWD/target/release/amethysctl.exe" games verify
+            if ($LASTEXITCODE -ne 0) { throw "CLI game verification failed for an empty library." }
+            $scan = & "$PWD/target/release/amethysctl.exe" games scan --json | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0 -or $scan.schema_version -ne 1 -or $scan.read_only -ne $true) {
+              throw "CLI JSON scan did not return the expected read-only schema."
+            }
           }
           finally {
             if (-not $agent.HasExited) { Stop-Process -Id $agent.Id -Force }
@@ -101,6 +107,9 @@ jobs:
           fi
           target/release/amethysctl status
           target/release/amethysctl games
+          target/release/amethysctl games verify
+          scan_json="$(target/release/amethysctl games scan --json)"
+          printf '%s' "$scan_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["schema_version"] == 1 and d["read_only"] is True'
       - name: Smoke-test Windows release archive
         if: runner.os == 'Windows'
         shell: pwsh
