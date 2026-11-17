@@ -9,7 +9,7 @@ The release workflow builds the CLI and core agent as native Rust executables:
 | Windows 64-bit | `x86_64-pc-windows-msvc` | ZIP |
 | Linux x86_64 (GNU) | `x86_64-unknown-linux-gnu` | TAR.GZ |
 
-Each archive contains `amethys-agent` (or `.exe`) and `amethysctl` (or `.exe`). These are portable binaries, not an installer or operating-system service package. The agent must be running before the CLI can communicate with it. Automatic startup, service registration, desktop shortcuts, update delivery and uninstallers are not part of this initial release package.
+Each archive contains `amethys-agent` (or `.exe`), `amethysctl` (or `.exe`), the project `README.md`, the `LICENSE`, and this release/first-run guide as `RELEASES.md`. The archives are portable binaries, not an installer or operating-system service package. The agent must be running before the CLI can communicate with it. Automatic startup, service registration, desktop shortcuts, update delivery and uninstallers are not part of this initial release package.
 
 ## Creating a draft release
 
