@@ -2720,7 +2720,6 @@ HKEY_CURRENT_USER\Software\Valve\Steam
     }
 
     #[test]
-    #[test]
     fn resolves_only_declared_epic_executables_inside_the_install_directory() {
         let root = std::env::temp_dir().join(format!(
             "amethys-epic-launch-{}-{}",
@@ -2756,6 +2755,58 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
+    #[test]
+    fn rejects_epic_executables_that_escape_or_do_not_exist() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-epic-launch-reject-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let manifests = root.join("Manifests");
+        let install = root.join("Installed").join("Example");
+        std::fs::create_dir_all(&manifests).expect("create manifests");
+        std::fs::create_dir_all(&install).expect("create install");
+        let outside = root.join("Installed").join("outside.exe");
+        std::fs::write(&outside, b"outside").expect("create outside executable");
+        let manifest_path = manifests.join("game.item");
+
+        let write_manifest = |executable: &str| {
+            let manifest = serde_json::json!({
+                "AppName": "ExampleApp",
+                "InstallLocation": install.to_string_lossy(),
+                "LaunchExecutable": executable,
+            });
+            std::fs::write(&manifest_path, manifest.to_string()).expect("write manifest");
+        };
+
+        write_manifest("../outside.exe");
+        assert_eq!(
+            epic_launch_executable(&manifests, "ExampleApp", &install),
+            None,
+            "parent-directory traversal must be rejected"
+        );
+
+        write_manifest(&outside.to_string_lossy());
+        assert_eq!(
+            epic_launch_executable(&manifests, "ExampleApp", &install),
+            None,
+            "absolute paths outside the installation must be rejected"
+        );
+
+        write_manifest("Missing/Game.exe");
+        assert_eq!(
+            epic_launch_executable(&manifests, "ExampleApp", &install),
+            None,
+            "missing executable files must not be inferred"
+        );
+
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
     fn reads_epic_manifests_with_uppercase_item_extension() {
         let root = std::env::temp_dir().join(format!(
             "amethys-epic-extension-{}-{}",
