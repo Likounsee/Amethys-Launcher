@@ -108,9 +108,7 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
         [group, action, id] if group == "games" && action == "remove" => {
             Ok(IpcCommand::RemoveGame { id: id.clone() })
         }
-        [group, action, id, executable]
-            if group == "games" && action == "set-executable" =>
-        {
+        [group, action, id, executable] if group == "games" && action == "set-executable" => {
             Ok(IpcCommand::SetGameExecutable {
                 id: id.clone(),
                 executable: executable.clone(),
@@ -747,7 +745,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                     println!("Exécutable configuré pour {}.", game.name);
                     Ok(())
                 }
-                Err(error) => Err(format!("Configuration impossible ({}): {}", error.code, error.message).into()),
+                Err(error) => Err(format!(
+                    "Configuration impossible ({}): {}",
+                    error.code, error.message
+                )
+                .into()),
                 Ok(_) => Err("Réponse inattendue du cœur Amethys.".into()),
             };
         }
