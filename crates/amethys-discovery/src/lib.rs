@@ -444,17 +444,47 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
     games
 }
 
-/// Returns the usual Epic Games manifest folder for the current operating system.
-pub fn epic_manifest_roots() -> Vec<PathBuf> {
-    #[allow(unused_mut)]
-    let mut roots: BTreeSet<PathBuf> = BTreeSet::new();
-    #[cfg(windows)]
-    if let Some(program_data) = std::env::var_os("ProgramData") {
-        roots.insert(PathBuf::from(program_data).join("Epic/EpicGamesLauncher/Data/Manifests"));
+/// Builds Epic Games Launcher manifest locations from explicit platform inputs.
+/// Keeping path selection separate from environment access makes every OS layout
+/// testable on every CI runner.
+fn epic_manifest_roots_for(
+    target_os: &str,
+    home: Option<&Path>,
+    program_data: Option<&Path>,
+) -> Vec<PathBuf> {
+    let mut roots = BTreeSet::new();
+    match target_os {
+        "windows" => {
+            if let Some(program_data) = program_data.filter(|path| is_absolute_metadata_path(path)) {
+                roots.insert(program_data.join("Epic/EpicGamesLauncher/Data/Manifests"));
+            }
+        }
+        "macos" => {
+            if let Some(home) = home.filter(|path| is_absolute_metadata_path(path)) {
+                roots.insert(home.join(
+                    "Library/Application Support/Epic/EpicGamesLauncher/Data/Manifests",
+                ));
+            }
+        }
+        // On Linux, Epic game installations are discovered through Heroic /
+        // Legendary metadata; the official Epic Games Launcher is not supported.
+        _ => {}
     }
-    // Epic's .item launcher manifests are currently supported on Windows.
-    // Heroic/Legendary use different metadata formats and are scanned separately.
-    roots.into_iter().filter(|path| path.is_dir()).collect()
+    roots.into_iter().collect()
+}
+
+/// Returns the usual Epic Games manifest folders for the current operating system.
+pub fn epic_manifest_roots() -> Vec<PathBuf> {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let program_data = std::env::var_os("ProgramData").map(PathBuf::from);
+    epic_manifest_roots_for(
+        std::env::consts::OS,
+        home.as_deref(),
+        program_data.as_deref(),
+    )
+    .into_iter()
+    .filter(|path| path.is_dir())
+    .collect()
 }
 
 /// Reads Heroic/Legendary installed-game metadata without starting the launcher.
@@ -2092,6 +2122,47 @@ mod tests {
         collections::BTreeSet,
         path::{Path, PathBuf},
     };
+
+    #[test]
+    fn epic_manifest_roots_cover_windows_and_macos_without_host_environment() {
+        assert_eq!(
+            super::epic_manifest_roots_for(
+                "windows",
+                None,
+                Some(Path::new("C:/ProgramData")),
+            ),
+            vec![PathBuf::from(
+                "C:/ProgramData/Epic/EpicGamesLauncher/Data/Manifests"
+            )]
+        );
+        assert_eq!(
+            super::epic_manifest_roots_for(
+                "macos",
+                Some(Path::new("/Users/test-user")),
+                None,
+            ),
+            vec![PathBuf::from(
+                "/Users/test-user/Library/Application Support/Epic/EpicGamesLauncher/Data/Manifests"
+            )]
+        );
+    }
+
+    #[test]
+    fn epic_manifest_roots_reject_relative_environment_paths_and_skip_linux_launcher() {
+        assert!(super::epic_manifest_roots_for(
+            "windows",
+            None,
+            Some(Path::new("relative/ProgramData")),
+        )
+        .is_empty());
+        assert!(super::epic_manifest_roots_for(
+            "macos",
+            Some(Path::new("relative/home")),
+            None,
+        )
+        .is_empty());
+        assert!(super::epic_manifest_roots_for("linux", None, None).is_empty());
+    }
 
     #[test]
     fn relative_xdg_config_home_is_ignored_in_favor_of_absolute_home_fallback() {
