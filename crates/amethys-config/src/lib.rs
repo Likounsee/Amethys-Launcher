@@ -335,15 +335,20 @@ mod tests {
 
     #[test]
     fn data_directory_override_has_priority() {
+        let override_path = if cfg!(windows) {
+            r"C:\custom\amethys"
+        } else {
+            "/custom/amethys"
+        };
         let path = resolve_data_directory(
-            Some(OsString::from("/custom/amethys")),
+            Some(OsString::from(override_path)),
             Some(OsString::from("/unused/appdata")),
             Some(OsString::from("/unused/local")),
             Some(OsString::from("/unused/home")),
             Some(OsString::from("/unused/xdg")),
         )
         .expect("explicit override resolves");
-        assert_eq!(path, Path::new("/custom/amethys"));
+        assert_eq!(path, Path::new(override_path));
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]
