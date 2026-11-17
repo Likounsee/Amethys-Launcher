@@ -103,7 +103,7 @@ jobs:
           archive="amethys-${RELEASE_TAG}-${{ matrix.target }}.tar.gz"
           tar -czf "$archive" -C dist amethys-agent amethysctl README.md LICENSE RELEASES.md
           tar -tzf "$archive" | sort > archive-contents.txt
-          printf '%s\\n' LICENSE README.md RELEASES.md amethys-agent amethysctl | sort > expected-contents.txt
+          printf '%s\n' LICENSE README.md RELEASES.md amethys-agent amethysctl | sort > expected-contents.txt
           diff -u expected-contents.txt archive-contents.txt
 
       - name: Upload platform archive
