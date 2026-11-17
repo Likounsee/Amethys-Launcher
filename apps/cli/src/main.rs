@@ -368,15 +368,11 @@ fn supported_platforms() -> &'static [&'static str] {
             "Xbox app",
         ]
     }
-    #[cfg(target_os = "macos")]
-    {
-        &["Steam", "Epic Games", "Heroic", "GOG Galaxy"]
-    }
     #[cfg(target_os = "linux")]
     {
         &["Steam", "Heroic"]
     }
-    #[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
+    #[cfg(not(any(windows, target_os = "linux")))]
     {
         &[]
     }
