@@ -34,10 +34,12 @@ impl EventBus {
 
     /// Publishes an event and returns the number of active receivers.
     pub fn publish(&self, event: CoreEvent) -> Result<usize, AmethysError> {
-        self.sender.send(event).map_err(|_| AmethysError::new(
-            ErrorCode::EventNoSubscribers,
-            "The event had no active subscribers.",
-        ))
+        self.sender.send(event).map_err(|_| {
+            AmethysError::new(
+                ErrorCode::EventNoSubscribers,
+                "The event had no active subscribers.",
+            )
+        })
     }
 }
 
@@ -49,7 +51,11 @@ mod tests {
     async fn subscribers_receive_events() {
         let bus = EventBus::new(8);
         let mut receiver = bus.subscribe();
-        bus.publish(CoreEvent::RuntimeStarted).expect("subscriber exists");
-        assert_eq!(receiver.recv().await.expect("event arrives"), CoreEvent::RuntimeStarted);
+        bus.publish(CoreEvent::RuntimeStarted)
+            .expect("subscriber exists");
+        assert_eq!(
+            receiver.recv().await.expect("event arrives"),
+            CoreEvent::RuntimeStarted
+        );
     }
 }

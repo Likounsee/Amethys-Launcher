@@ -63,7 +63,10 @@ async fn remove_stale_socket(path: &std::path::Path) -> Result<(), AmethysError>
     if !metadata.file_type().is_socket() {
         return Err(io_error(std::io::Error::new(
             std::io::ErrorKind::AddrInUse,
-            format!("IPC endpoint {} exists and is not a Unix socket", path.display()),
+            format!(
+                "IPC endpoint {} exists and is not a Unix socket",
+                path.display()
+            ),
         )));
     }
 
@@ -72,13 +75,18 @@ async fn remove_stale_socket(path: &std::path::Path) -> Result<(), AmethysError>
             drop(stream);
             Err(io_error(std::io::Error::new(
                 std::io::ErrorKind::AddrInUse,
-                format!("Another Amethys process is already listening on {}", path.display()),
+                format!(
+                    "Another Amethys process is already listening on {}",
+                    path.display()
+                ),
             )))
         }
-        Err(error) if matches!(
-            error.kind(),
-            std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::NotFound
-        ) => {
+        Err(error)
+            if matches!(
+                error.kind(),
+                std::io::ErrorKind::ConnectionRefused | std::io::ErrorKind::NotFound
+            ) =>
+        {
             // The pathname may have been replaced while the asynchronous
             // connection probe was in progress. Re-check the socket identity
             // before unlinking so we never delete a replacement file/socket.
@@ -94,7 +102,10 @@ async fn remove_stale_socket(path: &std::path::Path) -> Result<(), AmethysError>
             {
                 return Err(io_error(std::io::Error::new(
                     std::io::ErrorKind::AddrInUse,
-                    format!("IPC endpoint {} changed during stale-socket recovery", path.display()),
+                    format!(
+                        "IPC endpoint {} changed during stale-socket recovery",
+                        path.display()
+                    ),
                 )));
             }
             std::fs::remove_file(path).map_err(io_error)?;
@@ -112,13 +123,11 @@ impl IpcListener {
 
         let socket_path = endpoint.as_ref().to_path_buf();
         remove_stale_socket(&socket_path).await?;
-        let listener = tokio::net::UnixListener::bind(&socket_path)
-            .map_err(io_error)?;
+        let listener = tokio::net::UnixListener::bind(&socket_path).map_err(io_error)?;
         let metadata = std::fs::symlink_metadata(&socket_path).map_err(io_error)?;
-        if let Err(error) = std::fs::set_permissions(
-            &socket_path,
-            std::fs::Permissions::from_mode(0o600),
-        ) {
+        if let Err(error) =
+            std::fs::set_permissions(&socket_path, std::fs::Permissions::from_mode(0o600))
+        {
             // The listener is still local to this function. Remove only the
             // inode we just bound, never a path that may have been replaced.
             use std::os::unix::fs::MetadataExt;
@@ -156,7 +165,10 @@ impl IpcListener {
             .reject_remote_clients(true)
             .create(endpoint.as_ref())
             .map_err(io_error)?;
-        Ok(Self { server, endpoint: endpoint.as_ref().to_owned() })
+        Ok(Self {
+            server,
+            endpoint: endpoint.as_ref().to_owned(),
+        })
     }
 
     /// Accepts one client connection.
@@ -174,7 +186,9 @@ impl IpcListener {
 
 /// Connects to a Unix-domain socket path on Linux or macOS.
 #[cfg(unix)]
-pub async fn connect(endpoint: impl AsRef<std::path::Path>) -> Result<BoxedIpcStream, AmethysError> {
+pub async fn connect(
+    endpoint: impl AsRef<std::path::Path>,
+) -> Result<BoxedIpcStream, AmethysError> {
     tokio::net::UnixStream::connect(endpoint)
         .await
         .map(|stream| Box::new(stream) as BoxedIpcStream)
@@ -234,13 +248,19 @@ mod tests {
             uuid::Uuid::new_v4()
         ));
         {
-            let stale = std::os::unix::net::UnixListener::bind(&path)
-                .expect("create stale socket");
+            let stale = std::os::unix::net::UnixListener::bind(&path).expect("create stale socket");
             drop(stale);
         }
 
-        let listener = IpcListener::bind(&path).await.expect("replace stale socket");
-        assert!(std::fs::symlink_metadata(&path).expect("new socket exists").file_type().is_socket());
+        let listener = IpcListener::bind(&path)
+            .await
+            .expect("replace stale socket");
+        assert!(
+            std::fs::symlink_metadata(&path)
+                .expect("new socket exists")
+                .file_type()
+                .is_socket()
+        );
         drop(listener);
         assert!(!path.exists());
     }
@@ -268,14 +288,15 @@ mod tests {
 
     #[tokio::test]
     async fn listener_refuses_to_replace_a_regular_file() {
-        let path = std::env::temp_dir().join(format!(
-            "amethys-ipc-file-{}.sock",
-            uuid::Uuid::new_v4()
-        ));
+        let path =
+            std::env::temp_dir().join(format!("amethys-ipc-file-{}.sock", uuid::Uuid::new_v4()));
         std::fs::write(&path, b"keep this file").expect("create sentinel file");
 
         let result = IpcListener::bind(&path).await;
-        assert!(result.is_err(), "regular files must not be treated as stale sockets");
+        assert!(
+            result.is_err(),
+            "regular files must not be treated as stale sockets"
+        );
         assert_eq!(
             std::fs::read(&path).expect("sentinel file remains"),
             b"keep this file"
@@ -290,7 +311,9 @@ mod tests {
             "/tmp/amethys-ipc-active-{}.sock",
             uuid::Uuid::new_v4()
         ));
-        let mut first = IpcListener::bind(&path).await.expect("first listener binds");
+        let mut first = IpcListener::bind(&path)
+            .await
+            .expect("first listener binds");
         let error = match IpcListener::bind(&path).await {
             Ok(_) => panic!("second listener must not replace the active socket"),
             Err(error) => error,
@@ -299,7 +322,9 @@ mod tests {
 
         let client_path = path.clone();
         let client_task = tokio::spawn(async move {
-            let _client = connect(client_path).await.expect("first listener remains reachable");
+            let _client = connect(client_path)
+                .await
+                .expect("first listener remains reachable");
         });
         let _accepted = first.accept().await.expect("first listener accepts client");
         client_task.await.expect("client task");
@@ -307,10 +332,8 @@ mod tests {
 
     #[tokio::test]
     async fn listener_accepts_multiple_clients_without_rebinding() {
-        let path = std::path::PathBuf::from(format!(
-            "/tmp/amethys-ipc-{}.sock",
-            uuid::Uuid::new_v4()
-        ));
+        let path =
+            std::path::PathBuf::from(format!("/tmp/amethys-ipc-{}.sock", uuid::Uuid::new_v4()));
         let mut listener = IpcListener::bind(&path).await.expect("bind socket");
 
         for expected in [b"one".as_slice(), b"two".as_slice()] {
@@ -322,7 +345,10 @@ mod tests {
 
             let mut server = listener.accept().await.expect("accept client");
             let mut received = vec![0; expected.len()];
-            server.read_exact(&mut received).await.expect("read client data");
+            server
+                .read_exact(&mut received)
+                .await
+                .expect("read client data");
             assert_eq!(received, expected);
             client_task.await.expect("client task");
         }
@@ -332,10 +358,8 @@ mod tests {
     async fn protocol_request_round_trips_over_native_socket() {
         use crate::{IpcCommand, IpcCoreStatus, IpcRequest, IpcResponsePayload, send_request};
 
-        let path = std::path::PathBuf::from(format!(
-            "/tmp/amethys-ipc-{}.sock",
-            uuid::Uuid::new_v4()
-        ));
+        let path =
+            std::path::PathBuf::from(format!("/tmp/amethys-ipc-{}.sock", uuid::Uuid::new_v4()));
         let mut listener = IpcListener::bind(&path).await.expect("bind socket");
 
         let server_task = tokio::spawn(async move {
@@ -346,12 +370,9 @@ mod tests {
         });
 
         let mut client = connect(&path).await.expect("connect client");
-        let response = send_request(
-            &mut client,
-            IpcRequest::new(IpcCommand::GetStatus),
-        )
-        .await
-        .expect("send protocol request");
+        let response = send_request(&mut client, IpcRequest::new(IpcCommand::GetStatus))
+            .await
+            .expect("send protocol request");
 
         assert_eq!(
             response.result,
@@ -366,12 +387,13 @@ mod tests {
     async fn client_and_server_exchange_bytes_over_private_socket() {
         use std::os::unix::fs::PermissionsExt;
 
-        let path = std::env::temp_dir().join(format!(
-            "amethys-ipc-{}.sock",
-            uuid::Uuid::new_v4()
-        ));
+        let path = std::env::temp_dir().join(format!("amethys-ipc-{}.sock", uuid::Uuid::new_v4()));
         let listener = IpcListener::bind(&path).await.expect("bind socket");
-        let mode = std::fs::metadata(&path).expect("socket metadata").permissions().mode() & 0o777;
+        let mode = std::fs::metadata(&path)
+            .expect("socket metadata")
+            .permissions()
+            .mode()
+            & 0o777;
         assert_eq!(mode, 0o600);
 
         let client_path = path.clone();

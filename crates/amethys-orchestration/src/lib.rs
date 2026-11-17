@@ -1,15 +1,7 @@
 use amethys_errors::{AmethysError, ErrorCode};
 use amethys_events::{CoreEvent, EventBus};
-use std::{
-    collections::HashMap,
-    future::Future,
-    time::Duration,
-};
-use tokio::{
-    sync::oneshot,
-    task::JoinHandle,
-    time::timeout,
-};
+use std::{collections::HashMap, future::Future, time::Duration};
+use tokio::{sync::oneshot, task::JoinHandle, time::timeout};
 
 const DEFAULT_WORKER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -163,8 +155,7 @@ impl WorkerManager {
         }
         let (shutdown, receiver) = oneshot::channel();
         let join = tokio::spawn(run(receiver));
-        self.workers
-            .insert(name.clone(), Worker { shutdown, join });
+        self.workers.insert(name.clone(), Worker { shutdown, join });
         if let Some(events) = &self.events {
             let _delivery_count = events.publish(CoreEvent::WorkerStarted { name });
         }
@@ -259,10 +250,8 @@ mod tests {
 
     #[tokio::test]
     async fn unresponsive_worker_is_aborted_after_timeout() {
-        let mut manager = WorkerManager::with_shutdown_timeout(
-            EventBus::new(8),
-            Duration::from_millis(10),
-        );
+        let mut manager =
+            WorkerManager::with_shutdown_timeout(EventBus::new(8), Duration::from_millis(10));
         manager
             .start("stuck", |shutdown| async move {
                 let _ = shutdown.await;
@@ -270,16 +259,17 @@ mod tests {
             })
             .expect("start");
 
-        let error = manager.stop("stuck").await.expect_err("worker must time out");
+        let error = manager
+            .stop("stuck")
+            .await
+            .expect_err("worker must time out");
         assert_eq!(error.code(), ErrorCode::WorkerShutdownTimeout);
     }
 
     #[tokio::test]
     async fn stop_all_attempts_remaining_workers_after_an_error() {
-        let mut manager = WorkerManager::with_shutdown_timeout(
-            EventBus::new(8),
-            Duration::from_millis(10),
-        );
+        let mut manager =
+            WorkerManager::with_shutdown_timeout(EventBus::new(8), Duration::from_millis(10));
         manager
             .start("stuck", |shutdown| async move {
                 let _ = shutdown.await;
@@ -292,7 +282,10 @@ mod tests {
             })
             .expect("start");
 
-        let error = manager.stop_all().await.expect_err("stuck worker must time out");
+        let error = manager
+            .stop_all()
+            .await
+            .expect_err("stuck worker must time out");
         assert_eq!(error.code(), ErrorCode::WorkerShutdownTimeout);
         assert!(manager.workers.is_empty());
     }

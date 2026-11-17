@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use super::{read_bounded_text, DetectedGame};
+use super::{DetectedGame, read_bounded_text};
 
 /// Reads GDK game metadata from known Xbox app library roots.
 ///
@@ -66,11 +66,13 @@ pub fn scan_xbox_game_roots(roots: &[PathBuf]) -> Vec<DetectedGame> {
         }
     }
 
-    games.sort_by_key(|game| (
-        game.name.to_lowercase(),
-        game.install_path.clone(),
-        game.platform_id.clone(),
-    ));
+    games.sort_by_key(|game| {
+        (
+            game.name.to_lowercase(),
+            game.install_path.clone(),
+            game.platform_id.clone(),
+        )
+    });
     games
 }
 
@@ -92,9 +94,9 @@ fn parse_microsoft_game_config(contents: &str) -> Option<(String, String, String
     if executable.trim().is_empty()
         || executable.contains('\\')
         || executable_path.is_absolute()
-        || executable_path.components().any(|component| {
-            !matches!(component, std::path::Component::Normal(_))
-        })
+        || executable_path
+            .components()
+            .any(|component| !matches!(component, std::path::Component::Normal(_)))
     {
         return None;
     }
@@ -209,13 +211,20 @@ pub fn discover_xbox_games() -> Vec<DetectedGame> {
 #[cfg(test)]
 mod tests {
     use super::scan_xbox_game_roots;
-    use std::{fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     fn fixture_root() -> PathBuf {
         std::env::temp_dir().join(format!(
             "amethys-xbox-discovery-{}-{}",
             std::process::id(),
-            SystemTime::now().duration_since(UNIX_EPOCH).expect("clock").as_nanos()
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ))
     }
 
@@ -225,18 +234,25 @@ mod tests {
         let content = root.join("XboxGames/Example Game/Content");
         fs::create_dir_all(&content).expect("create content");
         fs::write(content.join("ExampleGame.exe"), b"fixture").expect("write executable");
-        fs::write(content.join("MicrosoftGame.config"), r#"
+        fs::write(
+            content.join("MicrosoftGame.config"),
+            r#"
             <Game configVersion="1">
               <Identity Name="Publisher.ExampleGame" Publisher="CN=Example" Version="1.0.0.0"/>
               <ExecutableList><Executable Name="ExampleGame.exe" Id="Game"/></ExecutableList>
               <ShellVisuals DefaultDisplayName="Example &amp; Game"/>
             </Game>
-        "#).expect("write config");
+        "#,
+        )
+        .expect("write config");
 
         let games = scan_xbox_game_roots(&[root.join("XboxGames")]);
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].name, "Example & Game");
-        assert_eq!(games[0].platform_id.as_deref(), Some("Publisher.ExampleGame"));
+        assert_eq!(
+            games[0].platform_id.as_deref(),
+            Some("Publisher.ExampleGame")
+        );
         assert_eq!(games[0].install_path, root.join("XboxGames/Example Game"));
         assert_eq!(games[0].platform, "Xbox app");
         fs::remove_dir_all(root).expect("cleanup");
@@ -250,14 +266,21 @@ mod tests {
         fs::create_dir_all(&generic).expect("create generic folder");
         let missing = library.join("Missing executable/Content");
         fs::create_dir_all(&missing).expect("create incomplete game");
-        fs::write(missing.join("MicrosoftGame.config"), r#"
+        fs::write(
+            missing.join("MicrosoftGame.config"),
+            r#"
             <Game><Identity Name="Publisher.Missing"/>
             <ExecutableList><Executable Name="missing.exe" Id="Game"/></ExecutableList></Game>
-        "#).expect("write config");
+        "#,
+        )
+        .expect("write config");
         let invalid = library.join("Invalid config/Content");
         fs::create_dir_all(&invalid).expect("create invalid game");
-        fs::write(invalid.join("MicrosoftGame.config"), "<Game><Identity/></Game>")
-            .expect("write invalid config");
+        fs::write(
+            invalid.join("MicrosoftGame.config"),
+            "<Game><Identity/></Game>",
+        )
+        .expect("write invalid config");
 
         assert!(scan_xbox_game_roots(&[library]).is_empty());
         fs::remove_dir_all(root).expect("cleanup");

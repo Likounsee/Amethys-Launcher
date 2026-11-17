@@ -1,5 +1,8 @@
 use amethys_events::EventBus;
-use amethys_ipc::{IpcCommand, IpcCoreStatus, IpcEnvelope, IpcGameEntry, IpcRemoteError, IpcRequest, IpcResponse, IpcResponsePayload, read_envelope, write_message, transport::IpcListener};
+use amethys_ipc::{
+    IpcCommand, IpcCoreStatus, IpcEnvelope, IpcGameEntry, IpcRemoteError, IpcRequest, IpcResponse,
+    IpcResponsePayload, read_envelope, transport::IpcListener, write_message,
+};
 use amethys_runtime::{CoreRuntime, RuntimeState};
 use amethys_storage::Database;
 use std::{
@@ -68,21 +71,23 @@ where
         command => {
             let database = database.lock().await;
             match command {
-                IpcCommand::ListGames => database.list_games().map(|entries| {
-                    IpcResponsePayload::Games {
-                        games: entries
-                            .into_iter()
-                            .map(|game| IpcGameEntry {
-                                id: game.id,
-                                name: game.name,
-                                platform: game.platform,
-                                platform_id: game.platform_id,
-                                install_path: game.install_path,
-                                executable: game.executable,
-                            })
-                            .collect(),
-                    }
-                }),
+                IpcCommand::ListGames => {
+                    database
+                        .list_games()
+                        .map(|entries| IpcResponsePayload::Games {
+                            games: entries
+                                .into_iter()
+                                .map(|game| IpcGameEntry {
+                                    id: game.id,
+                                    name: game.name,
+                                    platform: game.platform,
+                                    platform_id: game.platform_id,
+                                    install_path: game.install_path,
+                                    executable: game.executable,
+                                })
+                                .collect(),
+                        })
+                }
                 IpcCommand::AddGame {
                     name,
                     platform,
@@ -90,17 +95,15 @@ where
                     executable,
                 } => database
                     .add_game(&name, &platform, &install_path, executable.as_deref())
-                    .map(|game| {
-                        IpcResponsePayload::GameAdded {
-                            game: IpcGameEntry {
-                                id: game.id,
-                                name: game.name,
-                                platform: game.platform,
-                                platform_id: game.platform_id,
-                                install_path: game.install_path,
-                                executable: game.executable,
-                            },
-                        }
+                    .map(|game| IpcResponsePayload::GameAdded {
+                        game: IpcGameEntry {
+                            id: game.id,
+                            name: game.name,
+                            platform: game.platform,
+                            platform_id: game.platform_id,
+                            install_path: game.install_path,
+                            executable: game.executable,
+                        },
                     }),
                 IpcCommand::AddDetectedGame {
                     name,
@@ -116,17 +119,15 @@ where
                         &install_path,
                         executable.as_deref(),
                     )
-                    .map(|game| {
-                        IpcResponsePayload::GameAdded {
-                            game: IpcGameEntry {
-                                id: game.id,
-                                name: game.name,
-                                platform: game.platform,
-                                platform_id: game.platform_id,
-                                install_path: game.install_path,
-                                executable: game.executable,
-                            },
-                        }
+                    .map(|game| IpcResponsePayload::GameAdded {
+                        game: IpcGameEntry {
+                            id: game.id,
+                            name: game.name,
+                            platform: game.platform,
+                            platform_id: game.platform_id,
+                            install_path: game.install_path,
+                            executable: game.executable,
+                        },
                     }),
                 IpcCommand::RemoveGame { id } => database
                     .remove_game(&id)
@@ -251,18 +252,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        mutation_allowed, serve_database_connection, STATE_STOPPING,
-    };
+    use super::{STATE_STOPPING, mutation_allowed, serve_database_connection};
     use amethys_ipc::{
-        IpcCommand, IpcEnvelope, IpcRequest, IpcResponse, read_message, write_message,
-        IpcCoreStatus,
+        IpcCommand, IpcCoreStatus, IpcEnvelope, IpcRequest, IpcResponse, read_message,
+        write_message,
     };
     use amethys_storage::Database;
-    use std::sync::{
-        Arc,
-        atomic::AtomicU8,
-    };
+    use std::sync::{Arc, atomic::AtomicU8};
     use tokio::{io::duplex, sync::Mutex};
 
     #[test]
@@ -275,7 +271,9 @@ mod tests {
 
     #[tokio::test]
     async fn stopping_core_rejects_game_library_mutations_without_writing_database() {
-        let database = Arc::new(Mutex::new(Database::open(":memory:").expect("database opens")));
+        let database = Arc::new(Mutex::new(
+            Database::open(":memory:").expect("database opens"),
+        ));
         let state = Arc::new(AtomicU8::new(STATE_STOPPING));
         let (mut client, mut server) = duplex(4096);
         let request = IpcEnvelope::new(IpcRequest::new(IpcCommand::AddGame {
@@ -294,7 +292,9 @@ mod tests {
                 .expect("serve rejected request");
         });
 
-        write_message(&mut client, &request).await.expect("send request");
+        write_message(&mut client, &request)
+            .await
+            .expect("send request");
         let response: IpcResponse = read_message(&mut client).await.expect("read response");
         server_task.await.expect("server task");
 
@@ -302,7 +302,12 @@ mod tests {
         let error = response.result.expect_err("mutation must be rejected");
         assert_eq!(error.code, "AM-CORE-0002");
         assert!(
-            database.lock().await.list_games().expect("list games").is_empty(),
+            database
+                .lock()
+                .await
+                .list_games()
+                .expect("list games")
+                .is_empty(),
             "rejected mutation must not reach SQLite"
         );
     }
@@ -322,7 +327,9 @@ mod tests {
                 .expect("serve IPC request");
         });
 
-        write_message(&mut client, &request).await.expect("write IPC request");
+        write_message(&mut client, &request)
+            .await
+            .expect("write IPC request");
         let response = read_message(&mut client).await.expect("read IPC response");
         server_task.await.expect("IPC server task");
         response
@@ -330,7 +337,9 @@ mod tests {
 
     #[tokio::test]
     async fn running_core_supports_detected_game_add_list_and_remove_over_ipc() {
-        let database = Arc::new(Mutex::new(Database::open(":memory:").expect("database opens")));
+        let database = Arc::new(Mutex::new(
+            Database::open(":memory:").expect("database opens"),
+        ));
         let state = Arc::new(AtomicU8::new(super::STATE_RUNNING));
 
         let added = round_trip(
@@ -372,8 +381,7 @@ mod tests {
             Ok(amethys_ipc::IpcResponsePayload::GameRemoved { removed: true })
         );
 
-        let listed_after_remove =
-            round_trip(&database, &state, IpcCommand::ListGames).await;
+        let listed_after_remove = round_trip(&database, &state, IpcCommand::ListGames).await;
         assert_eq!(
             listed_after_remove.result,
             Ok(amethys_ipc::IpcResponsePayload::Games { games: Vec::new() })
@@ -382,7 +390,9 @@ mod tests {
 
     #[tokio::test]
     async fn invalid_game_metadata_is_rejected_without_partial_database_write() {
-        let database = Arc::new(Mutex::new(Database::open(":memory:").expect("database opens")));
+        let database = Arc::new(Mutex::new(
+            Database::open(":memory:").expect("database opens"),
+        ));
         let state = Arc::new(AtomicU8::new(super::STATE_RUNNING));
 
         let response = round_trip(
@@ -397,11 +407,18 @@ mod tests {
         )
         .await;
 
-        assert!(response.result.is_err(), "invalid metadata must be rejected");
         assert!(
-            database.lock().await.list_games().expect("list games").is_empty(),
+            response.result.is_err(),
+            "invalid metadata must be rejected"
+        );
+        assert!(
+            database
+                .lock()
+                .await
+                .list_games()
+                .expect("list games")
+                .is_empty(),
             "invalid metadata must not create a database row"
         );
     }
-
 }

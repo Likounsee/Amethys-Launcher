@@ -14,8 +14,11 @@ const MAX_METADATA_FILE_SIZE: u64 = 4 * 1024 * 1024;
 /// Reads UTF-8 metadata with a strict allocation/read limit.
 fn read_bounded_text(path: &Path) -> Option<String> {
     let mut contents = String::new();
-    fs::File::open(path).ok()?.take(MAX_METADATA_FILE_SIZE + 1)
-        .read_to_string(&mut contents).ok()?;
+    fs::File::open(path)
+        .ok()?
+        .take(MAX_METADATA_FILE_SIZE + 1)
+        .read_to_string(&mut contents)
+        .ok()?;
     (contents.len() as u64 <= MAX_METADATA_FILE_SIZE).then_some(contents)
 }
 
@@ -60,8 +63,8 @@ pub fn parse_library_folders(contents: &str, steam_root: &Path) -> Vec<PathBuf> 
                 library_folders_depth = None;
             } else if let Some((key, value)) = quoted_pair(line) {
                 let is_legacy_library = depth == root_depth && key.parse::<u32>().is_ok();
-                let is_modern_library_path = depth == root_depth + 1
-                    && key.eq_ignore_ascii_case("path");
+                let is_modern_library_path =
+                    depth == root_depth + 1 && key.eq_ignore_ascii_case("path");
                 if is_legacy_library || is_modern_library_path {
                     let value = unescape_vdf(&value);
                     let value = value.trim();
@@ -143,10 +146,11 @@ pub fn parse_app_manifest(contents: &str) -> Option<(String, String, String)> {
         return None;
     }
 
-    if install_dir.contains('/') || install_dir.contains('\\')
-        || Path::new(&install_dir).components().any(|component| {
-            !matches!(component, std::path::Component::Normal(_))
-        })
+    if install_dir.contains('/')
+        || install_dir.contains('\\')
+        || Path::new(&install_dir)
+            .components()
+            .any(|component| !matches!(component, std::path::Component::Normal(_)))
     {
         return None;
     }
@@ -195,7 +199,9 @@ pub fn scan_steam_libraries(libraries: &[PathBuf]) -> Vec<DetectedGame> {
                 .and_then(|value| value.strip_suffix(".acf"));
             // Steam AppIDs are decimal identifiers. Reject arbitrary filenames
             // that merely happen to repeat a non-numeric value in the payload.
-            if filename_app_id.and_then(|value| value.parse::<u32>().ok()).is_none()
+            if filename_app_id
+                .and_then(|value| value.parse::<u32>().ok())
+                .is_none()
                 || filename_app_id != Some(app_id.as_str())
             {
                 continue;
@@ -215,17 +221,21 @@ pub fn scan_steam_libraries(libraries: &[PathBuf]) -> Vec<DetectedGame> {
         }
     }
 
-    games.sort_by_key(|game| (
-        game.name.to_lowercase(),
-        game.install_path.clone(),
-        game.platform_id.clone(),
-    ));
+    games.sort_by_key(|game| {
+        (
+            game.name.to_lowercase(),
+            game.install_path.clone(),
+            game.platform_id.clone(),
+        )
+    });
     games
 }
 
 fn is_steam_runtime_component(app_id: &str, name: &str) -> bool {
-    matches!(app_id, "228980" | "1070560" | "1391110" | "1628350" | "1826330")
-        || name.starts_with("Steamworks Common Redistributables")
+    matches!(
+        app_id,
+        "228980" | "1070560" | "1391110" | "1628350" | "1826330"
+    ) || name.starts_with("Steamworks Common Redistributables")
         || name.starts_with("Steam Linux Runtime")
         || name.starts_with("Proton ")
 }
@@ -235,7 +245,8 @@ fn is_steam_runtime_component(app_id: &str, name: &str) -> bool {
 fn parse_steam_registry_output(output: &str) -> Option<PathBuf> {
     output.lines().find_map(|line| {
         let line = line.trim();
-        let (name, value) = line.split_once("REG_SZ")
+        let (name, value) = line
+            .split_once("REG_SZ")
             .or_else(|| line.split_once("REG_EXPAND_SZ"))?;
         if !name.trim().eq_ignore_ascii_case("SteamPath") {
             return None;
@@ -264,9 +275,9 @@ pub fn steam_install_roots() -> Vec<PathBuf> {
             .output()
         {
             if output.status.success() {
-                if let Some(root) = parse_steam_registry_output(
-                    &String::from_utf8_lossy(&output.stdout)
-                ) {
+                if let Some(root) =
+                    parse_steam_registry_output(&String::from_utf8_lossy(&output.stdout))
+                {
                     roots.insert(root);
                 }
             }
@@ -287,7 +298,10 @@ pub fn steam_install_roots() -> Vec<PathBuf> {
 
     // Never interpret a relative registry/config value against the launcher current directory.
     // Every supported Steam root is expected to be an absolute existing directory.
-    roots.into_iter().filter(|path| path.is_absolute() && path.is_dir()).collect()
+    roots
+        .into_iter()
+        .filter(|path| path.is_absolute() && path.is_dir())
+        .collect()
 }
 
 /// Reads libraryfolders.vdf files and returns their declared library roots.
@@ -310,7 +324,6 @@ pub fn discover_steam_libraries() -> Vec<PathBuf> {
 pub fn discover_steam_games() -> Vec<DetectedGame> {
     scan_steam_libraries(&discover_steam_libraries())
 }
-
 
 /// Returns true only for an existing absolute directory reported by launcher metadata.
 /// Relative paths are rejected rather than being resolved against the launcher's
@@ -338,7 +351,9 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
 
     for entry in entries {
         let path = entry.path();
-        if !path.extension().and_then(|value| value.to_str())
+        if !path
+            .extension()
+            .and_then(|value| value.to_str())
             .is_some_and(|extension| extension.eq_ignore_ascii_case("item"))
         {
             continue;
@@ -351,23 +366,37 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
         let Ok(manifest) = serde_json::from_str::<serde_json::Value>(contents) else {
             continue;
         };
-        let Some(install_location) = manifest.get("InstallLocation").and_then(|v| v.as_str())
-            .map(str::trim).filter(|value| !value.is_empty()) else {
+        let Some(install_location) = manifest
+            .get("InstallLocation")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
             continue;
         };
         let install_path = PathBuf::from(install_location);
         if !is_existing_absolute_directory(&install_path) {
             continue;
         }
-        let Some(name) = manifest.get("DisplayName").and_then(|v| v.as_str())
-            .map(str::trim).filter(|value| !value.is_empty())
+        let Some(name) = manifest
+            .get("DisplayName")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
             .or_else(|| install_path.file_name().and_then(|value| value.to_str()))
         else {
             continue;
         };
-        let platform_id = manifest.get("AppName").and_then(|v| v.as_str())
-            .map(str::trim).filter(|value| !value.is_empty()).map(str::to_owned);
-        if platform_id.as_ref().is_some_and(|id| seen_app_ids.contains(id)) {
+        let platform_id = manifest
+            .get("AppName")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned);
+        if platform_id
+            .as_ref()
+            .is_some_and(|id| seen_app_ids.contains(id))
+        {
             continue;
         }
         if insert_unique_install_path(&mut seen_paths, &install_path) {
@@ -382,11 +411,13 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
             });
         }
     }
-    games.sort_by_key(|game| (
-        game.name.to_lowercase(),
-        game.install_path.clone(),
-        game.platform_id.clone(),
-    ));
+    games.sort_by_key(|game| {
+        (
+            game.name.to_lowercase(),
+            game.install_path.clone(),
+            game.platform_id.clone(),
+        )
+    });
     games
 }
 
@@ -409,12 +440,18 @@ pub fn epic_manifest_roots() -> Vec<PathBuf> {
 /// Only entries with a non-empty app name/title and an existing install directory
 /// are returned; malformed entries and stale paths are ignored.
 pub fn scan_heroic_legendary_installed(installed_json: &Path) -> Vec<DetectedGame> {
-    let Some(contents) = read_bounded_text(installed_json) else { return Vec::new(); };
+    let Some(contents) = read_bounded_text(installed_json) else {
+        return Vec::new();
+    };
     // Some Windows tools export UTF-8 JSON with a BOM. Accept the same
     // harmless prefix already handled by the Epic manifest reader.
     let contents = contents.strip_prefix('\u{feff}').unwrap_or(&contents);
-    let Ok(entries) = serde_json::from_str::<serde_json::Value>(contents) else { return Vec::new(); };
-    let Some(entries) = entries.as_object() else { return Vec::new(); };
+    let Ok(entries) = serde_json::from_str::<serde_json::Value>(contents) else {
+        return Vec::new();
+    };
+    let Some(entries) = entries.as_object() else {
+        return Vec::new();
+    };
 
     let mut games = Vec::new();
     let mut seen_paths = BTreeSet::new();
@@ -424,19 +461,41 @@ pub fn scan_heroic_legendary_installed(installed_json: &Path) -> Vec<DetectedGam
     let mut entries: Vec<_> = entries.iter().collect();
     entries.sort_by_key(|(key, _)| *key);
     for (key, value) in entries {
-        let Some(record) = value.as_object() else { continue; };
-        let app_name = record.get("app_name").and_then(|value| value.as_str())
-            .map(str::trim).filter(|value| !value.is_empty()).unwrap_or(key.trim());
+        let Some(record) = value.as_object() else {
+            continue;
+        };
+        let app_name = record
+            .get("app_name")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(key.trim());
         if app_name.is_empty() || seen_app_ids.contains(app_name) {
             continue;
         }
-        let Some(title) = record.get("title").and_then(|value| value.as_str())
-            .map(str::trim).filter(|value| !value.is_empty()) else { continue; };
-        let Some(install_location) = record.get("install_path").and_then(|value| value.as_str())
-            .map(str::trim).filter(|value| !value.is_empty()) else { continue; };
+        let Some(title) = record
+            .get("title")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            continue;
+        };
+        let Some(install_location) = record
+            .get("install_path")
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            continue;
+        };
         let install_path = PathBuf::from(install_location);
-        if !is_existing_absolute_directory(&install_path) { continue; }
-        if !insert_unique_install_path(&mut seen_paths, &install_path) { continue; }
+        if !is_existing_absolute_directory(&install_path) {
+            continue;
+        }
+        if !insert_unique_install_path(&mut seen_paths, &install_path) {
+            continue;
+        }
         seen_app_ids.insert(app_name.to_owned());
         games.push(DetectedGame {
             platform_id: Some(app_name.to_owned()),
@@ -445,22 +504,30 @@ pub fn scan_heroic_legendary_installed(installed_json: &Path) -> Vec<DetectedGam
             platform: "Heroic",
         });
     }
-    games.sort_by_key(|game| (
-        game.name.to_lowercase(),
-        game.install_path.clone(),
-        game.platform_id.clone(),
-    ));
+    games.sort_by_key(|game| {
+        (
+            game.name.to_lowercase(),
+            game.install_path.clone(),
+            game.platform_id.clone(),
+        )
+    });
     games
 }
 
 /// Resolves Linux XDG configuration storage without interpreting relative
 /// environment values against the launcher's current working directory.
 #[cfg(any(target_os = "linux", test))]
-fn linux_heroic_config_home(xdg_config_home: Option<&Path>, home: Option<&Path>) -> Option<PathBuf> {
+fn linux_heroic_config_home(
+    xdg_config_home: Option<&Path>,
+    home: Option<&Path>,
+) -> Option<PathBuf> {
     xdg_config_home
         .filter(|path| is_absolute_metadata_path(path))
         .map(Path::to_path_buf)
-        .or_else(|| home.filter(|path| is_absolute_metadata_path(path)).map(|path| path.join(".config")))
+        .or_else(|| {
+            home.filter(|path| is_absolute_metadata_path(path))
+                .map(|path| path.join(".config"))
+        })
 }
 
 /// Returns known Heroic and standalone Legendary installed.json locations.
@@ -472,7 +539,9 @@ pub fn heroic_legendary_installed_files() -> Vec<PathBuf> {
 
     #[cfg(windows)]
     if let Some(app_data) = std::env::var_os("APPDATA") {
-        files.insert(PathBuf::from(app_data).join("heroic/legendaryConfig/legendary/installed.json"));
+        files.insert(
+            PathBuf::from(app_data).join("heroic/legendaryConfig/legendary/installed.json"),
+        );
     }
 
     #[cfg(target_os = "linux")]
@@ -494,7 +563,11 @@ pub fn heroic_legendary_installed_files() -> Vec<PathBuf> {
     #[cfg(target_os = "macos")]
     if let Some(home) = std::env::var_os("HOME") {
         let home = PathBuf::from(home);
-        files.insert(home.join("Library/Application Support/heroic/legendaryConfig/legendary/installed.json"));
+        files.insert(
+            home.join(
+                "Library/Application Support/heroic/legendaryConfig/legendary/installed.json",
+            ),
+        );
         files.insert(home.join(".config/legendary/installed.json"));
     }
 
@@ -514,7 +587,7 @@ pub fn scan_gog_galaxy(database: &Path) -> Vec<DetectedGame> {
          FROM InstalledBaseProducts AS ibp
          JOIN GamePieces AS gp ON gp.releaseKey = 'gog_' || ibp.productId
          JOIN GamePieceTypes AS gpt ON gp.gamePieceTypeId = gpt.id
-         WHERE gpt.type = 'originalTitle'"
+         WHERE gpt.type = 'originalTitle'",
     ) {
         Ok(statement) => statement,
         Err(_) => return Vec::new(),
@@ -552,7 +625,9 @@ pub fn scan_gog_galaxy(database: &Path) -> Vec<DetectedGame> {
             continue;
         };
         let install_path = PathBuf::from(install_location);
-        if !install_path.is_absolute() { continue; }
+        if !install_path.is_absolute() {
+            continue;
+        }
         let Ok(path_key) = fs::canonicalize(&install_path) else {
             continue;
         };
@@ -573,11 +648,13 @@ pub fn scan_gog_galaxy(database: &Path) -> Vec<DetectedGame> {
             });
         }
     }
-    games.sort_by_key(|game| (
-        game.name.to_lowercase(),
-        game.install_path.clone(),
-        game.platform_id.clone(),
-    ));
+    games.sort_by_key(|game| {
+        (
+            game.name.to_lowercase(),
+            game.install_path.clone(),
+            game.platform_id.clone(),
+        )
+    });
     games
 }
 
@@ -590,8 +667,13 @@ pub fn gog_galaxy_databases() -> Vec<PathBuf> {
         databases.insert(PathBuf::from(program_data).join("GOG.com/Galaxy/storage/galaxy-2.0.db"));
     }
     #[cfg(target_os = "macos")]
-    databases.insert(PathBuf::from("/Users/Shared/GOG.com/Galaxy/Storage/galaxy-2.0.db"));
-    databases.into_iter().filter(|path| path.is_file()).collect()
+    databases.insert(PathBuf::from(
+        "/Users/Shared/GOG.com/Galaxy/Storage/galaxy-2.0.db",
+    ));
+    databases
+        .into_iter()
+        .filter(|path| path.is_file())
+        .collect()
 }
 
 /// Reads installed Amazon Games entries from its local SQLite database.
@@ -605,12 +687,11 @@ pub fn scan_amazon_games(database: &Path) -> Vec<DetectedGame> {
         Ok(connection) => connection,
         Err(_) => return Vec::new(),
     };
-    let mut statement = match connection.prepare(
-        "SELECT Id, ProductTitle, InstallDirectory FROM DbSet"
-    ) {
-        Ok(statement) => statement,
-        Err(_) => return Vec::new(),
-    };
+    let mut statement =
+        match connection.prepare("SELECT Id, ProductTitle, InstallDirectory FROM DbSet") {
+            Ok(statement) => statement,
+            Err(_) => return Vec::new(),
+        };
     let rows = match statement.query_map([], |row| {
         Ok((
             row.get::<_, String>(0)?,
@@ -651,11 +732,13 @@ pub fn scan_amazon_games(database: &Path) -> Vec<DetectedGame> {
             });
         }
     }
-    games.sort_by_key(|game| (
-        game.name.to_lowercase(),
-        game.install_path.clone(),
-        game.platform_id.clone(),
-    ));
+    games.sort_by_key(|game| {
+        (
+            game.name.to_lowercase(),
+            game.install_path.clone(),
+            game.platform_id.clone(),
+        )
+    });
     games
 }
 
@@ -711,30 +794,51 @@ pub fn parse_ea_registry_output(contents: &str) -> Vec<DetectedGame> {
 
     for line in contents.lines() {
         let trimmed = line.trim();
-        if trimmed.get(..5).is_some_and(|prefix| prefix.eq_ignore_ascii_case("HKEY_")) {
+        if trimmed
+            .get(..5)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("HKEY_"))
+        {
             // Recursive registry output can contain unrelated vendors between
             // EA keys. Clear the current ID so their Install Dir values cannot
             // inherit the previous EA product identifier.
-            current_id = prefixes.iter()
+            current_id = prefixes
+                .iter()
                 .find_map(|prefix| strip_prefix_ignore_ascii_case(trimmed, prefix))
                 .map(|id| id.trim().to_owned());
             continue;
         }
-        let Some((name, value)) = trimmed.split_once("REG_SZ")
-            .or_else(|| trimmed.split_once("REG_EXPAND_SZ")) else { continue; };
-        if !["Install Dir", "InstallDir"].iter().any(|candidate| name.trim().eq_ignore_ascii_case(candidate)) { continue; }
+        let Some((name, value)) = trimmed
+            .split_once("REG_SZ")
+            .or_else(|| trimmed.split_once("REG_EXPAND_SZ"))
+        else {
+            continue;
+        };
+        if !["Install Dir", "InstallDir"]
+            .iter()
+            .any(|candidate| name.trim().eq_ignore_ascii_case(candidate))
+        {
+            continue;
+        }
         let expanded_path = expand_windows_environment_variables(value.trim().trim_matches('"'));
         let install_path = PathBuf::from(expanded_path);
         if !install_path.is_dir() || !install_path.join("__Installer/installerdata.xml").is_file() {
             continue;
         }
-        let Some(metadata) = read_bounded_text(&install_path.join("__Installer/installerdata.xml")) else {
+        let Some(metadata) = read_bounded_text(&install_path.join("__Installer/installerdata.xml"))
+        else {
             continue;
         };
         let name = xml_element_text(&metadata, "gameTitle")
             .filter(|value| !value.trim().is_empty())
-            .or_else(|| install_path.file_name().and_then(|value| value.to_str()).map(str::to_owned));
-        let Some(name) = name.filter(|value| !value.trim().is_empty()) else { continue; };
+            .or_else(|| {
+                install_path
+                    .file_name()
+                    .and_then(|value| value.to_str())
+                    .map(str::to_owned)
+            });
+        let Some(name) = name.filter(|value| !value.trim().is_empty()) else {
+            continue;
+        };
         let platform_id = xml_element_text(&metadata, "contentID")
             .filter(|value| !value.trim().is_empty())
             .or_else(|| current_id.clone().filter(|value| !value.is_empty()));
@@ -760,11 +864,13 @@ pub fn parse_ea_registry_output(contents: &str) -> Vec<DetectedGame> {
 
     let mut seen_paths = BTreeSet::new();
     games.retain(|game| insert_unique_install_path(&mut seen_paths, &game.install_path));
-    games.sort_by_key(|game| (
-        game.name.to_lowercase(),
-        game.install_path.clone(),
-        game.platform_id.clone(),
-    ));
+    games.sort_by_key(|game| {
+        (
+            game.name.to_lowercase(),
+            game.install_path.clone(),
+            game.platform_id.clone(),
+        )
+    });
     games
 }
 
@@ -784,15 +890,19 @@ pub fn discover_ea_games() -> Vec<DetectedGame> {
             Ok(output) if output.status.success() => output,
             _ => continue,
         };
-        games.extend(parse_ea_registry_output(&String::from_utf8_lossy(&output.stdout)));
+        games.extend(parse_ea_registry_output(&String::from_utf8_lossy(
+            &output.stdout,
+        )));
     }
     let mut seen_paths = BTreeSet::new();
     games.retain(|game| insert_unique_install_path(&mut seen_paths, &game.install_path));
-    games.sort_by_key(|game| (
-        game.name.to_lowercase(),
-        game.install_path.clone(),
-        game.platform_id.clone(),
-    ));
+    games.sort_by_key(|game| {
+        (
+            game.name.to_lowercase(),
+            game.install_path.clone(),
+            game.platform_id.clone(),
+        )
+    });
     games
 }
 
@@ -845,7 +955,8 @@ pub fn scan_ea_games(roots: &[PathBuf]) -> Vec<DetectedGame> {
             let name = xml_element_text(&contents, "gameTitle")
                 .filter(|value| !value.trim().is_empty())
                 .unwrap_or_else(|| {
-                    install_path.file_name()
+                    install_path
+                        .file_name()
                         .and_then(|value| value.to_str())
                         .unwrap_or_default()
                         .to_owned()
@@ -853,8 +964,8 @@ pub fn scan_ea_games(roots: &[PathBuf]) -> Vec<DetectedGame> {
             if name.trim().is_empty() {
                 continue;
             }
-            let platform_id = xml_element_text(&contents, "contentID")
-                .filter(|value| !value.trim().is_empty());
+            let platform_id =
+                xml_element_text(&contents, "contentID").filter(|value| !value.trim().is_empty());
             if insert_unique_install_path(&mut seen_paths, &install_path) {
                 games.push(DetectedGame {
                     platform_id,
@@ -865,11 +976,13 @@ pub fn scan_ea_games(roots: &[PathBuf]) -> Vec<DetectedGame> {
             }
         }
     }
-    games.sort_by_key(|game| (
-        game.name.to_lowercase(),
-        game.install_path.clone(),
-        game.platform_id.clone(),
-    ));
+    games.sort_by_key(|game| {
+        (
+            game.name.to_lowercase(),
+            game.install_path.clone(),
+            game.platform_id.clone(),
+        )
+    });
     games
 }
 
@@ -898,7 +1011,11 @@ fn xml_element_text(contents: &str, element: &str) -> Option<String> {
 /// Finds an exact opening or closing tag while skipping comments, CDATA and
 /// processing instructions. This is a focused metadata reader, not a full XML parser.
 fn find_xml_tag(contents: &str, element: &str, closing: bool, mut from: usize) -> Option<usize> {
-    let tag = if closing { format!("</{element}") } else { format!("<{element}") };
+    let tag = if closing {
+        format!("</{element}")
+    } else {
+        format!("<{element}")
+    };
 
     while let Some(relative) = contents.get(from..)?.find('<') {
         let start = from + relative;
@@ -963,10 +1080,15 @@ fn decode_xml_entities(raw: &str) -> String {
             "apos" => Some('\''),
             "amp" => Some('&'),
             _ => {
-                let numeric = entity.strip_prefix("#x")
+                let numeric = entity
+                    .strip_prefix("#x")
                     .or_else(|| entity.strip_prefix("#X"))
                     .and_then(|value| u32::from_str_radix(value, 16).ok())
-                    .or_else(|| entity.strip_prefix('#').and_then(|value| value.parse::<u32>().ok()));
+                    .or_else(|| {
+                        entity
+                            .strip_prefix('#')
+                            .and_then(|value| value.parse::<u32>().ok())
+                    });
                 numeric.and_then(xml_char_from_reference)
             }
         };
@@ -999,8 +1121,7 @@ pub fn amazon_games_database() -> Option<PathBuf> {
     #[cfg(windows)]
     {
         std::env::var_os("LOCALAPPDATA").map(|local_app_data| {
-            PathBuf::from(local_app_data)
-                .join("Amazon Games/Data/Games/Sql/GameInstallInfo.sqlite")
+            PathBuf::from(local_app_data).join("Amazon Games/Data/Games/Sql/GameInstallInfo.sqlite")
         })
     }
     #[cfg(not(windows))]
@@ -1021,24 +1142,32 @@ pub fn parse_ubisoft_registry_output(contents: &str) -> Vec<DetectedGame> {
             r"HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Ubisoft\Launcher\Installs\",
             r"HKEY_LOCAL_MACHINE\SOFTWARE\Ubisoft\Launcher\Installs\",
         ];
-        if trimmed.get(..5).is_some_and(|prefix| prefix.eq_ignore_ascii_case("HKEY_")) {
+        if trimmed
+            .get(..5)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case("HKEY_"))
+        {
             // reg.exe /s emits unrelated subkeys as well. Never let an
             // InstallDir value under another key inherit the previous game ID.
-            current_id = install_key_prefixes.iter()
+            current_id = install_key_prefixes
+                .iter()
                 .find_map(|prefix| strip_prefix_ignore_ascii_case(trimmed, prefix))
                 .map(|id| id.trim().to_owned());
             continue;
         }
-        if let Some((_, value)) = trimmed.split_once("REG_SZ")
+        if let Some((_, value)) = trimmed
+            .split_once("REG_SZ")
             .or_else(|| trimmed.split_once("REG_EXPAND_SZ"))
             .filter(|(name, _)| name.trim().eq_ignore_ascii_case("InstallDir"))
         {
-            let expanded_path = expand_windows_environment_variables(value.trim().trim_matches('"'));
+            let expanded_path =
+                expand_windows_environment_variables(value.trim().trim_matches('"'));
             let install_path = PathBuf::from(expanded_path);
             if !is_existing_absolute_directory(&install_path) {
                 continue;
             }
-            let Some(name) = install_path.file_name().and_then(|value| value.to_str())
+            let Some(name) = install_path
+                .file_name()
+                .and_then(|value| value.to_str())
                 .filter(|value| !value.trim().is_empty())
             else {
                 continue;
@@ -1061,11 +1190,13 @@ pub fn parse_ubisoft_registry_output(contents: &str) -> Vec<DetectedGame> {
             }
         }
     }
-    games.sort_by_key(|game| (
-        game.name.to_lowercase(),
-        game.install_path.clone(),
-        game.platform_id.clone(),
-    ));
+    games.sort_by_key(|game| {
+        (
+            game.name.to_lowercase(),
+            game.install_path.clone(),
+            game.platform_id.clone(),
+        )
+    });
     games
 }
 
@@ -1085,15 +1216,19 @@ pub fn discover_ubisoft_games() -> Vec<DetectedGame> {
             Ok(output) if output.status.success() => output,
             _ => continue,
         };
-        games.extend(parse_ubisoft_registry_output(&String::from_utf8_lossy(&output.stdout)));
+        games.extend(parse_ubisoft_registry_output(&String::from_utf8_lossy(
+            &output.stdout,
+        )));
     }
     let mut seen_paths = BTreeSet::new();
     games.retain(|game| insert_unique_install_path(&mut seen_paths, &game.install_path));
-    games.sort_by_key(|game| (
-        game.name.to_lowercase(),
-        game.install_path.clone(),
-        game.platform_id.clone(),
-    ));
+    games.sort_by_key(|game| {
+        (
+            game.name.to_lowercase(),
+            game.install_path.clone(),
+            game.platform_id.clone(),
+        )
+    });
     games
 }
 
@@ -1121,7 +1256,9 @@ pub fn scan_game_folders(platform: &'static str, roots: &[PathBuf]) -> Vec<Detec
             if !path.is_dir() {
                 continue;
             }
-            let Some(name) = path.file_name().and_then(|value| value.to_str())
+            let Some(name) = path
+                .file_name()
+                .and_then(|value| value.to_str())
                 .filter(|value| !value.trim().is_empty())
             else {
                 continue;
@@ -1136,11 +1273,13 @@ pub fn scan_game_folders(platform: &'static str, roots: &[PathBuf]) -> Vec<Detec
             }
         }
     }
-    games.sort_by_key(|game| (
-        game.name.to_lowercase(),
-        game.install_path.clone(),
-        game.platform_id.clone(),
-    ));
+    games.sort_by_key(|game| {
+        (
+            game.name.to_lowercase(),
+            game.install_path.clone(),
+            game.platform_id.clone(),
+        )
+    });
     games
 }
 
@@ -1163,8 +1302,8 @@ pub fn scan_battlenet_product_db(database: &Path) -> Vec<DetectedGame> {
 
     let mut installs = protobuf_length_delimited_fields(&bytes, 1).unwrap_or_default();
     // Some Agent versions store a single ProductInstall message directly.
-    if installs.is_empty() && protobuf_length_delimited_fields(&bytes, 2)
-        .is_some_and(|fields| !fields.is_empty())
+    if installs.is_empty()
+        && protobuf_length_delimited_fields(&bytes, 2).is_some_and(|fields| !fields.is_empty())
     {
         installs.push(bytes.as_slice());
     }
@@ -1204,11 +1343,17 @@ pub fn scan_battlenet_product_db(database: &Path) -> Vec<DetectedGame> {
         };
         let Some(cached_state) = protobuf_length_delimited_fields(install, 4)
             .and_then(|fields| fields.into_iter().next())
-        else { continue; };
+        else {
+            continue;
+        };
         let Some(base_state) = protobuf_length_delimited_fields(cached_state, 1)
             .and_then(|fields| fields.into_iter().next())
-        else { continue; };
-        if protobuf_varint_field(base_state, 1) != Some(1) { continue; }
+        else {
+            continue;
+        };
+        if protobuf_varint_field(base_state, 1) != Some(1) {
+            continue;
+        }
         let Ok(path_text) = std::str::from_utf8(path_bytes) else {
             continue;
         };
@@ -1225,7 +1370,12 @@ pub fn scan_battlenet_product_db(database: &Path) -> Vec<DetectedGame> {
         }
         let name = battlenet_product_name(&product_key)
             .map(str::to_owned)
-            .or_else(|| install_path.file_name().and_then(|name| name.to_str()).map(str::to_owned));
+            .or_else(|| {
+                install_path
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .map(str::to_owned)
+            });
         seen_product_codes.insert(product_key);
         let Some(name) = name.filter(|name| !name.trim().is_empty()) else {
             continue;
@@ -1237,11 +1387,13 @@ pub fn scan_battlenet_product_db(database: &Path) -> Vec<DetectedGame> {
             platform: "Battle.net",
         });
     }
-    games.sort_by_key(|game| (
-        game.name.to_lowercase(),
-        game.install_path.clone(),
-        game.platform_id.clone(),
-    ));
+    games.sort_by_key(|game| {
+        (
+            game.name.to_lowercase(),
+            game.install_path.clone(),
+            game.platform_id.clone(),
+        )
+    });
     games
 }
 
@@ -1274,9 +1426,8 @@ fn battlenet_product_name(code: &str) -> Option<&'static str> {
 pub fn battlenet_product_database() -> Option<PathBuf> {
     #[cfg(windows)]
     {
-        std::env::var_os("ProgramData").map(|program_data| {
-            PathBuf::from(program_data).join("Battle.net/Agent/product.db")
-        })
+        std::env::var_os("ProgramData")
+            .map(|program_data| PathBuf::from(program_data).join("Battle.net/Agent/product.db"))
     }
     #[cfg(not(windows))]
     {
@@ -1336,15 +1487,29 @@ fn protobuf_varint_field(bytes: &[u8], wanted: u32) -> Option<u64> {
         offset = offset.checked_add(tag_len)?;
         let field = u32::try_from(tag >> 3).ok()?;
         let wire = (tag & 7) as u8;
-        if field == 0 || field > 0x1fff_ffff { return None; }
+        if field == 0 || field > 0x1fff_ffff {
+            return None;
+        }
         match wire {
-            0 => { let (value, len) = protobuf_varint(&bytes[offset..])?; offset = offset.checked_add(len)?; if field == wanted { found = Some(value); } }
+            0 => {
+                let (value, len) = protobuf_varint(&bytes[offset..])?;
+                offset = offset.checked_add(len)?;
+                if field == wanted {
+                    found = Some(value);
+                }
+            }
             1 => offset = offset.checked_add(8)?,
-            2 => { let (length, len) = protobuf_varint(&bytes[offset..])?; offset = offset.checked_add(len)?; offset = offset.checked_add(usize::try_from(length).ok()?)?; }
+            2 => {
+                let (length, len) = protobuf_varint(&bytes[offset..])?;
+                offset = offset.checked_add(len)?;
+                offset = offset.checked_add(usize::try_from(length).ok()?)?;
+            }
             5 => offset = offset.checked_add(4)?,
             _ => return None,
         }
-        if offset > bytes.len() { return None; }
+        if offset > bytes.len() {
+            return None;
+        }
     }
     found
 }
@@ -1365,7 +1530,9 @@ fn protobuf_varint(bytes: &[u8]) -> Option<(u64, usize)> {
 
 /// Scans Riot Client installation metadata for installed Riot games.
 pub fn scan_riot_client_installs(installs_json: &Path) -> Vec<DetectedGame> {
-    let Some(contents) = read_bounded_text(installs_json) else { return Vec::new(); };
+    let Some(contents) = read_bounded_text(installs_json) else {
+        return Vec::new();
+    };
     let contents = contents.strip_prefix('\u{feff}').unwrap_or(&contents);
     let Ok(document) = serde_json::from_str::<serde_json::Value>(contents) else {
         return Vec::new();
@@ -1377,9 +1544,16 @@ pub fn scan_riot_client_installs(installs_json: &Path) -> Vec<DetectedGame> {
                 for (key, value) in object {
                     if matches!(
                         key.to_ascii_lowercase().as_str(),
-                        "product_install_root" | "install_path" | "install_dir" | "install_location"
+                        "product_install_root"
+                            | "install_path"
+                            | "install_dir"
+                            | "install_location"
                     ) {
-                        if let Some(path) = value.as_str().map(str::trim).filter(|path| !path.is_empty()) {
+                        if let Some(path) = value
+                            .as_str()
+                            .map(str::trim)
+                            .filter(|path| !path.is_empty())
+                        {
                             output.push(PathBuf::from(path));
                         }
                     }
@@ -1387,7 +1561,9 @@ pub fn scan_riot_client_installs(installs_json: &Path) -> Vec<DetectedGame> {
                 }
             }
             serde_json::Value::Array(values) => {
-                for value in values { collect_paths(value, output); }
+                for value in values {
+                    collect_paths(value, output);
+                }
             }
             _ => {}
         }
@@ -1401,7 +1577,9 @@ pub fn scan_riot_client_installs(installs_json: &Path) -> Vec<DetectedGame> {
     let mut games = Vec::new();
     let mut seen = BTreeSet::new();
     for path in candidates {
-        if !is_existing_absolute_directory(&path) { continue; }
+        if !is_existing_absolute_directory(&path) {
+            continue;
+        }
         let normalized = path.to_string_lossy().to_ascii_lowercase();
         let (name, platform_id) = if normalized.contains("valorant") {
             ("VALORANT", "valorant")
@@ -1413,7 +1591,9 @@ pub fn scan_riot_client_installs(installs_json: &Path) -> Vec<DetectedGame> {
             // Riot Client and Vanguard folders are components, not games.
             continue;
         };
-        if !seen.insert(install_path_key(&path)) { continue; }
+        if !seen.insert(install_path_key(&path)) {
+            continue;
+        }
         games.push(DetectedGame {
             platform_id: Some(platform_id.to_owned()),
             name: name.to_owned(),
@@ -1429,7 +1609,11 @@ pub fn scan_riot_client_installs(installs_json: &Path) -> Vec<DetectedGame> {
 pub fn scan_riot_product_settings(metadata_root: &Path) -> Vec<DetectedGame> {
     const PRODUCTS: [(&str, &str, &str); 4] = [
         ("valorant.live", "VALORANT", "valorant"),
-        ("league_of_legends.live", "League of Legends", "league_of_legends"),
+        (
+            "league_of_legends.live",
+            "League of Legends",
+            "league_of_legends",
+        ),
         ("lor.live", "Legends of Runeterra", "lor"),
         ("2xko.live", "2XKO", "2xko"),
     ];
@@ -1437,8 +1621,12 @@ pub fn scan_riot_product_settings(metadata_root: &Path) -> Vec<DetectedGame> {
     let mut seen = BTreeSet::new();
 
     for (directory, name, product_id) in PRODUCTS {
-        let file = metadata_root.join(directory).join(format!("{directory}.product_settings.yaml"));
-        let Some(contents) = read_bounded_text(&file) else { continue; };
+        let file = metadata_root
+            .join(directory)
+            .join(format!("{directory}.product_settings.yaml"));
+        let Some(contents) = read_bounded_text(&file) else {
+            continue;
+        };
         let install_root = contents.lines().find_map(|line| {
             let (key, value) = line.split_once(':')?;
             if !key.trim().eq_ignore_ascii_case("product_install_root") {
@@ -1447,9 +1635,15 @@ pub fn scan_riot_product_settings(metadata_root: &Path) -> Vec<DetectedGame> {
             let value = value.trim().trim_matches('"').trim_matches('\'').trim();
             (!value.is_empty()).then(|| PathBuf::from(value))
         });
-        let Some(install_path) = install_root else { continue; };
-        if !is_existing_absolute_directory(&install_path) { continue; }
-        if !seen.insert(install_path_key(&install_path)) { continue; }
+        let Some(install_path) = install_root else {
+            continue;
+        };
+        if !is_existing_absolute_directory(&install_path) {
+            continue;
+        }
+        if !seen.insert(install_path_key(&install_path)) {
+            continue;
+        }
         games.push(DetectedGame {
             platform_id: Some(product_id.to_owned()),
             name: name.to_owned(),
@@ -1527,12 +1721,14 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
     // Do not infer installed games from generic `GOG Games` directories.
     // GOG Galaxy metadata is the source of truth when its database is available.
 
-    games.sort_by_key(|game| (
-        game.platform,
-        game.name.to_lowercase(),
-        game.install_path.clone(),
-        game.platform_id.clone(),
-    ));
+    games.sort_by_key(|game| {
+        (
+            game.platform,
+            game.name.to_lowercase(),
+            game.install_path.clone(),
+            game.platform_id.clone(),
+        )
+    });
     let mut seen_installations = BTreeSet::new();
     games.retain(|game| {
         insert_unique_platform_install_path(
@@ -1557,7 +1753,9 @@ fn insert_unique_platform_install_path(
 /// Matches Windows registry key prefixes without relying on their displayed casing.
 fn strip_prefix_ignore_ascii_case<'a>(value: &'a str, prefix: &str) -> Option<&'a str> {
     let candidate = value.get(..prefix.len())?;
-    candidate.eq_ignore_ascii_case(prefix).then(|| &value[prefix.len()..])
+    candidate
+        .eq_ignore_ascii_case(prefix)
+        .then(|| &value[prefix.len()..])
 }
 
 fn insert_unique_install_path(seen: &mut BTreeSet<PathBuf>, candidate: &Path) -> bool {
@@ -1587,7 +1785,8 @@ fn install_path_key(path: &Path) -> PathBuf {
 fn same_install_path(left: &Path, right: &Path) -> bool {
     #[cfg(windows)]
     {
-        left.to_string_lossy().eq_ignore_ascii_case(&right.to_string_lossy())
+        left.to_string_lossy()
+            .eq_ignore_ascii_case(&right.to_string_lossy())
     }
     #[cfg(not(windows))]
     {
@@ -1605,7 +1804,8 @@ fn find_vdf_value(contents: &str, wanted_key: &str) -> Option<String> {
         if line.starts_with("//") {
             return false;
         }
-        line.split('"').nth(1)
+        line.split('"')
+            .nth(1)
             .is_some_and(|key| key.eq_ignore_ascii_case("AppState"))
     });
     let target_depth = usize::from(has_app_state);
@@ -1681,23 +1881,33 @@ mod tests {
         let root = std::env::temp_dir().join(format!(
             "amethys-metadata-limit-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("create test directory");
         let small = root.join("small.json");
         let oversized = root.join("oversized.json");
         std::fs::write(&small, br#"{"ok":true}"#).expect("write small metadata");
-        std::fs::write(&oversized, vec![b'x'; (super::MAX_METADATA_FILE_SIZE + 1) as usize])
-            .expect("write oversized metadata");
-        assert_eq!(super::read_bounded_text(&small).as_deref(), Some(r#"{"ok":true}"#));
+        std::fs::write(
+            &oversized,
+            vec![b'x'; (super::MAX_METADATA_FILE_SIZE + 1) as usize],
+        )
+        .expect("write oversized metadata");
+        assert_eq!(
+            super::read_bounded_text(&small).as_deref(),
+            Some(r#"{"ok":true}"#)
+        );
         assert!(super::read_bounded_text(&oversized).is_none());
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]
     fn rejects_relative_install_paths_even_when_they_could_resolve_from_current_directory() {
-        assert!(!super::is_existing_absolute_directory(Path::new("relative/game")));
+        assert!(!super::is_existing_absolute_directory(Path::new(
+            "relative/game"
+        )));
         let absolute = std::env::temp_dir();
         assert!(absolute.is_absolute());
         assert!(super::is_existing_absolute_directory(&absolute));
@@ -1722,7 +1932,11 @@ mod tests {
                 "installdir" "AnotherGame"
                 "#
             ),
-            Some(("123".to_owned(), "Real Game".to_owned(), "RealGame".to_owned()))
+            Some((
+                "123".to_owned(),
+                "Real Game".to_owned(),
+                "RealGame".to_owned()
+            ))
         );
 
         let libraries = super::parse_library_folders(
@@ -1778,7 +1992,10 @@ mod tests {
 
     #[test]
     fn unescapes_vdf_sequences_without_consuming_adjacent_backslashes() {
-        assert_eq!(super::unescape_vdf(r#"C:\\Games\\Example"#), r#"C:\Games\Example"#);
+        assert_eq!(
+            super::unescape_vdf(r#"C:\\Games\\Example"#),
+            r#"C:\Games\Example"#
+        );
         assert_eq!(super::unescape_vdf(r#"quoted\\\"name"#), r#"quoted\"name"#);
         assert_eq!(super::unescape_vdf(r#"unknown\q"#), r#"unknown\q"#);
         assert_eq!(super::unescape_vdf("trailing\\"), "trailing\\");
@@ -1802,19 +2019,26 @@ mod tests {
             super::decode_xml_entities("Rock &#38; Roll &#x1F680; &amp;lt; &unknown;"),
             "Rock & Roll 🚀 &lt; &unknown;"
         );
-        assert_eq!(super::decode_xml_entities("Bad &#xZZ; ref"), "Bad &#xZZ; ref");
+        assert_eq!(
+            super::decode_xml_entities("Bad &#xZZ; ref"),
+            "Bad &#xZZ; ref"
+        );
     }
 
     use super::{
         parse_app_manifest, parse_library_folders, scan_epic_manifests, scan_game_folders,
         scan_steam_libraries,
     };
-    use std::{collections::BTreeSet, path::{Path, PathBuf}};
+    use std::{
+        collections::BTreeSet,
+        path::{Path, PathBuf},
+    };
 
     #[test]
     fn relative_xdg_config_home_is_ignored_in_favor_of_absolute_home_fallback() {
         let home = Path::new("/home/test-user");
-        let config = super::linux_heroic_config_home(Some(Path::new("relative/config")), Some(home));
+        let config =
+            super::linux_heroic_config_home(Some(Path::new("relative/config")), Some(home));
         assert_eq!(config, Some(home.join(".config")));
     }
 
@@ -1829,7 +2053,10 @@ mod tests {
 
     #[test]
     fn missing_absolute_config_locations_do_not_fall_back_to_current_directory() {
-        assert_eq!(super::linux_heroic_config_home(Some(Path::new("relative")), None), None);
+        assert_eq!(
+            super::linux_heroic_config_home(Some(Path::new("relative")), None),
+            None
+        );
     }
 
     #[cfg(not(windows))]
@@ -1858,16 +2085,24 @@ mod tests {
     fn global_deduplication_keeps_non_adjacent_paths_and_separate_platforms() {
         let mut seen = BTreeSet::new();
         assert!(super::insert_unique_platform_install_path(
-            &mut seen, "Steam", Path::new("/games/shared")
+            &mut seen,
+            "Steam",
+            Path::new("/games/shared")
         ));
         assert!(super::insert_unique_platform_install_path(
-            &mut seen, "Steam", Path::new("/games/other")
+            &mut seen,
+            "Steam",
+            Path::new("/games/other")
         ));
         assert!(!super::insert_unique_platform_install_path(
-            &mut seen, "Steam", Path::new("/games/shared")
+            &mut seen,
+            "Steam",
+            Path::new("/games/shared")
         ));
         assert!(super::insert_unique_platform_install_path(
-            &mut seen, "Epic Games", Path::new("/games/shared")
+            &mut seen,
+            "Epic Games",
+            Path::new("/games/shared")
         ));
         assert_eq!(seen.len(), 3);
     }
@@ -1939,7 +2174,10 @@ mod tests {
     fn quoted_vdf_pairs_ignore_escaped_quotes_inside_values() {
         assert_eq!(
             super::quoted_pair(r#""path" "C:\\Games\\A \"Quoted\" Game""#),
-            Some(("path".to_owned(), r#"C:\\Games\\A \"Quoted\" Game"#.to_owned())),
+            Some((
+                "path".to_owned(),
+                r#"C:\\Games\\A \"Quoted\" Game"#.to_owned()
+            )),
         );
     }
 
@@ -2094,7 +2332,11 @@ HKEY_CURRENT_USER\Software\Valve\Steam
                     "installdir" "{install_dir}"
                 "#
             );
-            assert_eq!(parse_app_manifest(&contents), None, "accepted {install_dir}");
+            assert_eq!(
+                parse_app_manifest(&contents),
+                None,
+                "accepted {install_dir}"
+            );
         }
     }
 
@@ -2144,8 +2386,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-steam-library-order-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let first_library = root.join("a-library");
         let second_library = root.join("z-library");
@@ -2162,18 +2406,13 @@ HKEY_CURRENT_USER\Software\Valve\Steam
                     r#""appid" "570"
 "name" "{title}"
 "installdir" "{folder}""#
-                )
-            ).expect("write Steam manifest");
+                ),
+            )
+            .expect("write Steam manifest");
         }
 
-        let forward = super::scan_steam_libraries(&[
-            second_library.clone(),
-            first_library.clone(),
-        ]);
-        let reverse = super::scan_steam_libraries(&[
-            first_library.clone(),
-            second_library.clone(),
-        ]);
+        let forward = super::scan_steam_libraries(&[second_library.clone(), first_library.clone()]);
+        let reverse = super::scan_steam_libraries(&[first_library.clone(), second_library.clone()]);
         assert_eq!(forward, reverse);
         assert_eq!(forward.len(), 1);
         assert_eq!(forward[0].name, "First Copy");
@@ -2229,8 +2468,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-epic-discovery-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let manifests = root.join("Manifests");
         let installed = root.join("Installed").join("Example Game");
@@ -2240,10 +2481,14 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         std::fs::create_dir_all(&installed).expect("create game folder");
         std::fs::create_dir_all(&whitespace_install).expect("create whitespace game folder");
         std::fs::create_dir_all(&duplicate_install).expect("create duplicate game folder");
-        std::fs::write(manifests.join("installed.item"), format!(
-            r#"{{"AppName":"ExampleApp","DisplayName":"Example Game","InstallLocation":{}}}"#,
-            serde_json::to_string(&installed.to_string_lossy()).expect("encode path")
-        )).expect("write manifest");
+        std::fs::write(
+            manifests.join("installed.item"),
+            format!(
+                r#"{{"AppName":"ExampleApp","DisplayName":"Example Game","InstallLocation":{}}}"#,
+                serde_json::to_string(&installed.to_string_lossy()).expect("encode path")
+            ),
+        )
+        .expect("write manifest");
         std::fs::write(manifests.join("z-duplicate.item"), format!(
             r#"{{"AppName":"ExampleApp","DisplayName":"Duplicate Example","InstallLocation":{}}}"#,
             serde_json::to_string(&duplicate_install.to_string_lossy()).expect("encode duplicate path")
@@ -2259,13 +2504,23 @@ HKEY_CURRENT_USER\Software\Valve\Steam
                 serde_json::to_string(&format!("  {}  ", whitespace_install.display()))
                     .expect("encode whitespace install path")
             ),
-        ).expect("write manifest with surrounding whitespace");
+        )
+        .expect("write manifest with surrounding whitespace");
 
         let games = scan_epic_manifests(&manifests);
         assert_eq!(games.len(), 2);
         assert_eq!(games[0].platform, "Epic Games");
-        assert_eq!(games.iter().filter(|game| game.platform_id.as_deref() == Some("ExampleApp")).count(), 1);
-        let whitespace_game = games.iter().find(|game| game.install_path == whitespace_install).unwrap();
+        assert_eq!(
+            games
+                .iter()
+                .filter(|game| game.platform_id.as_deref() == Some("ExampleApp"))
+                .count(),
+            1
+        );
+        let whitespace_game = games
+            .iter()
+            .find(|game| game.install_path == whitespace_install)
+            .unwrap();
         assert_eq!(whitespace_game.name, "Example Game");
         assert_eq!(whitespace_game.platform_id, None);
         std::fs::remove_dir_all(root).expect("cleanup");
@@ -2276,8 +2531,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-epic-extension-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let manifests = root.join("Manifests");
         let install = root.join("Installed Game");
@@ -2287,8 +2544,7 @@ HKEY_CURRENT_USER\Software\Valve\Steam
             r#"{{"AppName":"UppercaseExtension","DisplayName":"Uppercase Extension","InstallLocation":{}}}"#,
             serde_json::to_string(&install.to_string_lossy()).expect("encode path")
         );
-        std::fs::write(manifests.join("uppercase.ITEM"), json)
-            .expect("write manifest");
+        std::fs::write(manifests.join("uppercase.ITEM"), json).expect("write manifest");
 
         let games = scan_epic_manifests(&manifests);
         assert_eq!(games.len(), 1);
@@ -2302,8 +2558,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-epic-bom-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let manifests = root.join("Manifests");
         let install = root.join("Installed Game");
@@ -2330,34 +2588,52 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-gog-discovery-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("create fixture root");
         let install = root.join("Heroes 3");
         std::fs::create_dir_all(&install).expect("create installed game");
         let database = root.join("galaxy-2.0.db");
         let connection = Connection::open(&database).expect("create fixture database");
-        connection.execute_batch(
-            "CREATE TABLE InstalledBaseProducts (productId TEXT, installationPath TEXT);
+        connection
+            .execute_batch(
+                "CREATE TABLE InstalledBaseProducts (productId TEXT, installationPath TEXT);
              CREATE TABLE GamePieces (releaseKey TEXT, gamePieceTypeId INTEGER, value TEXT);
-             CREATE TABLE GamePieceTypes (id INTEGER, type TEXT);"
-        ).expect("create GOG metadata tables");
-        connection.execute("INSERT INTO InstalledBaseProducts VALUES (?1, ?2)",
-            rusqlite::params!["1234567890", install.to_string_lossy()])
+             CREATE TABLE GamePieceTypes (id INTEGER, type TEXT);",
+            )
+            .expect("create GOG metadata tables");
+        connection
+            .execute(
+                "INSERT INTO InstalledBaseProducts VALUES (?1, ?2)",
+                rusqlite::params!["1234567890", install.to_string_lossy()],
+            )
             .expect("insert installed GOG product");
-        connection.execute("INSERT INTO GamePieceTypes VALUES (1, 'originalTitle')", [])
+        connection
+            .execute("INSERT INTO GamePieceTypes VALUES (1, 'originalTitle')", [])
             .expect("insert title type");
-        connection.execute("INSERT INTO GamePieces VALUES (?1, 1, ?2)",
-            rusqlite::params!["gog_1234567890", r#"{"title":"Heroes of Might and Magic 3"}"#])
+        connection
+            .execute(
+                "INSERT INTO GamePieces VALUES (?1, 1, ?2)",
+                rusqlite::params![
+                    "gog_1234567890",
+                    r#"{"title":"Heroes of Might and Magic 3"}"#
+                ],
+            )
             .expect("insert GOG title");
-        connection.execute(
-            "INSERT INTO InstalledBaseProducts VALUES (?1, ?2)",
-            rusqlite::params!["duplicate-product", install.to_string_lossy()],
-        )
-        .expect("insert duplicate install path");
-        connection.execute("INSERT INTO GamePieces VALUES (?1, 1, ?2)",
-            rusqlite::params!["gog_duplicate-product", r#"{"title":"Duplicate entry"}"#])
+        connection
+            .execute(
+                "INSERT INTO InstalledBaseProducts VALUES (?1, ?2)",
+                rusqlite::params!["duplicate-product", install.to_string_lossy()],
+            )
+            .expect("insert duplicate install path");
+        connection
+            .execute(
+                "INSERT INTO GamePieces VALUES (?1, 1, ?2)",
+                rusqlite::params!["gog_duplicate-product", r#"{"title":"Duplicate entry"}"#],
+            )
             .expect("insert duplicate GOG title");
         drop(connection);
 
@@ -2372,13 +2648,15 @@ HKEY_CURRENT_USER\Software\Valve\Steam
 
     #[test]
     fn keeps_gog_product_id_available_after_rejecting_duplicate_path() {
-        use rusqlite::{params, Connection};
+        use rusqlite::{Connection, params};
 
         let root = std::env::temp_dir().join(format!(
             "amethys-gog-dedup-order-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let first_install = root.join("First Game");
         let valid_second_install = root.join("Second Game");
@@ -2386,71 +2664,121 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         std::fs::create_dir_all(&valid_second_install).expect("create second install");
         let database = root.join("galaxy-2.0.db");
         let connection = Connection::open(&database).expect("create fixture database");
-        connection.execute_batch(
-            "CREATE TABLE InstalledBaseProducts (productId TEXT, installationPath TEXT);
+        connection
+            .execute_batch(
+                "CREATE TABLE InstalledBaseProducts (productId TEXT, installationPath TEXT);
              CREATE TABLE GamePieces (releaseKey TEXT, gamePieceTypeId INTEGER, value TEXT);
              CREATE TABLE GamePieceTypes (id INTEGER, type TEXT);
-             INSERT INTO GamePieceTypes VALUES (1, 'originalTitle');"
-        ).expect("create GOG metadata tables");
+             INSERT INTO GamePieceTypes VALUES (1, 'originalTitle');",
+            )
+            .expect("create GOG metadata tables");
         for (id, path, title) in [
-            ("first", first_install.to_string_lossy().into_owned(), "First Game"),
-            ("second", first_install.to_string_lossy().into_owned(), "Duplicate Path"),
-            ("second", valid_second_install.to_string_lossy().into_owned(), "Second Game"),
+            (
+                "first",
+                first_install.to_string_lossy().into_owned(),
+                "First Game",
+            ),
+            (
+                "second",
+                first_install.to_string_lossy().into_owned(),
+                "Duplicate Path",
+            ),
+            (
+                "second",
+                valid_second_install.to_string_lossy().into_owned(),
+                "Second Game",
+            ),
         ] {
-            connection.execute(
-                "INSERT INTO InstalledBaseProducts VALUES (?1, ?2)", params![id, path],
-            ).expect("insert GOG product");
-            connection.execute(
-                "INSERT INTO GamePieces VALUES (?1, 1, ?2)",
-                params![format!("gog_{id}"), serde_json::json!({"title": title}).to_string()],
-            ).expect("insert GOG title");
+            connection
+                .execute(
+                    "INSERT INTO InstalledBaseProducts VALUES (?1, ?2)",
+                    params![id, path],
+                )
+                .expect("insert GOG product");
+            connection
+                .execute(
+                    "INSERT INTO GamePieces VALUES (?1, 1, ?2)",
+                    params![
+                        format!("gog_{id}"),
+                        serde_json::json!({"title": title}).to_string()
+                    ],
+                )
+                .expect("insert GOG title");
         }
         drop(connection);
 
         let games = super::scan_gog_galaxy(&database);
         assert_eq!(games.len(), 2);
-        assert!(games.iter().any(|game| game.platform_id.as_deref() == Some("second")
-            && game.install_path == valid_second_install));
+        assert!(
+            games
+                .iter()
+                .any(|game| game.platform_id.as_deref() == Some("second")
+                    && game.install_path == valid_second_install)
+        );
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]
     fn skips_invalid_gog_titles_and_stale_install_paths() {
-        use rusqlite::{params, Connection};
+        use rusqlite::{Connection, params};
 
         let root = std::env::temp_dir().join(format!(
             "amethys-gog-invalid-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("create fixture root");
         let installed = root.join("Valid Game");
         std::fs::create_dir_all(&installed).expect("create installed game");
         let database = root.join("galaxy-2.0.db");
         let connection = Connection::open(&database).expect("create fixture database");
-        connection.execute_batch(
-            "CREATE TABLE InstalledBaseProducts (productId TEXT, installationPath TEXT);
+        connection
+            .execute_batch(
+                "CREATE TABLE InstalledBaseProducts (productId TEXT, installationPath TEXT);
              CREATE TABLE GamePieces (releaseKey TEXT, gamePieceTypeId INTEGER, value TEXT);
              CREATE TABLE GamePieceTypes (id INTEGER, type TEXT);
-             INSERT INTO GamePieceTypes VALUES (1, 'originalTitle');"
-        ).expect("create GOG metadata tables");
+             INSERT INTO GamePieceTypes VALUES (1, 'originalTitle');",
+            )
+            .expect("create GOG metadata tables");
 
         let rows = [
-            ("valid", installed.to_string_lossy().into_owned(), r#"{"title":"Valid Game"}"#),
-            ("bad-json", installed.to_string_lossy().into_owned(), "{not-json"),
-            ("empty-title", installed.to_string_lossy().into_owned(), r#"{"title":"  "}"#),
-            ("stale-path", root.join("Removed Game").to_string_lossy().into_owned(), r#"{"title":"Removed Game"}"#),
+            (
+                "valid",
+                installed.to_string_lossy().into_owned(),
+                r#"{"title":"Valid Game"}"#,
+            ),
+            (
+                "bad-json",
+                installed.to_string_lossy().into_owned(),
+                "{not-json",
+            ),
+            (
+                "empty-title",
+                installed.to_string_lossy().into_owned(),
+                r#"{"title":"  "}"#,
+            ),
+            (
+                "stale-path",
+                root.join("Removed Game").to_string_lossy().into_owned(),
+                r#"{"title":"Removed Game"}"#,
+            ),
         ];
         for (id, location, title) in rows {
-            connection.execute(
-                "INSERT INTO InstalledBaseProducts VALUES (?1, ?2)",
-                params![id, location],
-            ).expect("insert GOG product");
-            connection.execute(
-                "INSERT INTO GamePieces VALUES (?1, 1, ?2)",
-                params![format!("gog_{id}"), title],
-            ).expect("insert GOG title");
+            connection
+                .execute(
+                    "INSERT INTO InstalledBaseProducts VALUES (?1, ?2)",
+                    params![id, location],
+                )
+                .expect("insert GOG product");
+            connection
+                .execute(
+                    "INSERT INTO GamePieces VALUES (?1, 1, ?2)",
+                    params![format!("gog_{id}"), title],
+                )
+                .expect("insert GOG title");
         }
         drop(connection);
 
@@ -2469,12 +2797,15 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-gog-empty-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("create fixture root");
         let database = root.join("unknown.db");
-        Connection::open(&database).expect("create empty database")
+        Connection::open(&database)
+            .expect("create empty database")
             .execute_batch("CREATE TABLE unrelated (value TEXT);")
             .expect("create unrelated table");
         assert!(super::scan_gog_galaxy(&database).is_empty());
@@ -2487,8 +2818,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-ea-discovery-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let install = root.join("EA Games").join("Dead Space");
         let metadata_dir = install.join("__Installer");
@@ -2512,8 +2845,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-ea-registry-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let install = root.join("Games").join("Custom EA Game");
         std::fs::create_dir_all(install.join("__Installer")).expect("create EA install metadata");
@@ -2540,15 +2875,18 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-ea-registry-wow-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let install = root.join("Games").join("Another EA Game");
         std::fs::create_dir_all(install.join("__Installer")).expect("create EA install metadata");
         std::fs::write(
             install.join("__Installer/installerdata.xml"),
             r#"<DiPManifest><gameTitle>Another EA Game</gameTitle></DiPManifest>"#,
-        ).expect("write EA metadata");
+        )
+        .expect("write EA metadata");
         let output = format!(
             "HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\EA Games\\legacy-id\n    installdir    REG_SZ    {}\n",
             install.display()
@@ -2566,8 +2904,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-ea-registry-invalid-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("create unrelated directory");
         let output = format!(
@@ -2583,8 +2923,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-ubisoft-dedup-order-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let first_install = root.join("First Game");
         let valid_install = root.join("Valid Game");
@@ -2600,8 +2942,7 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let games = super::parse_ubisoft_registry_output(&output);
         assert_eq!(games.len(), 2);
         assert!(games.iter().any(|game| {
-            game.platform_id.as_deref() == Some("target")
-                && game.install_path == valid_install
+            game.platform_id.as_deref() == Some("target") && game.install_path == valid_install
         }));
         std::fs::remove_dir_all(root).expect("cleanup");
     }
@@ -2636,15 +2977,24 @@ HKEY_CURRENT_USER\Software\Valve\Steam
             <![CDATA[ <contentID>fake-id</contentID> ]]>
             <contentID>real-id</contentID>
         "#;
-        assert_eq!(super::xml_element_text(metadata, "gameTitle").as_deref(), Some("Real & Valid Title"));
-        assert_eq!(super::xml_element_text(metadata, "contentID").as_deref(), Some("real-id"));
+        assert_eq!(
+            super::xml_element_text(metadata, "gameTitle").as_deref(),
+            Some("Real & Valid Title")
+        );
+        assert_eq!(
+            super::xml_element_text(metadata, "contentID").as_deref(),
+            Some("real-id")
+        );
     }
 
     #[test]
     fn xml_entity_decoding_does_not_decode_escaped_entity_text_twice() {
         assert_eq!(
-            super::xml_element_text("<gameTitle>Rock &amp;lt; Roll &amp;amp; More</gameTitle>", "gameTitle")
-                .as_deref(),
+            super::xml_element_text(
+                "<gameTitle>Rock &amp;lt; Roll &amp;amp; More</gameTitle>",
+                "gameTitle"
+            )
+            .as_deref(),
             Some("Rock &lt; Roll &amp; More"),
         );
     }
@@ -2654,13 +3004,18 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-ea-fallback-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let install = root.join("Mass Effect");
         std::fs::create_dir_all(install.join("__Installer")).expect("create metadata folder");
-        std::fs::write(install.join("__Installer/installerdata.xml"), "<DiPManifest/>")
-            .expect("write incomplete metadata");
+        std::fs::write(
+            install.join("__Installer/installerdata.xml"),
+            "<DiPManifest/>",
+        )
+        .expect("write incomplete metadata");
         std::fs::create_dir_all(root.join("Unrelated Folder")).expect("create unrelated folder");
 
         let games = super::scan_ea_games(std::slice::from_ref(&root));
@@ -2677,8 +3032,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-amazon-discovery-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("create fixture root");
         let installed = root.join("Blue Fire");
@@ -2686,28 +3043,44 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         std::fs::create_dir_all(&installed).expect("create installed game");
         let database = root.join("GameInstallInfo.sqlite");
         let connection = Connection::open(&database).expect("create fixture database");
-        connection.execute_batch(
-            "CREATE TABLE DbSet (
+        connection
+            .execute_batch(
+                "CREATE TABLE DbSet (
                 Id TEXT,
                 InstallDirectory TEXT,
                 ProductTitle TEXT
-            );"
-        ).expect("create Amazon metadata table");
-        connection.execute(
-            "INSERT INTO DbSet (Id, InstallDirectory, ProductTitle)
+            );",
+            )
+            .expect("create Amazon metadata table");
+        connection
+            .execute(
+                "INSERT INTO DbSet (Id, InstallDirectory, ProductTitle)
              VALUES (?1, ?2, ?3)",
-            rusqlite::params!["amzn1.blue-fire", installed.to_string_lossy(), "Blue Fire"],
-        ).expect("insert installed game");
-        connection.execute(
-            "INSERT INTO DbSet (Id, InstallDirectory, ProductTitle)
+                rusqlite::params!["amzn1.blue-fire", installed.to_string_lossy(), "Blue Fire"],
+            )
+            .expect("insert installed game");
+        connection
+            .execute(
+                "INSERT INTO DbSet (Id, InstallDirectory, ProductTitle)
              VALUES (?1, ?2, ?3)",
-            rusqlite::params!["amzn1.other", not_installed.to_string_lossy(), "Not Installed"],
-        ).expect("insert uninstalled game");
-        connection.execute(
-            "INSERT INTO DbSet (Id, InstallDirectory, ProductTitle)
+                rusqlite::params![
+                    "amzn1.other",
+                    not_installed.to_string_lossy(),
+                    "Not Installed"
+                ],
+            )
+            .expect("insert uninstalled game");
+        connection
+            .execute(
+                "INSERT INTO DbSet (Id, InstallDirectory, ProductTitle)
              VALUES (?1, ?2, ?3)",
-            rusqlite::params!["amzn1.blue-fire-alias", installed.to_string_lossy(), "Duplicate Blue Fire"],
-        ).expect("insert duplicate installation path");
+                rusqlite::params![
+                    "amzn1.blue-fire-alias",
+                    installed.to_string_lossy(),
+                    "Duplicate Blue Fire"
+                ],
+            )
+            .expect("insert duplicate installation path");
         drop(connection);
 
         let games = super::scan_amazon_games(&database);
@@ -2722,43 +3095,57 @@ HKEY_CURRENT_USER\Software\Valve\Steam
 
     #[test]
     fn skips_malformed_gog_rows_without_losing_valid_games() {
-        use rusqlite::{params, Connection};
+        use rusqlite::{Connection, params};
 
         let root = std::env::temp_dir().join(format!(
             "amethys-gog-malformed-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let installed = root.join("Valid GOG Game");
         std::fs::create_dir_all(&installed).expect("create install");
         let database = root.join("galaxy-2.0.db");
         let connection = Connection::open(&database).expect("create database");
-        connection.execute_batch(
-            "CREATE TABLE InstalledBaseProducts (productId, installationPath);
+        connection
+            .execute_batch(
+                "CREATE TABLE InstalledBaseProducts (productId, installationPath);
              CREATE TABLE GamePieces (releaseKey, gamePieceTypeId, value);
-             CREATE TABLE GamePieceTypes (id, type);"
-        ).expect("create GOG metadata tables");
-        connection.execute(
-            "INSERT INTO GamePieceTypes VALUES (?1, ?2)",
-            params![1_i64, "originalTitle"],
-        ).expect("insert title type");
-        connection.execute(
-            "INSERT INTO InstalledBaseProducts VALUES (?1, ?2)",
-            params![42_i64, installed.to_string_lossy()],
-        ).expect("insert malformed product row");
-        connection.execute(
-            "INSERT INTO InstalledBaseProducts VALUES (?1, ?2)",
-            params!["valid-product", installed.to_string_lossy()],
-        ).expect("insert valid product row");
-        connection.execute(
-            "INSERT INTO GamePieces VALUES (?1, ?2, ?3)",
-            params!["gog_42", 1_i64, r#"{"title":"Malformed Game"}"#],
-        ).expect("insert malformed title metadata");
-        connection.execute(
-            "INSERT INTO GamePieces VALUES (?1, ?2, ?3)",
-            params!["gog_valid-product", 1_i64, r#"{"title":"Valid GOG Game"}"#],
-        ).expect("insert valid title metadata");
+             CREATE TABLE GamePieceTypes (id, type);",
+            )
+            .expect("create GOG metadata tables");
+        connection
+            .execute(
+                "INSERT INTO GamePieceTypes VALUES (?1, ?2)",
+                params![1_i64, "originalTitle"],
+            )
+            .expect("insert title type");
+        connection
+            .execute(
+                "INSERT INTO InstalledBaseProducts VALUES (?1, ?2)",
+                params![42_i64, installed.to_string_lossy()],
+            )
+            .expect("insert malformed product row");
+        connection
+            .execute(
+                "INSERT INTO InstalledBaseProducts VALUES (?1, ?2)",
+                params!["valid-product", installed.to_string_lossy()],
+            )
+            .expect("insert valid product row");
+        connection
+            .execute(
+                "INSERT INTO GamePieces VALUES (?1, ?2, ?3)",
+                params!["gog_42", 1_i64, r#"{"title":"Malformed Game"}"#],
+            )
+            .expect("insert malformed title metadata");
+        connection
+            .execute(
+                "INSERT INTO GamePieces VALUES (?1, ?2, ?3)",
+                params!["gog_valid-product", 1_i64, r#"{"title":"Valid GOG Game"}"#],
+            )
+            .expect("insert valid title metadata");
         drop(connection);
 
         let games = super::scan_gog_galaxy(&database);
@@ -2770,29 +3157,35 @@ HKEY_CURRENT_USER\Software\Valve\Steam
 
     #[test]
     fn skips_malformed_amazon_rows_without_losing_valid_games() {
-        use rusqlite::{params, Connection};
+        use rusqlite::{Connection, params};
 
         let root = std::env::temp_dir().join(format!(
             "amethys-amazon-malformed-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let installed = root.join("Valid Game");
         std::fs::create_dir_all(&installed).expect("create install");
         let database = root.join("GameInstallInfo.sqlite");
         let connection = Connection::open(&database).expect("create database");
-        connection.execute_batch(
-            "CREATE TABLE DbSet (Id, InstallDirectory, ProductTitle);"
-        ).expect("create metadata table");
-        connection.execute(
-            "INSERT INTO DbSet VALUES (?1, ?2, ?3)",
-            params![42_i64, installed.to_string_lossy(), "Malformed ID"],
-        ).expect("insert malformed ID row");
-        connection.execute(
-            "INSERT INTO DbSet VALUES (?1, ?2, ?3)",
-            params!["amzn.valid", installed.to_string_lossy(), "Valid Game"],
-        ).expect("insert valid row");
+        connection
+            .execute_batch("CREATE TABLE DbSet (Id, InstallDirectory, ProductTitle);")
+            .expect("create metadata table");
+        connection
+            .execute(
+                "INSERT INTO DbSet VALUES (?1, ?2, ?3)",
+                params![42_i64, installed.to_string_lossy(), "Malformed ID"],
+            )
+            .expect("insert malformed ID row");
+        connection
+            .execute(
+                "INSERT INTO DbSet VALUES (?1, ?2, ?3)",
+                params!["amzn.valid", installed.to_string_lossy(), "Valid Game"],
+            )
+            .expect("insert valid row");
         drop(connection);
 
         let games = super::scan_amazon_games(&database);
@@ -2804,13 +3197,15 @@ HKEY_CURRENT_USER\Software\Valve\Steam
 
     #[test]
     fn keeps_amazon_product_id_available_after_rejecting_duplicate_path() {
-        use rusqlite::{params, Connection};
+        use rusqlite::{Connection, params};
 
         let root = std::env::temp_dir().join(format!(
             "amethys-amazon-dedup-order-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let first_install = root.join("First Game");
         let valid_second_install = root.join("Second Game");
@@ -2818,25 +3213,45 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         std::fs::create_dir_all(&valid_second_install).expect("create second install");
         let database = root.join("GameInstallInfo.sqlite");
         let connection = Connection::open(&database).expect("create fixture database");
-        connection.execute_batch(
-            "CREATE TABLE DbSet (Id TEXT, InstallDirectory TEXT, ProductTitle TEXT);"
-        ).expect("create Amazon metadata table");
+        connection
+            .execute_batch(
+                "CREATE TABLE DbSet (Id TEXT, InstallDirectory TEXT, ProductTitle TEXT);",
+            )
+            .expect("create Amazon metadata table");
         for (id, path, title) in [
-            ("amzn.first", first_install.to_string_lossy().into_owned(), "First Game"),
-            ("amzn.second", first_install.to_string_lossy().into_owned(), "Duplicate Path"),
-            ("amzn.second", valid_second_install.to_string_lossy().into_owned(), "Second Game"),
+            (
+                "amzn.first",
+                first_install.to_string_lossy().into_owned(),
+                "First Game",
+            ),
+            (
+                "amzn.second",
+                first_install.to_string_lossy().into_owned(),
+                "Duplicate Path",
+            ),
+            (
+                "amzn.second",
+                valid_second_install.to_string_lossy().into_owned(),
+                "Second Game",
+            ),
         ] {
-            connection.execute(
-                "INSERT INTO DbSet (Id, InstallDirectory, ProductTitle) VALUES (?1, ?2, ?3)",
-                params![id, path, title],
-            ).expect("insert Amazon product");
+            connection
+                .execute(
+                    "INSERT INTO DbSet (Id, InstallDirectory, ProductTitle) VALUES (?1, ?2, ?3)",
+                    params![id, path, title],
+                )
+                .expect("insert Amazon product");
         }
         drop(connection);
 
         let games = super::scan_amazon_games(&database);
         assert_eq!(games.len(), 2);
-        assert!(games.iter().any(|game| game.platform_id.as_deref() == Some("amzn.second")
-            && game.install_path == valid_second_install));
+        assert!(
+            games
+                .iter()
+                .any(|game| game.platform_id.as_deref() == Some("amzn.second")
+                    && game.install_path == valid_second_install)
+        );
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
@@ -2845,8 +3260,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-amazon-empty-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("create fixture root");
         let unknown = root.join("unknown.sqlite");
@@ -2864,8 +3281,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-ubisoft-native-discovery-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let install = root.join("The Crew");
         std::fs::create_dir_all(&install).expect("create game install");
@@ -2885,8 +3304,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-ubisoft-discovery-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let install = root.join("Assassins Creed");
         std::fs::create_dir_all(&install).expect("create game install");
@@ -2908,8 +3329,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-ea-duplicates-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let first_install = root.join("Game");
         let duplicate_install = root.join("Game-copy");
@@ -2919,11 +3342,13 @@ HKEY_CURRENT_USER\Software\Valve\Steam
             std::fs::write(
                 install.join("__Installer/installerdata.xml"),
                 "<gameTitle>Same Game</gameTitle><contentID>EA-123</contentID>",
-            ).expect("write EA installer metadata");
+            )
+            .expect("write EA installer metadata");
         }
         let output = format!(
             "HKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\First\n    Install Dir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\EA Games\\Second\n    Install Dir    REG_SZ    {}\n",
-            first_install.display(), duplicate_install.display()
+            first_install.display(),
+            duplicate_install.display()
         );
         let games = super::parse_ea_registry_output(&output);
         assert_eq!(games.len(), 1);
@@ -2937,8 +3362,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-ea-dedup-order-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let first_install = root.join("First Game");
         let valid_second_install = root.join("Second Game");
@@ -2953,16 +3380,23 @@ HKEY_CURRENT_USER\Software\Valve\Steam
             std::fs::write(
                 install.join("__Installer/installerdata.xml"),
                 format!("<gameTitle>{title}</gameTitle>"),
-            ).expect("write EA installer metadata");
+            )
+            .expect("write EA installer metadata");
         }
         let output = format!(
             "HKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\First\n    Install Dir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\Second\n    Install Dir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\Second\n    Install Dir    REG_SZ    {}\n",
-            first_install.display(), first_install.display(), valid_second_install.display()
+            first_install.display(),
+            first_install.display(),
+            valid_second_install.display()
         );
         let games = super::parse_ea_registry_output(&output);
         assert_eq!(games.len(), 2);
-        assert!(games.iter().any(|game| game.platform_id.as_deref() == Some("Second")
-            && game.install_path == valid_second_install));
+        assert!(
+            games
+                .iter()
+                .any(|game| game.platform_id.as_deref() == Some("Second")
+                    && game.install_path == valid_second_install)
+        );
         std::fs::remove_dir_all(root).expect("cleanup");
     }
 
@@ -2971,8 +3405,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-ea-unrelated-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let ea_install = root.join("EA Game");
         let unrelated_install = root.join("Other Vendor Game");
@@ -2981,12 +3417,13 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         std::fs::write(
             ea_install.join("__Installer/installerdata.xml"),
             "<gameTitle>Valid Game</gameTitle><contentID>EA-123</contentID>",
-        ).expect("write EA installer metadata");
-        std::fs::create_dir_all(&unrelated_install)
-            .expect("create unrelated install directory");
+        )
+        .expect("write EA installer metadata");
+        std::fs::create_dir_all(&unrelated_install).expect("create unrelated install directory");
         let output = format!(
             "HKEY_LOCAL_MACHINE\\SOFTWARE\\EA Games\\EA-123\n    Install Dir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\OtherVendor\\Installs\\99\n    Install Dir    REG_SZ    {}\n",
-            ea_install.display(), unrelated_install.display()
+            ea_install.display(),
+            unrelated_install.display()
         );
         let games = super::parse_ea_registry_output(&output);
         assert_eq!(games.len(), 1);
@@ -2999,14 +3436,17 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-ubisoft-unrelated-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let install = root.join("Not Ubisoft");
         std::fs::create_dir_all(&install).expect("create unrelated install");
         let output = format!(
             "HKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\44\n    InstallDir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\OtherVendor\\Installs\\99\n    InstallDir    REG_SZ    {}\n",
-            install.display(), install.display()
+            install.display(),
+            install.display()
         );
         let games = super::parse_ubisoft_registry_output(&output);
         assert_eq!(games.len(), 1);
@@ -3019,8 +3459,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-ubisoft-duplicates-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let first_install = root.join("Game");
         let duplicate_install = root.join("Game-copy");
@@ -3028,7 +3470,8 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         std::fs::create_dir_all(&duplicate_install).expect("create duplicate install");
         let output = format!(
             "HKEY_LOCAL_MACHINE\\SOFTWARE\\Ubisoft\\Launcher\\Installs\\44\n    InstallDir    REG_SZ    {}\nHKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Ubisoft\\Launcher\\Installs\\44\n    InstallDir    REG_SZ    {}\n",
-            first_install.display(), duplicate_install.display()
+            first_install.display(),
+            duplicate_install.display()
         );
         let games = super::parse_ubisoft_registry_output(&output);
         assert_eq!(games.len(), 1);
@@ -3074,13 +3517,18 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-battlenet-discovery-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let install = root.join("WoW");
         std::fs::create_dir_all(&install).expect("create installed game");
         let settings = encode_bytes_field(1, install.to_string_lossy().as_bytes());
-        let base_state = encode_varint(8).into_iter().chain(encode_varint(1)).collect::<Vec<_>>();
+        let base_state = encode_varint(8)
+            .into_iter()
+            .chain(encode_varint(1))
+            .collect::<Vec<_>>();
         let cached_state = encode_bytes_field(1, &base_state);
         let mut product = encode_bytes_field(2, b"wow");
         product.extend(encode_bytes_field(3, &settings));
@@ -3103,8 +3551,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-battlenet-duplicates-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let first_install = root.join("WoW");
         let second_install = root.join("WoW-copy");
@@ -3113,7 +3563,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
 
         let make_product = |code: &[u8], install: &Path| {
             let settings = encode_bytes_field(1, install.to_string_lossy().as_bytes());
-            let base_state = encode_varint(8).into_iter().chain(encode_varint(1)).collect::<Vec<_>>();
+            let base_state = encode_varint(8)
+                .into_iter()
+                .chain(encode_varint(1))
+                .collect::<Vec<_>>();
             let cached_state = encode_bytes_field(1, &base_state);
             let mut product = encode_bytes_field(2, code);
             product.extend(encode_bytes_field(3, &settings));
@@ -3121,7 +3574,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
             product
         };
         let mut database_bytes = encode_bytes_field(1, &make_product(b"wow", &first_install));
-        database_bytes.extend(encode_bytes_field(1, &make_product(b"WOW", &second_install)));
+        database_bytes.extend(encode_bytes_field(
+            1,
+            &make_product(b"WOW", &second_install),
+        ));
         let database = root.join("product.db");
         std::fs::write(&database, database_bytes).expect("write protobuf fixture");
 
@@ -3137,21 +3593,25 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-battlenet-uppercase-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let install = root.join("WoW");
         std::fs::create_dir_all(&install).expect("create install");
 
         let settings = encode_bytes_field(1, install.to_string_lossy().as_bytes());
-        let base_state = encode_varint(8).into_iter().chain(encode_varint(1)).collect::<Vec<_>>();
+        let base_state = encode_varint(8)
+            .into_iter()
+            .chain(encode_varint(1))
+            .collect::<Vec<_>>();
         let cached_state = encode_bytes_field(1, &base_state);
         let mut product = encode_bytes_field(2, b"WOW");
         product.extend(encode_bytes_field(3, &settings));
         product.extend(encode_bytes_field(4, &cached_state));
         let database = root.join("product.db");
-        std::fs::write(&database, encode_bytes_field(1, &product))
-            .expect("write protobuf fixture");
+        std::fs::write(&database, encode_bytes_field(1, &product)).expect("write protobuf fixture");
 
         let games = super::scan_battlenet_product_db(&database);
         assert_eq!(games.len(), 1);
@@ -3165,8 +3625,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-battlenet-invalid-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("create fixture root");
         let settings = encode_bytes_field(1, root.join("missing").to_string_lossy().as_bytes());
@@ -3185,13 +3647,18 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-battlenet-not-installed-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let install = root.join("World of Warcraft");
         std::fs::create_dir_all(&install).expect("create leftover game directory");
         let settings = encode_bytes_field(1, install.to_string_lossy().as_bytes());
-        let base_state = encode_varint(8).into_iter().chain(encode_varint(0)).collect::<Vec<_>>();
+        let base_state = encode_varint(8)
+            .into_iter()
+            .chain(encode_varint(0))
+            .collect::<Vec<_>>();
         let cached_state = encode_bytes_field(1, &base_state);
         let mut product = encode_bytes_field(2, b"wow");
         product.extend(encode_bytes_field(3, &settings));
@@ -3208,8 +3675,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-battlenet-large-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("create fixture root");
         let database = root.join("product.db");
@@ -3234,10 +3703,8 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let alias_root = root.join("z-library");
         std::fs::create_dir_all(actual_root.join("Same Game")).expect("create install");
         std::fs::create_dir_all(&alias_root).expect("create alias root");
-        std::os::unix::fs::symlink(
-            actual_root.join("Same Game"),
-            alias_root.join("Same Game"),
-        ).expect("create install alias");
+        std::os::unix::fs::symlink(actual_root.join("Same Game"), alias_root.join("Same Game"))
+            .expect("create install alias");
 
         let forward = scan_game_folders("EA app", &[alias_root.clone(), actual_root.clone()]);
         let reverse = scan_game_folders("EA app", &[actual_root.clone(), alias_root.clone()]);
@@ -3266,7 +3733,11 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let games = scan_game_folders("EA app", std::slice::from_ref(&root));
         assert_eq!(games.len(), 2);
         assert!(games.iter().any(|game| game.name == "Installed Game"));
-        assert!(games.iter().any(|game| game.name == "Another Installed Game"));
+        assert!(
+            games
+                .iter()
+                .any(|game| game.name == "Another Installed Game")
+        );
         assert!(games.iter().all(|game| game.platform == "EA app"));
         assert!(games.iter().all(|game| game.platform_id.is_none()));
         assert!(!games.iter().any(|game| game.name == "Game Data"));
@@ -3279,8 +3750,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-heroic-discovery-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("create fixture root");
         let installed = root.join("Hades");
@@ -3297,15 +3770,22 @@ HKEY_CURRENT_USER\Software\Valve\Steam
             "RemovedApp": { "app_name": "RemovedApp", "title": "Removed Game", "install_path": root.join("Removed Game").to_string_lossy() },
             "BrokenApp": { "app_name": "BrokenApp", "title": "Broken Game" }
         });
-        std::fs::write(&database, format!("\u{feff}{}", contents)).expect("write BOM-prefixed Legendary metadata");
+        std::fs::write(&database, format!("\u{feff}{}", contents))
+            .expect("write BOM-prefixed Legendary metadata");
 
         let games = super::scan_heroic_legendary_installed(&database);
         assert_eq!(games.len(), 2);
         assert!(games.iter().all(|game| game.platform == "Heroic"));
-        let hades = games.iter().find(|game| game.platform_id.as_deref() == Some("HadesApp")).unwrap();
+        let hades = games
+            .iter()
+            .find(|game| game.platform_id.as_deref() == Some("HadesApp"))
+            .unwrap();
         assert_eq!(hades.name, "Hades");
         assert_eq!(hades.install_path, installed);
-        let celeste = games.iter().find(|game| game.platform_id.as_deref() == Some("CelesteApp")).unwrap();
+        let celeste = games
+            .iter()
+            .find(|game| game.platform_id.as_deref() == Some("CelesteApp"))
+            .unwrap();
         assert_eq!(celeste.name, "Celeste");
         assert_eq!(celeste.install_path, whitespace_install);
         assert!(super::scan_heroic_legendary_installed(&root.join("missing.json")).is_empty());
@@ -3314,9 +3794,18 @@ HKEY_CURRENT_USER\Software\Valve\Steam
 
     #[test]
     fn filters_steam_runtime_components_from_game_results() {
-        assert!(super::is_steam_runtime_component("228980", "Steamworks Common Redistributables"));
-        assert!(super::is_steam_runtime_component("1070560", "Steam Linux Runtime"));
-        assert!(super::is_steam_runtime_component("123", "Proton Experimental"));
+        assert!(super::is_steam_runtime_component(
+            "228980",
+            "Steamworks Common Redistributables"
+        ));
+        assert!(super::is_steam_runtime_component(
+            "1070560",
+            "Steam Linux Runtime"
+        ));
+        assert!(super::is_steam_runtime_component(
+            "123",
+            "Proton Experimental"
+        ));
         assert!(!super::is_steam_runtime_component("570", "Dota 2"));
     }
 
@@ -3365,21 +3854,25 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-battlenet-unknown-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let install = root.join("CustomGame");
         std::fs::create_dir_all(&install).expect("create install");
 
         let settings = encode_bytes_field(1, install.to_string_lossy().as_bytes());
-        let base_state = encode_varint(8).into_iter().chain(encode_varint(1)).collect::<Vec<_>>();
+        let base_state = encode_varint(8)
+            .into_iter()
+            .chain(encode_varint(1))
+            .collect::<Vec<_>>();
         let cached_state = encode_bytes_field(1, &base_state);
         let mut product = encode_bytes_field(2, b"future_product_code");
         product.extend(encode_bytes_field(3, &settings));
         product.extend(encode_bytes_field(4, &cached_state));
         let database = root.join("product.db");
-        std::fs::write(&database, encode_bytes_field(1, &product))
-            .expect("write protobuf fixture");
+        std::fs::write(&database, encode_bytes_field(1, &product)).expect("write protobuf fixture");
 
         let games = super::scan_battlenet_product_db(&database);
         assert_eq!(games.len(), 1);
@@ -3394,8 +3887,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-ubisoft-registry-case-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let install = root.join("Ubisoft Game");
         std::fs::create_dir_all(&install).expect("create Ubisoft install");
@@ -3417,7 +3912,11 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         );
         assert_eq!(roots.len(), 2);
         assert!(roots.iter().any(|path| path.to_string_lossy() == r"A:\EA"));
-        assert!(roots.iter().any(|path| path.to_string_lossy() == r"D:\Game Libraries\EA"));
+        assert!(
+            roots
+                .iter()
+                .any(|path| path.to_string_lossy() == r"D:\Game Libraries\EA")
+        );
     }
 
     #[test]
@@ -3425,8 +3924,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-ea-registry-case-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let install = root.join("EA Game");
         std::fs::create_dir_all(install.join("__Installer")).expect("create EA metadata");
@@ -3437,7 +3938,8 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let output = format!(
             "hkey_local_machine\\software\\ea games\\CaseGame\\n    install dir    REG_SZ    {}\\n",
             install.display()
-        ).replace("\\n", "\n");
+        )
+        .replace("\\n", "\n");
         let games = super::parse_ea_registry_output(&output);
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].platform_id.as_deref(), Some("EA:case-123"));
@@ -3450,8 +3952,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-riot-discovery-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let valorant = root.join("VALORANT");
         let league = root.join("League of Legends");
@@ -3467,7 +3971,12 @@ HKEY_CURRENT_USER\Software\Valve\Steam
 
         let games = super::scan_riot_client_installs(&metadata);
         assert_eq!(games.len(), 2);
-        assert!(games.iter().any(|game| game.name == "VALORANT" && game.platform_id.as_deref() == Some("valorant")));
+        assert!(
+            games
+                .iter()
+                .any(|game| game.name == "VALORANT"
+                    && game.platform_id.as_deref() == Some("valorant"))
+        );
         assert!(games.iter().any(|game| game.name == "League of Legends"));
         assert!(games.iter().all(|game| game.platform == "Riot Games"));
         std::fs::remove_dir_all(root).expect("cleanup");
@@ -3478,8 +3987,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-riot-yaml-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let metadata = root.join("Metadata/valorant.live");
         let install = root.join("A Games/VALORANT");
@@ -3488,7 +3999,8 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         std::fs::write(
             metadata.join("valorant.live.product_settings.yaml"),
             format!("product_install_root: \"{}\"\n", install.display()),
-        ).expect("write Riot product settings");
+        )
+        .expect("write Riot product settings");
 
         let games = super::scan_riot_product_settings(&root.join("Metadata"));
         assert_eq!(games.len(), 1);
@@ -3503,8 +4015,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         let root = std::env::temp_dir().join(format!(
             "amethys-riot-invalid-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("create fixture");
         let metadata = root.join("RiotClientInstalls.json");
@@ -3532,10 +4046,7 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         std::fs::create_dir_all(&second).expect("create second install");
         std::fs::create_dir_all(&first).expect("create first install");
 
-        let games = scan_game_folders(
-            "EA app",
-            &[root.join("z-library"), root.join("a-library")],
-        );
+        let games = scan_game_folders("EA app", &[root.join("z-library"), root.join("a-library")]);
         assert_eq!(games.len(), 2);
         assert_eq!(games[0].name, games[1].name);
         assert_eq!(games[0].install_path, first);
@@ -3543,6 +4054,4 @@ HKEY_CURRENT_USER\Software\Valve\Steam
 
         std::fs::remove_dir_all(root).expect("cleanup");
     }
-
-
 }

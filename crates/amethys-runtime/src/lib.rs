@@ -3,7 +3,12 @@ use amethys_events::{CoreEvent, EventBus};
 
 /// Lifecycle state of the core runtime.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RuntimeState { Created, Running, Stopping, Stopped }
+pub enum RuntimeState {
+    Created,
+    Running,
+    Stopping,
+    Stopped,
+}
 
 /// Owns the core lifecycle and its internal event bus.
 pub struct CoreRuntime {
@@ -14,14 +19,21 @@ pub struct CoreRuntime {
 impl CoreRuntime {
     #[must_use]
     pub fn new(events: EventBus) -> Self {
-        Self { state: RuntimeState::Created, events }
+        Self {
+            state: RuntimeState::Created,
+            events,
+        }
     }
 
     #[must_use]
-    pub const fn state(&self) -> RuntimeState { self.state }
+    pub const fn state(&self) -> RuntimeState {
+        self.state
+    }
 
     #[must_use]
-    pub const fn events(&self) -> &EventBus { &self.events }
+    pub const fn events(&self) -> &EventBus {
+        &self.events
+    }
 
     pub fn start(&mut self) -> Result<(), AmethysError> {
         if self.state != RuntimeState::Created {

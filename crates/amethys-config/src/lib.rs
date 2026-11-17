@@ -27,7 +27,7 @@ fn resolve_data_directory(
     local_app_data: Option<std::ffi::OsString>,
     home: Option<std::ffi::OsString>,
     xdg_data_home: Option<std::ffi::OsString>,
- ) -> io::Result<PathBuf> {
+) -> io::Result<PathBuf> {
     #[cfg(unix)]
     let _ = (&app_data, &local_app_data);
     #[cfg(target_os = "macos")]
@@ -124,7 +124,11 @@ pub struct AppConfig {
 
 impl Default for AppConfig {
     fn default() -> Self {
-        Self { schema_version: 1, start_agent_with_session: true, offline_reminder_days: 7 }
+        Self {
+            schema_version: 1,
+            start_agent_with_session: true,
+            offline_reminder_days: 7,
+        }
     }
 }
 
@@ -134,16 +138,22 @@ impl AppConfig {
         let path = path.as_ref();
         let bytes = match fs::read(path).await {
             Ok(bytes) => bytes,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Self::default()),
-            Err(error) => return Err(AmethysError::new(
-                ErrorCode::ConfigurationRead,
-                format!("Could not read {}: {error}", path.display()),
-            )),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Self::default());
+            }
+            Err(error) => {
+                return Err(AmethysError::new(
+                    ErrorCode::ConfigurationRead,
+                    format!("Could not read {}: {error}", path.display()),
+                ));
+            }
         };
-        let config: Self = serde_json::from_slice(&bytes).map_err(|error| AmethysError::new(
-            ErrorCode::ConfigurationRead,
-            format!("Configuration file is invalid: {error}"),
-        ))?;
+        let config: Self = serde_json::from_slice(&bytes).map_err(|error| {
+            AmethysError::new(
+                ErrorCode::ConfigurationRead,
+                format!("Configuration file is invalid: {error}"),
+            )
+        })?;
         if config.schema_version != 1 {
             return Err(AmethysError::new(
                 ErrorCode::ConfigurationRead,
@@ -169,15 +179,19 @@ impl AppConfig {
         }
 
         let path = path.as_ref();
-        if let Some(parent) = path.parent().filter(|parent| !parent.as_os_str().is_empty()) {
-            fs::create_dir_all(parent).await.map_err(|error| AmethysError::new(
-                ErrorCode::ConfigurationWrite,
-                format!("Could not create {}: {error}", parent.display()),
-            ))?;
+        if let Some(parent) = path
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            fs::create_dir_all(parent).await.map_err(|error| {
+                AmethysError::new(
+                    ErrorCode::ConfigurationWrite,
+                    format!("Could not create {}: {error}", parent.display()),
+                )
+            })?;
         }
-        let bytes = serde_json::to_vec_pretty(self).map_err(|error|
-            AmethysError::new(ErrorCode::ConfigurationWrite, error.to_string())
-        )?;
+        let bytes = serde_json::to_vec_pretty(self)
+            .map_err(|error| AmethysError::new(ErrorCode::ConfigurationWrite, error.to_string()))?;
         // A unique sibling avoids collisions between concurrent saves and keeps the
         // final rename on the same filesystem.
         let temporary = path.with_extension(format!("{}.tmp", uuid::Uuid::new_v4()));
@@ -225,15 +239,21 @@ impl AppConfig {
         // contents. Without this, a power loss can lose the rename itself.
         #[cfg(unix)]
         {
-            let parent = path.parent()
+            let parent = path
+                .parent()
                 .filter(|parent| !parent.as_os_str().is_empty())
                 .unwrap_or_else(|| Path::new("."));
             std::fs::File::open(parent)
                 .and_then(|directory| directory.sync_all())
-                .map_err(|error| AmethysError::new(
-                    ErrorCode::ConfigurationWrite,
-                    format!("Could not sync configuration directory {}: {error}", parent.display()),
-                ))?;
+                .map_err(|error| {
+                    AmethysError::new(
+                        ErrorCode::ConfigurationWrite,
+                        format!(
+                            "Could not sync configuration directory {}: {error}",
+                            parent.display()
+                        ),
+                    )
+                })?;
         }
         Ok(())
     }
@@ -242,9 +262,9 @@ impl AppConfig {
 #[cfg(test)]
 mod tests {
     use super::{AppConfig, resolve_data_directory};
-    use std::{ffi::OsString, path::Path};
     #[cfg(any(windows, all(unix, not(target_os = "macos"))))]
     use std::io;
+    use std::{ffi::OsString, path::Path};
 
     #[cfg(all(unix, not(target_os = "macos")))]
     #[test]
@@ -284,8 +304,7 @@ mod tests {
         std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
             .expect("initial permissions are set");
 
-        super::restrict_data_directory_permissions(&path)
-            .expect("private permissions are applied");
+        super::restrict_data_directory_permissions(&path).expect("private permissions are applied");
         let mode = std::fs::metadata(&path)
             .expect("directory metadata is available")
             .permissions()
@@ -372,7 +391,10 @@ mod tests {
     #[tokio::test]
     async fn missing_file_returns_defaults() {
         let path = std::env::temp_dir().join(format!("amethys-{}.json", uuid::Uuid::new_v4()));
-        assert_eq!(AppConfig::load(path).await.expect("default config"), AppConfig::default());
+        assert_eq!(
+            AppConfig::load(path).await.expect("default config"),
+            AppConfig::default()
+        );
     }
 
     #[tokio::test]
@@ -382,29 +404,54 @@ mod tests {
             .await
             .expect("future-version fixture is written");
 
-        let error = AppConfig::load(&path).await.expect_err("unsupported schema must fail");
+        let error = AppConfig::load(&path)
+            .await
+            .expect_err("unsupported schema must fail");
         assert_eq!(error.code(), amethys_errors::ErrorCode::ConfigurationRead);
-        assert!(error.message().contains("Unsupported configuration schema version 2"));
-        tokio::fs::remove_file(path).await.expect("fixture is removed");
+        assert!(
+            error
+                .message()
+                .contains("Unsupported configuration schema version 2")
+        );
+        tokio::fs::remove_file(path)
+            .await
+            .expect("fixture is removed");
     }
 
     #[tokio::test]
     async fn save_rejects_unsupported_schema_versions_without_touching_file() {
         let path = std::env::temp_dir().join(format!("amethys-{}.json", uuid::Uuid::new_v4()));
-        let original = r#"{"schema_version":1,"start_agent_with_session":false,"offline_reminder_days":21}"#;
-        tokio::fs::write(&path, original).await.expect("original config is written");
+        let original =
+            r#"{"schema_version":1,"start_agent_with_session":false,"offline_reminder_days":21}"#;
+        tokio::fs::write(&path, original)
+            .await
+            .expect("original config is written");
 
         let unsupported = AppConfig {
             schema_version: 2,
             start_agent_with_session: true,
             offline_reminder_days: 30,
         };
-        let error = unsupported.save(&path).await.expect_err("unsupported schema must fail");
+        let error = unsupported
+            .save(&path)
+            .await
+            .expect_err("unsupported schema must fail");
         assert_eq!(error.code(), amethys_errors::ErrorCode::ConfigurationWrite);
-        assert!(error.message().contains("Unsupported configuration schema version 2"));
-        assert_eq!(tokio::fs::read_to_string(&path).await.expect("original remains"), original);
+        assert!(
+            error
+                .message()
+                .contains("Unsupported configuration schema version 2")
+        );
+        assert_eq!(
+            tokio::fs::read_to_string(&path)
+                .await
+                .expect("original remains"),
+            original
+        );
 
-        tokio::fs::remove_file(path).await.expect("fixture is removed");
+        tokio::fs::remove_file(path)
+            .await
+            .expect("fixture is removed");
     }
 
     #[tokio::test]
@@ -417,9 +464,17 @@ mod tests {
             offline_reminder_days: 14,
         };
 
-        config.save(path).await.expect("relative config save succeeds");
-        assert_eq!(AppConfig::load(path).await.expect("saved config loads"), config);
-        tokio::fs::remove_file(path).await.expect("temporary test config is removed");
+        config
+            .save(path)
+            .await
+            .expect("relative config save succeeds");
+        assert_eq!(
+            AppConfig::load(path).await.expect("saved config loads"),
+            config
+        );
+        tokio::fs::remove_file(path)
+            .await
+            .expect("temporary test config is removed");
     }
 
     #[tokio::test]
@@ -434,7 +489,12 @@ mod tests {
             offline_reminder_days: 30,
         };
         second.save(&path).await.expect("replacement save succeeds");
-        assert_eq!(AppConfig::load(&path).await.expect("replacement loads"), second);
-        tokio::fs::remove_file(path).await.expect("test config is removed");
+        assert_eq!(
+            AppConfig::load(&path).await.expect("replacement loads"),
+            second
+        );
+        tokio::fs::remove_file(path)
+            .await
+            .expect("test config is removed");
     }
 }

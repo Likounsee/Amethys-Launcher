@@ -61,11 +61,8 @@ async fn connect_to_core() -> Result<BoxedIpcStream, Box<dyn Error>> {
 
 /// Sends one local command with bounded connection and response times.
 async fn request_core(command: IpcCommand) -> Result<amethys_ipc::IpcResponse, Box<dyn Error>> {
-    let mut connection = tokio::time::timeout(
-        std::time::Duration::from_secs(5),
-        connect_to_core(),
-    )
-    .await??;
+    let mut connection =
+        tokio::time::timeout(std::time::Duration::from_secs(5), connect_to_core()).await??;
 
     let response = tokio::time::timeout(
         std::time::Duration::from_secs(15),
@@ -96,7 +93,9 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
                 executable: None,
             })
         }
-        [group, action, name, platform, install_path, executable] if group == "games" && action == "add" => {
+        [group, action, name, platform, install_path, executable]
+            if group == "games" && action == "add" =>
+        {
             Ok(IpcCommand::AddGame {
                 name: name.clone(),
                 platform: platform.clone(),
@@ -107,7 +106,9 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
         [group, action, id] if group == "games" && action == "remove" => {
             Ok(IpcCommand::RemoveGame { id: id.clone() })
         }
-        _ => Err("Utilisation : amethysctl games add <nom> <plateforme> <dossier> [executable] | games remove <id> | games scan | games import <appid> | games import <plateforme> <id> | games import-all | games verify [--json]"),
+        _ => Err(
+            "Utilisation : amethysctl games add <nom> <plateforme> <dossier> [executable] | games remove <id> | games scan | games import <appid> | games import <plateforme> <id> | games import-all | games verify [--json]",
+        ),
     }
 }
 
@@ -116,11 +117,15 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
 fn same_install_location(saved: &str, detected: &std::path::Path) -> bool {
     let saved = std::path::Path::new(saved);
     let saved = saved.canonicalize().unwrap_or_else(|_| saved.to_path_buf());
-    let detected = detected.canonicalize().unwrap_or_else(|_| detected.to_path_buf());
+    let detected = detected
+        .canonicalize()
+        .unwrap_or_else(|_| detected.to_path_buf());
 
     #[cfg(windows)]
     {
-        saved.to_string_lossy().eq_ignore_ascii_case(&detected.to_string_lossy())
+        saved
+            .to_string_lossy()
+            .eq_ignore_ascii_case(&detected.to_string_lossy())
     }
     #[cfg(not(windows))]
     {
@@ -143,7 +148,9 @@ fn game_is_already_imported(
 
 async fn load_saved_games() -> Result<Vec<amethys_ipc::IpcGameEntry>, Box<dyn Error>> {
     let response = request_core(IpcCommand::ListGames).await.map_err(|error| {
-        format!("Impossible de joindre Amethys. Vérifie que le programme fonctionne. Détail : {error}")
+        format!(
+            "Impossible de joindre Amethys. Vérifie que le programme fonctionne. Détail : {error}"
+        )
     })?;
 
     match response.result {
@@ -151,10 +158,9 @@ async fn load_saved_games() -> Result<Vec<amethys_ipc::IpcGameEntry>, Box<dyn Er
         Err(remote_error) => Err(format!(
             "Impossible de vérifier la bibliothèque ({}): {}",
             remote_error.code, remote_error.message
-        ).into()),
-        Ok(_) => Err(
-            "Amethys a envoyé une réponse inattendue en lisant la bibliothèque.".into(),
-        ),
+        )
+        .into()),
+        Ok(_) => Err("Amethys a envoyé une réponse inattendue en lisant la bibliothèque.".into()),
     }
 }
 
@@ -167,7 +173,8 @@ fn filter_games_by_platform<'a>(
     if platform.is_empty() {
         return Vec::new();
     }
-    games.iter()
+    games
+        .iter()
         .filter(|game| game.platform.eq_ignore_ascii_case(platform))
         .collect()
 }
@@ -179,14 +186,27 @@ async fn list_games_for_platform(platform: &str) -> Result<(), Box<dyn Error>> {
     let games = load_saved_games().await?;
     let matches = filter_games_by_platform(&games, platform);
     if matches.is_empty() {
-        println!("Aucun jeu enregistré pour la plateforme « {} ».", platform.trim());
+        println!(
+            "Aucun jeu enregistré pour la plateforme « {} ».",
+            platform.trim()
+        );
         return Ok(());
     }
-    println!("{} jeu(x) enregistré(s) sur {} :", matches.len(), platform.trim());
+    println!(
+        "{} jeu(x) enregistré(s) sur {} :",
+        matches.len(),
+        platform.trim()
+    );
     for game in matches {
-        println!("- {}{} — {}", game.name,
-            game.platform_id.as_deref().map(|id| format!(" — ID {id}")).unwrap_or_default(),
-            game.install_path);
+        println!(
+            "- {}{} — {}",
+            game.name,
+            game.platform_id
+                .as_deref()
+                .map(|id| format!(" — ID {id}"))
+                .unwrap_or_default(),
+            game.install_path
+        );
     }
     Ok(())
 }
@@ -205,17 +225,21 @@ fn search_saved_games<'a>(
         return Vec::new();
     }
 
-    games.iter().filter(|game| {
-        let searchable = format!(
-            "{} {} {} {} {}",
-            game.name,
-            game.platform,
-            game.platform_id.as_deref().unwrap_or_default(),
-            game.install_path,
-            game.executable.as_deref().unwrap_or_default(),
-        ).to_lowercase();
-        terms.iter().all(|term| searchable.contains(term))
-    }).collect()
+    games
+        .iter()
+        .filter(|game| {
+            let searchable = format!(
+                "{} {} {} {} {}",
+                game.name,
+                game.platform,
+                game.platform_id.as_deref().unwrap_or_default(),
+                game.install_path,
+                game.executable.as_deref().unwrap_or_default(),
+            )
+            .to_lowercase();
+            terms.iter().all(|term| searchable.contains(term))
+        })
+        .collect()
 }
 
 async fn search_library(query: &str) -> Result<(), Box<dyn Error>> {
@@ -236,7 +260,10 @@ async fn search_library(query: &str) -> Result<(), Box<dyn Error>> {
             "- {} ({}){} — {}",
             game.name,
             game.platform,
-            game.platform_id.as_deref().map(|id| format!(" — ID {id}")).unwrap_or_default(),
+            game.platform_id
+                .as_deref()
+                .map(|id| format!(" — ID {id}"))
+                .unwrap_or_default(),
             game.install_path,
         );
     }
@@ -248,7 +275,10 @@ async fn import_one_detected_game(
     saved_games: &mut Vec<amethys_ipc::IpcGameEntry>,
 ) -> Result<bool, Box<dyn Error>> {
     if game_is_already_imported(saved_games, game) {
-        println!("{} est déjà présent dans la bibliothèque Amethys.", game.name);
+        println!(
+            "{} est déjà présent dans la bibliothèque Amethys.",
+            game.name
+        );
         return Ok(false);
     }
 
@@ -260,7 +290,9 @@ async fn import_one_detected_game(
         executable: None,
     };
     let response = request_core(command).await.map_err(|error| {
-        format!("Impossible de joindre Amethys. Vérifie que le programme fonctionne. Détail : {error}")
+        format!(
+            "Impossible de joindre Amethys. Vérifie que le programme fonctionne. Détail : {error}"
+        )
     })?;
     match response.result {
         Ok(IpcResponsePayload::GameAdded { game }) => {
@@ -271,7 +303,8 @@ async fn import_one_detected_game(
         Err(remote_error) => Err(format!(
             "Amethys n'a pas pu ajouter le jeu ({}): {}",
             remote_error.code, remote_error.message
-        ).into()),
+        )
+        .into()),
         Ok(_) => Err("Amethys a envoyé une réponse inattendue pendant l'ajout du jeu.".into()),
     }
 }
@@ -312,7 +345,8 @@ async fn import_detected_games(
         Err(format!(
             "Certains jeux n'ont pas pu être importés : {}.",
             failures.join(", ")
-        ).into())
+        )
+        .into())
     }
 }
 
@@ -320,7 +354,18 @@ async fn import_detected_games(
 fn supported_platforms() -> &'static [&'static str] {
     #[cfg(windows)]
     {
-        &["Steam", "Epic Games", "Heroic", "GOG Galaxy", "Amazon Games", "EA app", "Ubisoft Connect", "Battle.net", "Riot Games", "Xbox app"]
+        &[
+            "Steam",
+            "Epic Games",
+            "Heroic",
+            "GOG Galaxy",
+            "Amazon Games",
+            "EA app",
+            "Ubisoft Connect",
+            "Battle.net",
+            "Riot Games",
+            "Xbox app",
+        ]
     }
     #[cfg(target_os = "macos")]
     {
@@ -369,7 +414,10 @@ fn print_scan_results(games: &[amethys_discovery::DetectedGame], verbose: bool) 
                 "- {} [{}]{} — {}",
                 game.name,
                 game.platform,
-                game.platform_id.as_deref().map(|id| format!(" — ID {id}")).unwrap_or_default(),
+                game.platform_id
+                    .as_deref()
+                    .map(|id| format!(" — ID {id}"))
+                    .unwrap_or_default(),
                 game.install_path.display()
             );
         }
@@ -379,12 +427,15 @@ fn print_scan_results(games: &[amethys_discovery::DetectedGame], verbose: bool) 
     if verbose {
         println!("\nRésultat par plateforme :");
         for platform in supported_platforms() {
-            let count = games.iter()
+            let count = games
+                .iter()
                 .filter(|game| game.platform.eq_ignore_ascii_case(platform))
                 .count();
             println!("- {platform} : {count} jeu(x) détecté(s)");
         }
-        println!("Résultats issus des métadonnées locales réellement trouvées ; aucun jeu fictif n'est ajouté.");
+        println!(
+            "Résultats issus des métadonnées locales réellement trouvées ; aucun jeu fictif n'est ajouté."
+        );
     }
 }
 
@@ -422,11 +473,12 @@ fn inspect_path(path: &std::path::Path, expect_directory: bool) -> PathCheck {
         Ok(metadata) if !expect_directory && metadata.is_file() => PathCheck::Available,
         Ok(_) => PathCheck::WrongType,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => PathCheck::Missing,
-        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => PathCheck::Inaccessible,
+        Err(error) if error.kind() == std::io::ErrorKind::PermissionDenied => {
+            PathCheck::Inaccessible
+        }
         Err(_) => PathCheck::Error,
     }
 }
-
 
 /// Rejects relative executable paths that could escape the registered game directory.
 fn is_safe_relative_executable(executable: &str) -> bool {
@@ -438,7 +490,9 @@ fn is_safe_relative_executable(executable: &str) -> bool {
     // Check both separator styles so Windows metadata is validated consistently
     // even when fixtures are evaluated on a non-Windows CI runner.
     let mut components = trimmed.split(['/', '\\']);
-    let Some(first) = components.next() else { return false; };
+    let Some(first) = components.next() else {
+        return false;
+    };
     !first.contains(':')
         && !components
             .chain(std::iter::once(first))
@@ -462,31 +516,36 @@ fn inspect_game_executable(game: &amethys_ipc::IpcGameEntry) -> Option<PathCheck
 /// Creates a versioned, read-only report of saved installation directories and
 /// configured executables. Directory availability remains separate from executable status.
 fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value {
-    let entries = games.iter().map(|game| {
-        let directory_status = inspect_path(std::path::Path::new(&game.install_path), true);
-        let executable_status = inspect_game_executable(game);
-        let executable_label = executable_status
-            .map(PathCheck::as_str)
-            .unwrap_or("not_configured");
-        let healthy = directory_status.is_available()
-            && executable_status.is_none_or(PathCheck::is_available);
-        serde_json::json!({
-            "id": game.id,
-            "name": game.name,
-            "platform": game.platform,
-            "platform_id": game.platform_id,
-            "install_path": game.install_path,
-            "directory_available": directory_status.is_available(),
-            "directory_status": directory_status.as_str(),
-            "executable": game.executable,
-            "executable_status": executable_label,
-            "healthy": healthy,
+    let entries = games
+        .iter()
+        .map(|game| {
+            let directory_status = inspect_path(std::path::Path::new(&game.install_path), true);
+            let executable_status = inspect_game_executable(game);
+            let executable_label = executable_status
+                .map(PathCheck::as_str)
+                .unwrap_or("not_configured");
+            let healthy = directory_status.is_available()
+                && executable_status.is_none_or(PathCheck::is_available);
+            serde_json::json!({
+                "id": game.id,
+                "name": game.name,
+                "platform": game.platform,
+                "platform_id": game.platform_id,
+                "install_path": game.install_path,
+                "directory_available": directory_status.is_available(),
+                "directory_status": directory_status.as_str(),
+                "executable": game.executable,
+                "executable_status": executable_label,
+                "healthy": healthy,
+            })
         })
-    }).collect::<Vec<_>>();
-    let available = entries.iter()
+        .collect::<Vec<_>>();
+    let available = entries
+        .iter()
         .filter(|entry| entry["directory_available"] == true)
         .count();
-    let healthy = entries.iter()
+    let healthy = entries
+        .iter()
         .filter(|entry| entry["healthy"] == true)
         .count();
     let issues = entries.len() - healthy;
@@ -574,7 +633,8 @@ async fn import_detected_game(platform: &str, platform_id: &str) -> Result<(), B
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
-    if arguments.is_empty() || arguments.as_slice() == ["--help"] || arguments.as_slice() == ["-h"] {
+    if arguments.is_empty() || arguments.as_slice() == ["--help"] || arguments.as_slice() == ["-h"]
+    {
         print_help();
         return Ok(());
     }
@@ -624,7 +684,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
         || arguments.as_slice() == ["games", "scan", "--json"]
     {
         let games = amethys_discovery::discover_all_games();
-        if arguments.last().is_some_and(|argument| argument == "--json") {
+        if arguments
+            .last()
+            .is_some_and(|argument| argument == "--json")
+        {
             return print_scan_json(&games);
         }
         print_scan_results(&games, arguments.len() == 3);
@@ -634,14 +697,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let command = parse_arguments(&arguments)?;
 
     let response = request_core(command.clone()).await.map_err(|error| {
-        format!("Impossible de joindre Amethys. Vérifie que le programme fonctionne. Détail : {error}")
+        format!(
+            "Impossible de joindre Amethys. Vérifie que le programme fonctionne. Détail : {error}"
+        )
     })?;
 
     match response.result {
         Err(remote_error) => Err(format!(
             "Amethys a renvoyé une erreur ({}): {}",
             remote_error.code, remote_error.message
-        ).into()),
+        )
+        .into()),
         Ok(IpcResponsePayload::Pong) if command == IpcCommand::Ping => {
             println!("Amethys fonctionne et répond correctement.");
             Ok(())
@@ -657,12 +723,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 println!("Jeux enregistrés :");
                 for game in games {
                     println!(
-                    "- {} ({}){} — {}",
-                    game.name,
-                    game.platform,
-                    game.platform_id.as_deref().map(|id| format!(" — ID {id}")).unwrap_or_default(),
-                    game.install_path
-                );
+                        "- {} ({}){} — {}",
+                        game.name,
+                        game.platform,
+                        game.platform_id
+                            .as_deref()
+                            .map(|id| format!(" — ID {id}"))
+                            .unwrap_or_default(),
+                        game.install_path
+                    );
                 }
             }
             Ok(())
@@ -684,7 +753,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{inspect_path, parse_arguments, parse_command, same_install_location, status_label, PathCheck};
+    use super::{
+        PathCheck, inspect_path, parse_arguments, parse_command, same_install_location,
+        status_label,
+    };
     use amethys_ipc::{IpcCommand, IpcCoreStatus};
 
     #[test]
@@ -710,8 +782,14 @@ mod tests {
             platform: "Epic Games",
         };
 
-        assert!(super::game_is_already_imported(std::slice::from_ref(&saved), &same_game));
-        assert!(!super::game_is_already_imported(std::slice::from_ref(&saved), &other_store));
+        assert!(super::game_is_already_imported(
+            std::slice::from_ref(&saved),
+            &same_game
+        ));
+        assert!(!super::game_is_already_imported(
+            std::slice::from_ref(&saved),
+            &other_store
+        ));
 
         // Store metadata can change (for example after a game is moved or
         // re-registered). A matching installation path must still prevent a
@@ -744,8 +822,10 @@ mod tests {
         let root = std::env::temp_dir().join(format!(
             "amethys-cli-path-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         let install = root.join("Installed Game");
         let other = root.join("Other Game");
@@ -764,16 +844,27 @@ mod tests {
         let root = std::env::temp_dir().join(format!(
             "amethys-verify-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("create installation directory");
         let existing = root.to_string_lossy().into_owned();
         let missing = root.join("missing-game").to_string_lossy().into_owned();
 
-        assert_eq!(inspect_path(std::path::Path::new(&existing), true), PathCheck::Available);
-        assert_eq!(inspect_path(std::path::Path::new(&missing), true), PathCheck::Missing);
-        assert!(root.is_dir(), "verification must leave the installation untouched");
+        assert_eq!(
+            inspect_path(std::path::Path::new(&existing), true),
+            PathCheck::Available
+        );
+        assert_eq!(
+            inspect_path(std::path::Path::new(&missing), true),
+            PathCheck::Missing
+        );
+        assert!(
+            root.is_dir(),
+            "verification must leave the installation untouched"
+        );
 
         std::fs::remove_dir_all(root).expect("cleanup");
     }
@@ -783,8 +874,10 @@ mod tests {
         let root = std::env::temp_dir().join(format!(
             "amethys-verify-file-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("create test root");
         let file = root.join("not-a-game-folder.exe");
@@ -801,8 +894,10 @@ mod tests {
         let root = std::env::temp_dir().join(format!(
             "amethys-verify-json-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("create installation");
         let game = amethys_ipc::IpcGameEntry {
@@ -833,8 +928,10 @@ mod tests {
         let root = std::env::temp_dir().join(format!(
             "amethys-verify-executable-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         std::fs::create_dir_all(root.join("bin")).expect("create install and bin");
         std::fs::write(root.join("bin/game.exe"), b"sentinel").expect("create executable fixture");
@@ -852,7 +949,10 @@ mod tests {
         let missing = super::build_verify_report(&[make_game("bin/missing.exe")]);
         assert_eq!(missing["games"][0]["executable_status"], "missing");
         assert_eq!(missing["games"][0]["healthy"], false);
-        assert_eq!(std::fs::read(root.join("bin/game.exe")).expect("fixture remains"), b"sentinel");
+        assert_eq!(
+            std::fs::read(root.join("bin/game.exe")).expect("fixture remains"),
+            b"sentinel"
+        );
         std::fs::remove_dir_all(root).expect("remove fixture");
     }
 
@@ -867,7 +967,12 @@ mod tests {
             executable: Some(executable.to_owned()),
         };
 
-        for unsafe_path in ["../outside.exe", r"..\outside.exe", "bin/../../outside.exe", r"C:outside.exe"] {
+        for unsafe_path in [
+            "../outside.exe",
+            r"..\outside.exe",
+            "bin/../../outside.exe",
+            r"C:outside.exe",
+        ] {
             assert_eq!(
                 super::inspect_game_executable(&game(unsafe_path)),
                 Some(super::PathCheck::InvalidPath),
@@ -882,8 +987,10 @@ mod tests {
         let root = std::env::temp_dir().join(format!(
             "amethys-verify-status-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                .expect("clock").as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("create fixture");
         let file = root.join("not-a-directory");
@@ -915,7 +1022,10 @@ mod tests {
         assert_eq!(report["detected_games"][0]["name"], "Example");
         assert_eq!(report["detected_games"][0]["platform"], "Steam");
         assert_eq!(report["detected_games"][0]["platform_id"], "123");
-        assert_eq!(report["detected_games"][0]["install_path"], "/games/example");
+        assert_eq!(
+            report["detected_games"][0]["install_path"],
+            "/games/example"
+        );
     }
 
     #[test]
@@ -924,8 +1034,16 @@ mod tests {
 
         #[cfg(windows)]
         let expected: &[&str] = &[
-            "Steam", "Epic Games", "Heroic", "GOG Galaxy", "Amazon Games",
-            "EA app", "Ubisoft Connect", "Battle.net", "Riot Games", "Xbox app",
+            "Steam",
+            "Epic Games",
+            "Heroic",
+            "GOG Galaxy",
+            "Amazon Games",
+            "EA app",
+            "Ubisoft Connect",
+            "Battle.net",
+            "Riot Games",
+            "Xbox app",
         ];
         #[cfg(target_os = "macos")]
         let expected: &[&str] = &["Steam", "Heroic", "GOG Galaxy"];
@@ -934,7 +1052,9 @@ mod tests {
 
         for platform in expected {
             assert!(
-                platforms.iter().any(|supported| supported.eq_ignore_ascii_case(platform)),
+                platforms
+                    .iter()
+                    .any(|supported| supported.eq_ignore_ascii_case(platform)),
                 "scan summary must include {platform} on this operating system"
             );
         }
@@ -945,14 +1065,20 @@ mod tests {
     fn filters_library_by_platform_case_insensitively() {
         let games = vec![
             amethys_ipc::IpcGameEntry {
-                id: "steam-1".to_owned(), name: "Example".to_owned(),
-                platform: "Steam".to_owned(), platform_id: Some("10".to_owned()),
-                install_path: "A:/Steam/Example".to_owned(), executable: None,
+                id: "steam-1".to_owned(),
+                name: "Example".to_owned(),
+                platform: "Steam".to_owned(),
+                platform_id: Some("10".to_owned()),
+                install_path: "A:/Steam/Example".to_owned(),
+                executable: None,
             },
             amethys_ipc::IpcGameEntry {
-                id: "epic-1".to_owned(), name: "Example".to_owned(),
-                platform: "Epic Games".to_owned(), platform_id: Some("10".to_owned()),
-                install_path: "A:/Epic/Example".to_owned(), executable: None,
+                id: "epic-1".to_owned(),
+                name: "Example".to_owned(),
+                platform: "Epic Games".to_owned(),
+                platform_id: Some("10".to_owned()),
+                install_path: "A:/Epic/Example".to_owned(),
+                executable: None,
             },
         ];
         let steam = super::filter_games_by_platform(&games, "sTEAM");
@@ -1008,15 +1134,34 @@ mod tests {
 
     #[test]
     fn parses_game_management_commands() {
-        let add = vec!["games".to_owned(), "add".to_owned(), "Game".to_owned(), "Steam".to_owned(), "/games/game".to_owned(), "game.exe".to_owned()];
-        assert_eq!(parse_arguments(&add), Ok(IpcCommand::AddGame {
-            name: "Game".to_owned(),
-            platform: "Steam".to_owned(),
-            install_path: "/games/game".to_owned(),
-            executable: Some("game.exe".to_owned()),
-        }));
-        let remove = vec!["games".to_owned(), "remove".to_owned(), "game-id".to_owned()];
-        assert_eq!(parse_arguments(&remove), Ok(IpcCommand::RemoveGame { id: "game-id".to_owned() }));
+        let add = vec![
+            "games".to_owned(),
+            "add".to_owned(),
+            "Game".to_owned(),
+            "Steam".to_owned(),
+            "/games/game".to_owned(),
+            "game.exe".to_owned(),
+        ];
+        assert_eq!(
+            parse_arguments(&add),
+            Ok(IpcCommand::AddGame {
+                name: "Game".to_owned(),
+                platform: "Steam".to_owned(),
+                install_path: "/games/game".to_owned(),
+                executable: Some("game.exe".to_owned()),
+            })
+        );
+        let remove = vec![
+            "games".to_owned(),
+            "remove".to_owned(),
+            "game-id".to_owned(),
+        ];
+        assert_eq!(
+            parse_arguments(&remove),
+            Ok(IpcCommand::RemoveGame {
+                id: "game-id".to_owned()
+            })
+        );
     }
 
     #[test]

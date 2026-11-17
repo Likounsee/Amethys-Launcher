@@ -17,9 +17,20 @@ pub enum IpcCommand {
     /// Lists games saved in the local library.
     ListGames,
     /// Adds a game to the local library.
-    AddGame { name: String, platform: String, install_path: String, executable: Option<String> },
+    AddGame {
+        name: String,
+        platform: String,
+        install_path: String,
+        executable: Option<String>,
+    },
     /// Adds a detected game while retaining its source-platform identifier.
-    AddDetectedGame { name: String, platform: String, platform_id: Option<String>, install_path: String, executable: Option<String> },
+    AddDetectedGame {
+        name: String,
+        platform: String,
+        platform_id: Option<String>,
+        install_path: String,
+        executable: Option<String>,
+    },
     /// Removes a game by its identifier.
     RemoveGame { id: String },
 }
@@ -122,15 +133,22 @@ pub struct IpcEnvelope<T> {
 impl<T> IpcEnvelope<T> {
     #[must_use]
     pub fn new(payload: T) -> Self {
-        Self { protocol_version: PROTOCOL_VERSION, request_id: Uuid::new_v4(), payload }
+        Self {
+            protocol_version: PROTOCOL_VERSION,
+            request_id: Uuid::new_v4(),
+            payload,
+        }
     }
 
     pub fn validate_version(&self) -> Result<(), AmethysError> {
         if self.protocol_version != PROTOCOL_VERSION {
-            return Err(AmethysError::new(ErrorCode::IpcUnsupportedVersion, format!(
-                "Unsupported protocol version {}; expected {}.",
-                self.protocol_version, PROTOCOL_VERSION
-            )));
+            return Err(AmethysError::new(
+                ErrorCode::IpcUnsupportedVersion,
+                format!(
+                    "Unsupported protocol version {}; expected {}.",
+                    self.protocol_version, PROTOCOL_VERSION
+                ),
+            ));
         }
         Ok(())
     }
@@ -141,10 +159,7 @@ impl<T> IpcEnvelope<T> {
 /// The caller supplies the current core state so this crate stays independent
 /// from the runtime implementation.
 #[must_use]
-pub fn dispatch_request(
-    request: IpcEnvelope<IpcRequest>,
-    state: IpcCoreStatus,
-) -> IpcResponse {
+pub fn dispatch_request(request: IpcEnvelope<IpcRequest>, state: IpcCoreStatus) -> IpcResponse {
     dispatch_request_with_games(request, state, &[])
 }
 
@@ -158,8 +173,12 @@ pub fn dispatch_request_with_games(
     let payload = match request.payload.command {
         IpcCommand::Ping => IpcResponsePayload::Pong,
         IpcCommand::GetStatus => IpcResponsePayload::CoreStatus { state },
-        IpcCommand::ListGames => IpcResponsePayload::Games { games: games.to_vec() },
-        IpcCommand::AddGame { .. } | IpcCommand::AddDetectedGame { .. } | IpcCommand::RemoveGame { .. } => {
+        IpcCommand::ListGames => IpcResponsePayload::Games {
+            games: games.to_vec(),
+        },
+        IpcCommand::AddGame { .. }
+        | IpcCommand::AddDetectedGame { .. }
+        | IpcCommand::RemoveGame { .. } => {
             return IpcResponse::failure(
                 request.request_id,
                 IpcRemoteError::new(
@@ -200,10 +219,7 @@ where
 /// A connection carries one request and one response. The listener owner is
 /// responsible for accepting additional clients and calling this function
 /// for each connection.
-pub async fn serve_connection<S>(
-    stream: &mut S,
-    state: IpcCoreStatus,
-) -> Result<(), AmethysError>
+pub async fn serve_connection<S>(stream: &mut S, state: IpcCoreStatus) -> Result<(), AmethysError>
 where
     S: AsyncRead + AsyncWrite + Unpin,
 {
@@ -225,11 +241,17 @@ where
 }
 
 pub async fn write_message<W, T>(writer: &mut W, message: &T) -> Result<(), AmethysError>
-where W: AsyncWrite + Unpin, T: Serialize {
+where
+    W: AsyncWrite + Unpin,
+    T: Serialize,
+{
     let payload = serde_json::to_vec(message)
         .map_err(|error| AmethysError::new(ErrorCode::IpcSerialization, error.to_string()))?;
     if payload.is_empty() || payload.len() > MAX_FRAME_SIZE {
-        return Err(AmethysError::new(ErrorCode::IpcFrameTooLarge, "IPC frame size is outside the accepted range."));
+        return Err(AmethysError::new(
+            ErrorCode::IpcFrameTooLarge,
+            "IPC frame size is outside the accepted range.",
+        ));
     }
     let length = u32::try_from(payload.len())
         .map_err(|error| AmethysError::new(ErrorCode::IpcFrameTooLarge, error.to_string()))?;
@@ -240,13 +262,22 @@ where W: AsyncWrite + Unpin, T: Serialize {
 }
 
 pub async fn read_message<R, T>(reader: &mut R) -> Result<T, AmethysError>
-where R: AsyncRead + Unpin, T: DeserializeOwned {
+where
+    R: AsyncRead + Unpin,
+    T: DeserializeOwned,
+{
     let length = reader.read_u32().await.map_err(io_error)? as usize;
     if length == 0 {
-        return Err(AmethysError::new(ErrorCode::IpcInvalidLength, "An IPC frame cannot be empty."));
+        return Err(AmethysError::new(
+            ErrorCode::IpcInvalidLength,
+            "An IPC frame cannot be empty.",
+        ));
     }
     if length > MAX_FRAME_SIZE {
-        return Err(AmethysError::new(ErrorCode::IpcFrameTooLarge, "IPC frame exceeds the configured limit."));
+        return Err(AmethysError::new(
+            ErrorCode::IpcFrameTooLarge,
+            "IPC frame exceeds the configured limit.",
+        ));
     }
     let mut payload = vec![0_u8; length];
     reader.read_exact(&mut payload).await.map_err(io_error)?;
@@ -280,7 +311,9 @@ mod tests {
     use uuid::Uuid;
 
     #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-    struct Payload { command: String }
+    struct Payload {
+        command: String,
+    }
 
     #[test]
     fn dispatch_returns_pong_with_the_same_request_identifier() {
@@ -303,11 +336,8 @@ mod tests {
             install_path: "/games/example".to_owned(),
             executable: Some("game.exe".to_owned()),
         }];
-        let response = super::dispatch_request_with_games(
-            request,
-            super::IpcCoreStatus::Running,
-            &games,
-        );
+        let response =
+            super::dispatch_request_with_games(request, super::IpcCoreStatus::Running, &games);
         assert_eq!(
             response.result,
             Ok(super::IpcResponsePayload::Games { games }),
@@ -365,12 +395,10 @@ mod tests {
                 .expect("serve request");
         });
 
-        let response = super::send_request(
-            &mut client,
-            super::IpcRequest::new(super::IpcCommand::Ping),
-        )
-        .await
-        .expect("send request");
+        let response =
+            super::send_request(&mut client, super::IpcRequest::new(super::IpcCommand::Ping))
+                .await
+                .expect("send request");
         server_task.await.expect("server task");
 
         assert_eq!(response.result, Ok(super::IpcResponsePayload::Pong));
@@ -380,23 +408,20 @@ mod tests {
     async fn client_helper_rejects_response_for_another_request() {
         let (mut client, mut server) = duplex(1024);
         let server_task = tokio::spawn(async move {
-            let _: super::IpcEnvelope<super::IpcRequest> =
-                super::read_envelope(&mut server).await.expect("read request");
-            let response = super::IpcResponse::success(
-                Uuid::new_v4(),
-                super::IpcResponsePayload::Pong,
-            );
+            let _: super::IpcEnvelope<super::IpcRequest> = super::read_envelope(&mut server)
+                .await
+                .expect("read request");
+            let response =
+                super::IpcResponse::success(Uuid::new_v4(), super::IpcResponsePayload::Pong);
             super::write_message(&mut server, &response)
                 .await
                 .expect("write mismatched response");
         });
 
-        let error = super::send_request(
-            &mut client,
-            super::IpcRequest::new(super::IpcCommand::Ping),
-        )
-        .await
-        .expect_err("mismatched response must be rejected");
+        let error =
+            super::send_request(&mut client, super::IpcRequest::new(super::IpcCommand::Ping))
+                .await
+                .expect_err("mismatched response must be rejected");
         server_task.await.expect("server task");
 
         assert_eq!(error.code(), ErrorCode::IpcResponseMismatch);
@@ -408,8 +433,11 @@ mod tests {
         let request = IpcEnvelope::new(super::IpcRequest::new(super::IpcCommand::Ping));
         let request_id = request.request_id;
         let send = tokio::spawn(async move {
-            write_message(&mut client, &request).await.expect("send request");
-            let response: super::IpcResponse = read_message(&mut client).await.expect("read response");
+            write_message(&mut client, &request)
+                .await
+                .expect("send request");
+            let response: super::IpcResponse =
+                read_message(&mut client).await.expect("read response");
             response
         });
 
@@ -424,10 +452,8 @@ mod tests {
     #[test]
     fn ipc_response_keeps_original_request_identifier() {
         let request = IpcEnvelope::new(super::IpcRequest::new(super::IpcCommand::Ping));
-        let response = super::IpcResponse::success(
-            request.request_id,
-            super::IpcResponsePayload::Pong,
-        );
+        let response =
+            super::IpcResponse::success(request.request_id, super::IpcResponsePayload::Pong);
 
         assert_eq!(response.request_id, request.request_id);
         assert_eq!(response.result, Ok(super::IpcResponsePayload::Pong));
@@ -451,11 +477,12 @@ mod tests {
         assert_eq!(decoded, response);
     }
 
-
     #[tokio::test]
     async fn framed_message_round_trips() {
         let (mut writer, mut reader) = duplex(1024);
-        let outgoing = IpcEnvelope::new(Payload { command: "ping".to_owned() });
+        let outgoing = IpcEnvelope::new(Payload {
+            command: "ping".to_owned(),
+        });
         let expected = outgoing.clone();
         let send = tokio::spawn(async move {
             write_message(&mut writer, &outgoing).await.expect("write");
@@ -467,16 +494,22 @@ mod tests {
 
     #[test]
     fn unsupported_protocol_version_has_specific_error_code() {
-        let mut envelope = IpcEnvelope::new(Payload { command: "ping".to_owned() });
+        let mut envelope = IpcEnvelope::new(Payload {
+            command: "ping".to_owned(),
+        });
         envelope.protocol_version = PROTOCOL_VERSION + 1;
-        let error = envelope.validate_version().expect_err("version must be rejected");
+        let error = envelope
+            .validate_version()
+            .expect_err("version must be rejected");
         assert_eq!(error.code(), ErrorCode::IpcUnsupportedVersion);
     }
 
     #[tokio::test]
     async fn read_envelope_rejects_unsupported_protocol_version() {
         let (mut writer, mut reader) = duplex(1024);
-        let mut outgoing = IpcEnvelope::new(Payload { command: "ping".to_owned() });
+        let mut outgoing = IpcEnvelope::new(Payload {
+            command: "ping".to_owned(),
+        });
         outgoing.protocol_version = PROTOCOL_VERSION + 1;
         let send = tokio::spawn(async move {
             write_message(&mut writer, &outgoing).await.expect("write");
@@ -509,12 +542,9 @@ mod tests {
     async fn read_message_rejects_frame_larger_than_limit_before_allocating() {
         let (mut writer, mut reader) = duplex(8);
         let send = tokio::spawn(async move {
-            tokio::io::AsyncWriteExt::write_u32(
-                &mut writer,
-                (super::MAX_FRAME_SIZE as u32) + 1,
-            )
-            .await
-            .expect("write oversized frame header");
+            tokio::io::AsyncWriteExt::write_u32(&mut writer, (super::MAX_FRAME_SIZE as u32) + 1)
+                .await
+                .expect("write oversized frame header");
         });
 
         let error = super::read_message::<_, serde_json::Value>(&mut reader)
@@ -561,5 +591,4 @@ mod tests {
             .expect_err("oversized payload must be rejected");
         assert_eq!(error.code(), ErrorCode::IpcFrameTooLarge);
     }
-
 }
