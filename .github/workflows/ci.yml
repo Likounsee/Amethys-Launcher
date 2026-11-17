@@ -41,3 +41,31 @@ jobs:
         run: |
           cargo run --release -p amethys-cli --bin amethysctl -- --version
           cargo run --release -p amethys-cli --bin amethysctl -- --help
+
+      - name: Smoke-test Windows release archive
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item target/release/amethys-agent.exe,target/release/amethysctl.exe,README.md,LICENSE,doc/technical/RELEASES.md -Destination dist/
+          Compress-Archive -Path dist/* -DestinationPath amethys-ci-windows.zip
+          Expand-Archive -Path amethys-ci-windows.zip -DestinationPath archive-check
+          $expected = @("amethys-agent.exe", "amethysctl.exe", "README.md", "LICENSE", "RELEASES.md")
+          foreach ($file in $expected) {
+            if (-not (Test-Path (Join-Path archive-check $file) -PathType Leaf)) {
+              throw "Windows release archive is missing $file."
+            }
+          }
+          if ((Get-ChildItem archive-check -File).Count -ne $expected.Count) {
+            throw "Windows release archive contains unexpected files."
+          }
+      - name: Smoke-test Linux release archive
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp target/release/amethys-agent target/release/amethysctl README.md LICENSE doc/technical/RELEASES.md dist/
+          tar -czf amethys-ci-linux.tar.gz -C dist amethys-agent amethysctl README.md LICENSE RELEASES.md
+          tar -tzf amethys-ci-linux.tar.gz | sort > archive-contents.txt
+          printf '%s\\n' LICENSE README.md RELEASES.md amethys-agent amethysctl | sort > expected-contents.txt
+          diff -u expected-contents.txt archive-contents.txt
