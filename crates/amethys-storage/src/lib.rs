@@ -14,6 +14,7 @@ pub struct GameEntry {
     pub added_at: String,
 }
 
+const MAX_GAME_ID_BYTES: usize = 128;
 const MAX_GAME_NAME_BYTES: usize = 512;
 const MAX_PLATFORM_NAME_BYTES: usize = 128;
 const MAX_PLATFORM_ID_BYTES: usize = 512;
@@ -307,6 +308,7 @@ impl Database {
 
     /// Finds one game by its stable identifier.
     pub fn get_game(&self, id: &str) -> Result<Option<GameEntry>, AmethysError> {
+        let id = validate_game_id(id)?;
         self.connection
             .query_row(
                 "SELECT id, name, platform, platform_id, install_path, executable, added_at
@@ -341,10 +343,9 @@ impl Database {
         executable: &str,
     ) -> Result<Option<GameEntry>, AmethysError> {
         let executable = executable.trim();
-        if id.trim().is_empty() || executable.is_empty() {
-            return Err(storage_error(
-                "Game ID and executable path must not be empty.",
-            ));
+        let id = validate_game_id(id)?;
+        if executable.is_empty() {
+            return Err(storage_error("Executable path must not be empty."));
         }
         if executable.contains('\0') {
             return Err(storage_error(
@@ -367,6 +368,7 @@ impl Database {
 
     /// Removes a game. Returns false when its identifier was not present.
     pub fn remove_game(&self, id: &str) -> Result<bool, AmethysError> {
+        let id = validate_game_id(id)?;
         let changed = self
             .connection
             .execute("DELETE FROM games WHERE id = ?1", [id])
@@ -450,6 +452,22 @@ fn game_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GameEntry> {
         executable: row.get(5)?,
         added_at: row.get(6)?,
     })
+}
+
+fn validate_game_id(id: &str) -> Result<&str, AmethysError> {
+    let id = id.trim();
+    if id.is_empty() {
+        return Err(storage_error("Game IDs must not be empty."));
+    }
+    if id.contains('\0') {
+        return Err(storage_error("Game IDs must not contain NUL characters."));
+    }
+    if id.len() > MAX_GAME_ID_BYTES {
+        return Err(storage_error(format!(
+            "Game ID exceeds the {MAX_GAME_ID_BYTES}-byte limit."
+        )));
+    }
+    Ok(id)
 }
 
 fn validate_setting_key(key: &str) -> Result<&str, AmethysError> {
@@ -837,6 +855,43 @@ mod tests {
         assert_eq!(count, 3);
         drop(database);
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn game_identifiers_are_trimmed_and_bounded_at_the_storage_boundary() {
+        let (database, path) = temporary_database();
+        let game = database
+            .add_game("Example", "Steam", "/games/example", None)
+            .expect("game is added");
+
+        assert_eq!(
+            database
+                .get_game(&format!(" {} ", game.id))
+                .expect("trimmed lookup succeeds"),
+            Some(game.clone())
+        );
+        assert!(
+            database
+                .set_game_executable(&format!(" {} ", game.id), "bin/game")
+                .expect("trimmed update succeeds")
+                .is_some()
+        );
+        assert!(
+            database
+                .get_game("")
+                .is_err(),
+            "empty identifiers must be rejected"
+        );
+        assert!(database.get_game("bad\\0id").is_err());
+        assert!(database.get_game(&"x".repeat(super::MAX_GAME_ID_BYTES + 1)).is_err());
+        assert!(database.remove_game(" ").is_err());
+        assert!(database.remove_game("bad\\0id").is_err());
+        assert!(database.remove_game(&"x".repeat(super::MAX_GAME_ID_BYTES + 1)).is_err());
+
+        drop(database);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
     }
 
     #[test]
