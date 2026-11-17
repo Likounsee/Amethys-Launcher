@@ -1740,7 +1740,7 @@ fn parse_yaml_scalar(raw: &str) -> Option<String> {
         let mut output = String::with_capacity(inner.len());
         let mut chars = inner.chars();
         while let Some(character) = chars.next() {
-            if character != '\\\\' {
+            if character != '\\' {
                 if character == '"' {
                     return None;
                 }
@@ -1751,13 +1751,13 @@ fn parse_yaml_scalar(raw: &str) -> Option<String> {
                 // YAML escapes recognized here; preserve unknown backslash
                 // sequences because Riot metadata commonly contains raw
                 // Windows paths such as C:\\Riot Games\\VALORANT.
-                Some('\\\\') => output.push('\\\\'),
+                Some('\\') => output.push('\\'),
                 Some('"') => output.push('"'),
-                Some('n') => output.push('\\n'),
-                Some('r') => output.push('\\r'),
-                Some('t') => output.push('\\t'),
+                Some('n') => output.push('\n'),
+                Some('r') => output.push('\r'),
+                Some('t') => output.push('\t'),
                 Some(other) => {
-                    output.push('\\\\');
+                    output.push('\\');
                     output.push(other);
                 }
                 None => return None,
