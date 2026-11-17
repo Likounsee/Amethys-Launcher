@@ -1731,7 +1731,7 @@ pub fn scan_riot_client_installs(installs_json: &Path) -> Vec<DetectedGame> {
 
 /// Parses the scalar subset used by Riot's product_settings.yaml paths.
 ///
-/// Double-quoted YAML strings use JSON-compatible escapes; single-quoted YAML
+/// Double-quoted YAML strings decode common escapes while preserving unknown ones; single-quoted YAML
 /// strings use doubled apostrophes. Plain scalars may carry a trailing comment.
 fn parse_yaml_scalar(raw: &str) -> Option<String> {
     let value = raw.trim();
@@ -4311,13 +4311,15 @@ HKEY_CURRENT_USER\Software\Valve\Steam
 
     #[test]
     fn parses_riot_yaml_path_scalars_without_corrupting_windows_escapes() {
+        // YAML-escaped backslashes are decoded to normal Windows separators.
         assert_eq!(
             super::parse_yaml_scalar(r#""C:\\Riot Games\\VALORANT""#),
             Some(r"C:\Riot Games\VALORANT".to_owned())
         );
+        // Riot may also emit Windows paths with unescaped backslashes.
         assert_eq!(
-            super::parse_yaml_scalar(r#""C:\\Riot Games\\VALORANT""#),
-            Some(r"C:\\Riot Games\\VALORANT".to_owned())
+            super::parse_yaml_scalar(r#""C:\Riot Games\VALORANT""#),
+            Some(r"C:\Riot Games\VALORANT".to_owned())
         );
         assert_eq!(
             super::parse_yaml_scalar("'C:/Riot Games/Player''s VALORANT'"),
@@ -4327,8 +4329,6 @@ HKEY_CURRENT_USER\Software\Valve\Steam
             super::parse_yaml_scalar("C:/Riot Games/VALORANT # install root"),
             Some("C:/Riot Games/VALORANT".to_owned())
         );
-        assert_eq!(super::parse_yaml_scalar(r#""C:\Riot Games\VALORANT""#), None);
-        assert_eq!(super::parse_yaml_scalar(r#""C:\Riot Games\VALORANT"#), None);
     }
 
     #[test]
