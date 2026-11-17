@@ -78,6 +78,17 @@ jobs:
           Copy-Item README.md,LICENSE,doc/technical/RELEASES.md -Destination dist/
           $archive = "amethys-$($env:RELEASE_TAG)-${{ matrix.target }}.zip"
           Compress-Archive -Path dist/* -DestinationPath $archive
+          $verify = "archive-check"
+          Expand-Archive -Path $archive -DestinationPath $verify
+          $expected = @("amethys-agent.exe", "amethysctl.exe", "README.md", "LICENSE", "RELEASES.md")
+          foreach ($file in $expected) {
+            if (-not (Test-Path (Join-Path $verify $file) -PathType Leaf)) {
+              throw "Release archive is missing $file."
+            }
+          }
+          if ((Get-ChildItem $verify -File).Count -ne $expected.Count) {
+            throw "Release archive contains unexpected top-level files."
+          }
 
       - name: Stage Unix binaries
         if: runner.os != 'Windows'
@@ -91,6 +102,9 @@ jobs:
           cp README.md LICENSE doc/technical/RELEASES.md dist/
           archive="amethys-${RELEASE_TAG}-${{ matrix.target }}.tar.gz"
           tar -czf "$archive" -C dist amethys-agent amethysctl README.md LICENSE RELEASES.md
+          tar -tzf "$archive" | sort > archive-contents.txt
+          printf '%s\\n' LICENSE README.md RELEASES.md amethys-agent amethysctl | sort > expected-contents.txt
+          diff -u expected-contents.txt archive-contents.txt
 
       - name: Upload platform archive
         uses: actions/upload-artifact@v4
