@@ -201,10 +201,8 @@ pub async fn connect(
 /// Connects to a Windows named pipe, for example \\.\pipe\amethys-core.
 #[cfg(windows)]
 pub async fn connect(endpoint: impl AsRef<str>) -> Result<BoxedIpcStream, AmethysError> {
-    // SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION. Keep the client at
-    // identification level: opening a pipe must never grant the server an
-    // impersonation token capable of acting as this client.
-    const SECURITY_IDENTIFICATION_QOS: u32 = 0x0011_0000;
+    // The helper opens the client with identification-level QoS, preventing
+    // the server from impersonating this client beyond identity inspection.
     weida_winpipe::open_client(std::ffi::OsStr::new(endpoint.as_ref()))
         .map(|stream| Box::new(stream) as BoxedIpcStream)
         .map_err(io_error)
