@@ -617,7 +617,7 @@ mod tests {
         use tokio::io::AsyncWriteExt;
         writer.write_u32(4).await.expect("write frame length");
         writer
-            .write_all(&[b'{', b'}'])
+            .write_all(b"{}")
             .await
             .expect("write partial payload");
         writer.shutdown().await.expect("close truncated stream");
