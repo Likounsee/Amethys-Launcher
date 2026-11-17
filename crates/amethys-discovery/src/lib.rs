@@ -1730,7 +1730,7 @@ pub fn scan_riot_client_installs(installs_json: &Path) -> Vec<DetectedGame> {
 }
 
 /// Parses the scalar subset used by Riot's product_settings.yaml paths.
-////
+///
 /// Double-quoted YAML strings use JSON-compatible escapes; single-quoted YAML
 /// strings use doubled apostrophes. Plain scalars may carry a trailing comment.
 fn parse_yaml_scalar(raw: &str) -> Option<String> {
