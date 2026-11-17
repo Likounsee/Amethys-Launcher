@@ -1729,6 +1729,26 @@ pub fn scan_riot_client_installs(installs_json: &Path) -> Vec<DetectedGame> {
     games
 }
 
+/// Parses the scalar subset used by Riot's product_settings.yaml paths.
+////
+/// Double-quoted YAML strings use JSON-compatible escapes; single-quoted YAML
+/// strings use doubled apostrophes. Plain scalars may carry a trailing comment.
+fn parse_yaml_scalar(raw: &str) -> Option<String> {
+    let value = raw.trim();
+    if value.starts_with('"') {
+        return serde_json::from_str::<String>(value).ok();
+    }
+    if value.starts_with('\'') {
+        let inner = value.strip_prefix('\'')?.strip_suffix('\'')?;
+        return Some(inner.replace("''", "'"));
+    }
+    let plain = value
+        .split_once(" #")
+        .map_or(value, |(value, _)| value)
+        .trim();
+    (!plain.is_empty()).then(|| plain.to_owned())
+}
+
 /// Reads Riot product_settings.yaml files for known installed Riot titles.
 pub fn scan_riot_product_settings(metadata_root: &Path) -> Vec<DetectedGame> {
     const PRODUCTS: [(&str, &str, &str); 4] = [
@@ -1756,7 +1776,7 @@ pub fn scan_riot_product_settings(metadata_root: &Path) -> Vec<DetectedGame> {
             if !key.trim().eq_ignore_ascii_case("product_install_root") {
                 return None;
             }
-            let value = value.trim().trim_matches('"').trim_matches('\'').trim();
+            let value = parse_yaml_scalar(value)?;
             (!value.is_empty()).then(|| PathBuf::from(value))
         });
         let Some(install_path) = install_root else {
@@ -4260,6 +4280,24 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         assert!(games.iter().any(|game| game.name == "League of Legends"));
         assert!(games.iter().all(|game| game.platform == "Riot Games"));
         std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn parses_riot_yaml_path_scalars_without_corrupting_windows_escapes() {
+        assert_eq!(
+            super::parse_yaml_scalar(r#""C:\\Riot Games\\VALORANT""#),
+            Some(r"C:\Riot Games\VALORANT".to_owned())
+        );
+        assert_eq!(
+            super::parse_yaml_scalar("'C:/Riot Games/Player''s VALORANT'"),
+            Some("C:/Riot Games/Player's VALORANT".to_owned())
+        );
+        assert_eq!(
+            super::parse_yaml_scalar("C:/Riot Games/VALORANT # install root"),
+            Some("C:/Riot Games/VALORANT".to_owned())
+        );
+        assert_eq!(super::parse_yaml_scalar(r#""C:\Riot Games\VALORANT""#), Some(r"C:\Riot Games\VALORANT".to_owned()));
+        assert_eq!(super::parse_yaml_scalar(r#""C:\Riot Games\VALORANT"#), None);
     }
 
     #[test]
