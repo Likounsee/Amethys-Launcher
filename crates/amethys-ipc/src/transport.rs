@@ -160,12 +160,8 @@ impl IpcListener {
     pub async fn bind(endpoint: impl AsRef<str>) -> Result<Self, AmethysError> {
         let dacl = weida_winpipe::OwnerOnlyDacl::for_current_user().map_err(io_error)?;
         let endpoint = endpoint.as_ref().to_owned();
-        let server = weida_winpipe::create_instance(
-            std::ffi::OsStr::new(&endpoint),
-            &dacl,
-            true,
-        )
-        .map_err(io_error)?;
+        let server = weida_winpipe::create_instance(std::ffi::OsStr::new(&endpoint), &dacl, true)
+            .map_err(io_error)?;
         Ok(Self {
             server,
             endpoint,
@@ -176,12 +172,9 @@ impl IpcListener {
     /// Accepts one client connection.
     pub async fn accept(&mut self) -> Result<BoxedIpcStream, AmethysError> {
         self.server.connect().await.map_err(io_error)?;
-        let next_server = weida_winpipe::create_instance(
-            std::ffi::OsStr::new(&self.endpoint),
-            &self.dacl,
-            false,
-        )
-        .map_err(io_error)?;
+        let next_server =
+            weida_winpipe::create_instance(std::ffi::OsStr::new(&self.endpoint), &self.dacl, false)
+                .map_err(io_error)?;
         let connected_server = std::mem::replace(&mut self.server, next_server);
         Ok(Box::new(connected_server))
     }
@@ -456,30 +449,33 @@ mod windows_tests {
     #[tokio::test]
     async fn named_pipe_peer_identity_matches_the_current_user_and_process() {
         let endpoint = test_endpoint();
-        let dacl = weida_winpipe::OwnerOnlyDacl::for_current_user()
-            .expect("build current-user-only DACL");
-        let mut server = weida_winpipe::create_instance(
-            std::ffi::OsStr::new(&endpoint),
-            &dacl,
-            true,
-        )
-        .expect("create protected named pipe");
+        let dacl =
+            weida_winpipe::OwnerOnlyDacl::for_current_user().expect("build current-user-only DACL");
+        let mut server =
+            weida_winpipe::create_instance(std::ffi::OsStr::new(&endpoint), &dacl, true)
+                .expect("create protected named pipe");
 
         let client_endpoint = endpoint.clone();
         let client_task = tokio::spawn(async move {
             let mut client = weida_winpipe::open_client(std::ffi::OsStr::new(&client_endpoint))
                 .expect("open protected pipe");
-            client.write_all(b"identity").await.expect("send identity probe");
+            client
+                .write_all(b"identity")
+                .await
+                .expect("send identity probe");
             weida_winpipe::server_peer(&client).expect("read server identity")
         });
 
         server.connect().await.expect("accept protected client");
         let mut probe = [0_u8; 8];
-        server.read_exact(&mut probe).await.expect("read identity probe");
+        server
+            .read_exact(&mut probe)
+            .await
+            .expect("read identity probe");
         assert_eq!(&probe, b"identity");
 
-        let client_peer = weida_winpipe::client_peer(&server)
-            .expect("read authenticated client identity");
+        let client_peer =
+            weida_winpipe::client_peer(&server).expect("read authenticated client identity");
         let server_peer = client_task.await.expect("client task");
 
         assert_eq!(client_peer.sid, server_peer.sid);
