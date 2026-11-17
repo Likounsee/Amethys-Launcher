@@ -870,18 +870,12 @@ mod tests {
         assert!(database.get_game_by_platform_id("Steam", "bad\\0id").is_err());
         assert!(
             database
-                .get_game_by_platform_id(
-                    &"p".repeat(super::MAX_PLATFORM_NAME_BYTES + 1),
-                    "570"
-                )
+                .get_game_by_platform_id(&"p".repeat(super::MAX_PLATFORM_NAME_BYTES + 1), "570")
                 .is_err()
         );
         assert!(
             database
-                .get_game_by_platform_id(
-                    "Steam",
-                    &"i".repeat(super::MAX_PLATFORM_ID_BYTES + 1)
-                )
+                .get_game_by_platform_id("Steam", &"i".repeat(super::MAX_PLATFORM_ID_BYTES + 1))
                 .is_err()
         );
 
