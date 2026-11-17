@@ -497,10 +497,11 @@ fn is_safe_relative_executable(executable: &str) -> bool {
     let Some(first) = components.next() else {
         return false;
     };
-    !first.contains(':')
-        && !components
-            .chain(std::iter::once(first))
-            .any(|component| component == "." || component == "..")
+    !components
+        .chain(std::iter::once(first))
+        .all(|component| {
+            !component.contains(':') && component != "." && component != ".."
+        })
 }
 
 /// Resolves a configured executable and guarantees it stays inside the registered install.
@@ -1176,6 +1177,8 @@ mod tests {
             r"..\\outside.exe",
             "bin/../../outside.exe",
             r"C:outside.exe",
+            "bin/game.exe:alternate-stream",
+            r"bin\\game.exe:alternate-stream",
         ] {
             assert_eq!(
                 super::inspect_game_executable(&game(unsafe_path)),
