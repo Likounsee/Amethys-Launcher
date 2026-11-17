@@ -1,12 +1,9 @@
 //! Native local IPC server and client helpers.
 //!
 //! Unix-domain sockets are used on Linux/macOS and named pipes on Windows.
-//! Unix sockets are restricted to the owning user (0600). Windows named-pipe
-//! access currently uses the process token's default security descriptor. Remote
-//! pipe clients are rejected and client opens use identification-level QoS to
-//! prevent accidental server-side impersonation. Local-user access still depends
-//! on the inherited Windows DACL; a restrictive DACL remains required before
-//! multi-user isolation can be claimed.
+//! Unix sockets are restricted to the owning user (0600). Windows named pipes
+//! use an explicit DACL granting access only to the process user and SYSTEM;
+//! remote clients are rejected and client opens use identification-level QoS.
 //! Callers must validate the peer's protocol and authorize every command.
 
 use crate::{AmethysError, ErrorCode};
@@ -29,6 +26,7 @@ pub struct IpcListener {
 pub struct IpcListener {
     server: tokio::net::windows::named_pipe::NamedPipeServer,
     endpoint: String,
+    dacl: weida_winpipe::OwnerOnlyDacl,
 }
 
 #[cfg(unix)]
@@ -160,26 +158,30 @@ impl IpcListener {
 impl IpcListener {
     /// Creates one local named-pipe server instance.
     pub async fn bind(endpoint: impl AsRef<str>) -> Result<Self, AmethysError> {
-        let server = tokio::net::windows::named_pipe::ServerOptions::new()
-            .first_pipe_instance(true)
-            .max_instances(32)
-            .reject_remote_clients(true)
-            .create(endpoint.as_ref())
-            .map_err(io_error)?;
+        let dacl = weida_winpipe::OwnerOnlyDacl::for_current_user().map_err(io_error)?;
+        let endpoint = endpoint.as_ref().to_owned();
+        let server = weida_winpipe::create_instance(
+            std::ffi::OsStr::new(&endpoint),
+            &dacl,
+            true,
+        )
+        .map_err(io_error)?;
         Ok(Self {
             server,
-            endpoint: endpoint.as_ref().to_owned(),
+            endpoint,
+            dacl,
         })
     }
 
     /// Accepts one client connection.
     pub async fn accept(&mut self) -> Result<BoxedIpcStream, AmethysError> {
         self.server.connect().await.map_err(io_error)?;
-        let next_server = tokio::net::windows::named_pipe::ServerOptions::new()
-            .max_instances(32)
-            .reject_remote_clients(true)
-            .create(&self.endpoint)
-            .map_err(io_error)?;
+        let next_server = weida_winpipe::create_instance(
+            std::ffi::OsStr::new(&self.endpoint),
+            &self.dacl,
+            false,
+        )
+        .map_err(io_error)?;
         let connected_server = std::mem::replace(&mut self.server, next_server);
         Ok(Box::new(connected_server))
     }
@@ -203,9 +205,7 @@ pub async fn connect(endpoint: impl AsRef<str>) -> Result<BoxedIpcStream, Amethy
     // identification level: opening a pipe must never grant the server an
     // impersonation token capable of acting as this client.
     const SECURITY_IDENTIFICATION_QOS: u32 = 0x0011_0000;
-    tokio::net::windows::named_pipe::ClientOptions::new()
-        .security_qos_flags(SECURITY_IDENTIFICATION_QOS)
-        .open(endpoint.as_ref())
+    weida_winpipe::open_client(std::ffi::OsStr::new(endpoint.as_ref()))
         .map(|stream| Box::new(stream) as BoxedIpcStream)
         .map_err(io_error)
 }
