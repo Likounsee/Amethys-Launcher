@@ -875,8 +875,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 #[cfg(test)]
 mod tests {
     use super::{
-        PathCheck, inspect_path, parse_arguments, parse_command, same_install_location,
-        status_label,
+        PathCheck, inspect_path, parse_arguments, parse_command, resolve_launch_executable,
+        same_install_location, status_label,
     };
     use amethys_ipc::{IpcCommand, IpcCoreStatus};
 
@@ -1008,6 +1008,52 @@ mod tests {
         assert_eq!(std::fs::read(&file).expect("file remains"), b"sentinel");
 
         std::fs::remove_dir_all(root).expect("remove test root");
+    }
+
+    #[test]
+    fn launch_resolution_rejects_paths_outside_the_installation() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-launch-resolve-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let install = root.join("game");
+        std::fs::create_dir_all(install.join("bin")).expect("create installation");
+        let executable = install.join("bin/game.exe");
+        std::fs::write(&executable, b"game").expect("create executable fixture");
+        let make_game = |path: &str| amethys_ipc::IpcGameEntry {
+            id: "game-1".to_owned(),
+            name: "Example".to_owned(),
+            platform: "Test".to_owned(),
+            platform_id: None,
+            install_path: install.to_string_lossy().into_owned(),
+            executable: Some(path.to_owned()),
+        };
+
+        assert_eq!(
+            resolve_launch_executable(&make_game("bin/game.exe")).expect("valid executable"),
+            executable.canonicalize().expect("canonical executable")
+        );
+        assert!(resolve_launch_executable(&make_game("../outside.exe")).is_err());
+        assert!(resolve_launch_executable(&make_game("bin/missing.exe")).is_err());
+
+        let outside = root.join("outside.exe");
+        std::fs::write(&outside, b"outside").expect("create outside executable");
+        assert!(resolve_launch_executable(&make_game(&outside.to_string_lossy())).is_err());
+
+        #[cfg(unix)]
+        {
+            let link = install.join("bin/outside-link.exe");
+            std::os::unix::fs::symlink(&outside, &link).expect("create external symlink");
+            assert!(resolve_launch_executable(&make_game("bin/outside-link.exe")).is_err());
+            std::fs::remove_file(link).expect("remove symlink");
+        }
+
+        assert_eq!(std::fs::read(&executable).expect("game file remains"), b"game");
+        std::fs::remove_dir_all(root).expect("cleanup");
     }
 
     #[test]
