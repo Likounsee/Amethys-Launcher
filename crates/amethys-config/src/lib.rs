@@ -98,25 +98,61 @@ fn resolve_data_directory(
     }
 }
 
-/// Creates the application data directory and applies private Unix permissions.
+/// Creates a private application data directory without changing permissions
+/// on an existing user-selected directory.
 ///
-/// On Unix, the directory is restricted to its owner (0700), protecting the
-/// SQLite database and local IPC socket stored inside it.
+/// On Unix, newly-created directories use mode 0700. Existing directories must
+/// already be private; Amethys never chmods an arbitrary existing directory.
 pub fn prepare_data_directory() -> io::Result<PathBuf> {
     let path = data_directory()?;
-    std::fs::create_dir_all(&path)?;
-    restrict_data_directory_permissions(&path)?;
+    create_private_data_directory(&path)?;
     Ok(path)
 }
 
-fn restrict_data_directory_permissions(path: &Path) -> io::Result<()> {
+fn create_private_data_directory(path: &Path) -> io::Result<()> {
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))?;
+        use std::os::unix::fs::{DirBuilderExt, MetadataExt};
+
+        let mut builder = std::fs::DirBuilder::new();
+        builder.recursive(true).mode(0o700);
+        match builder.create(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error),
+        }
+
+        let metadata = std::fs::symlink_metadata(path)?;
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Amethys data directory must be a real directory, not a symlink or file",
+            ));
+        }
+        if metadata.mode() & 0o077 != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "Amethys data directory is accessible by other users; set its permissions to 0700",
+            ));
+        }
     }
+
     #[cfg(not(unix))]
-    let _ = path;
+    {
+        match std::fs::create_dir_all(path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error),
+        }
+        let metadata = std::fs::symlink_metadata(path)?;
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Amethys data directory must be a real directory, not a symlink or file",
+            ));
+        }
+    }
+
     Ok(())
 }
 
@@ -301,15 +337,11 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn prepared_data_directory_is_private_to_its_owner() {
+    fn newly_created_data_directory_is_private_to_its_owner() {
         use std::os::unix::fs::PermissionsExt;
 
         let path = std::env::temp_dir().join(format!("amethys-private-{}", uuid::Uuid::new_v4()));
-        std::fs::create_dir(&path).expect("temporary data directory is created");
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
-            .expect("initial permissions are set");
-
-        super::restrict_data_directory_permissions(&path).expect("private permissions are applied");
+        super::create_private_data_directory(&path).expect("private directory is created");
         let mode = std::fs::metadata(&path)
             .expect("directory metadata is available")
             .permissions()
@@ -317,6 +349,46 @@ mod tests {
             & 0o777;
         assert_eq!(mode, 0o700);
         std::fs::remove_dir(path).expect("temporary directory is removed");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn existing_public_data_directory_is_rejected_without_changing_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let path = std::env::temp_dir().join(format!("amethys-public-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&path).expect("temporary directory is created");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+            .expect("initial permissions are set");
+
+        let error = super::create_private_data_directory(&path)
+            .expect_err("public directory must be rejected");
+        assert_eq!(error.kind(), io::ErrorKind::PermissionDenied);
+        let mode = std::fs::metadata(&path)
+            .expect("directory metadata is available")
+            .permissions()
+            .mode()
+            & 0o777;
+        assert_eq!(mode, 0o755, "Amethys must not alter existing permissions");
+        std::fs::remove_dir(path).expect("temporary directory is removed");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn symlink_data_directory_is_rejected() {
+        let root = std::env::temp_dir().join(format!("amethys-symlink-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&root).expect("fixture root is created");
+        let target = root.join("target");
+        std::fs::create_dir(&target).expect("target directory is created");
+        let link = root.join("link");
+        std::os::unix::fs::symlink(&target, &link).expect("directory symlink is created");
+
+        let error = super::create_private_data_directory(&link)
+            .expect_err("symlink data directory must be rejected");
+        assert_eq!(error.kind(), io::ErrorKind::InvalidInput);
+        std::fs::remove_file(link).expect("symlink is removed");
+        std::fs::remove_dir(target).expect("target is removed");
+        std::fs::remove_dir(root).expect("fixture root is removed");
     }
 
     #[test]
