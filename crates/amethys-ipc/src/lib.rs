@@ -599,7 +599,10 @@ mod tests {
     async fn reader_rejects_truncated_frame_header() {
         let (mut writer, mut reader) = duplex(8);
         use tokio::io::AsyncWriteExt;
-        writer.write_all(&[0, 0]).await.expect("write partial header");
+        writer
+            .write_all(&[0, 0])
+            .await
+            .expect("write partial header");
         writer.shutdown().await.expect("close truncated stream");
 
         let error = super::read_message::<_, Payload>(&mut reader)
@@ -613,7 +616,10 @@ mod tests {
         let (mut writer, mut reader) = duplex(8);
         use tokio::io::AsyncWriteExt;
         writer.write_u32(4).await.expect("write frame length");
-        writer.write_all(&[b'{', b'}']).await.expect("write partial payload");
+        writer
+            .write_all(&[b'{', b'}'])
+            .await
+            .expect("write partial payload");
         writer.shutdown().await.expect("close truncated stream");
 
         let error = super::read_message::<_, Payload>(&mut reader)
