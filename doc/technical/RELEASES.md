@@ -8,7 +8,6 @@ The release workflow builds the CLI and core agent as native Rust executables:
 | --- | --- | --- |
 | Windows 64-bit | `x86_64-pc-windows-msvc` | ZIP |
 | Linux x86_64 (GNU) | `x86_64-unknown-linux-gnu` | TAR.GZ |
-| macOS Apple Silicon | `aarch64-apple-darwin` | TAR.GZ |
 
 Each archive contains `amethys-agent` (or `.exe`) and `amethysctl` (or `.exe`). These are portable binaries, not an installer or operating-system service package. The agent must be running before the CLI can communicate with it. Automatic startup, service registration, desktop shortcuts, update delivery and uninstallers are not part of this initial release package.
 
@@ -21,7 +20,7 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-The release workflow builds all three targets, archives the two executables for each target, calculates SHA-256 checksums, and creates a **draft** GitHub release. The maintainer must inspect and manually publish the draft; a successful build does not automatically make a release public.
+The release workflow builds both targets, archives the two executables for each target, calculates SHA-256 checksums, and creates a **draft** GitHub release. The maintainer must inspect and manually publish the draft; a successful build does not automatically make a release public.
 
 The workflow can also be started manually for an existing tag through the GitHub Actions interface.
 
@@ -39,11 +38,13 @@ The agent currently runs in the foreground. Closing its terminal stops it. Do no
 
 A release candidate is not ready merely because compilation succeeded. Before publishing a draft, check:
 
-- the CI workflow is green on Windows, Linux and macOS;
+- the CI workflow is green on Windows and Linux;
 - each archive contains both expected executables;
 - `amethysctl --version` and `amethysctl --help` work;
 - the agent starts and responds to `ping` and `status`;
 - scan, import, list, search and read-only verify behave as documented;
-- the archive and checksum files can be downloaded and verified on each target OS.
+- the archive and checksum files can be downloaded and verified on Windows and Linux.
+
+macOS is temporarily out of scope for the 0.1 release because it cannot currently be tested on physical Apple hardware. Its development can resume when a suitable Mac test machine is available.
 
 Windows named-pipe access currently uses the creating process' default security descriptor. Do not describe the 0.1 IPC endpoint as isolated from other local Windows users until an explicit restrictive DACL and the corresponding security tests are implemented.
