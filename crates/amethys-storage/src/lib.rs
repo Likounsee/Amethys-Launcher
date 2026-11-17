@@ -857,11 +857,7 @@ mod tests {
                 .is_none()
         );
         assert!(database.set_game_executable(&game.id, " ").is_err());
-        assert!(
-            database
-                .set_game_executable(&game.id, "bad\0path")
-                .is_err()
-        );
+        assert!(database.set_game_executable(&game.id, "bad\0path").is_err());
         drop(database);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
