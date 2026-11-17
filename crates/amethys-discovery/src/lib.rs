@@ -444,6 +444,78 @@ pub fn scan_epic_manifests(manifests_dir: &Path) -> Vec<DetectedGame> {
     games
 }
 
+/// Resolves Epic's declared launch executable for an installed game.
+///
+/// The executable is accepted only when the manifest identifies the same app,
+/// the path is relative, and the resolved file remains inside the installation.
+pub fn epic_launch_executable(
+    manifests_dir: &Path,
+    app_id: &str,
+    install_path: &Path,
+) -> Option<PathBuf> {
+    if app_id.trim().is_empty() || !is_existing_absolute_directory(install_path) {
+        return None;
+    }
+    let entries = fs::read_dir(manifests_dir).ok()?;
+    let mut paths: Vec<_> = entries.flatten().map(|entry| entry.path()).collect();
+    paths.sort();
+
+    let canonical_root = install_path.canonicalize().ok()?;
+    for manifest_path in paths {
+        if !manifest_path
+            .extension()
+            .and_then(|value| value.to_str())
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("item"))
+        {
+            continue;
+        }
+        let Some(contents) = read_bounded_text(&manifest_path) else {
+            continue;
+        };
+        let contents = contents.strip_prefix('\u{feff}').unwrap_or(&contents);
+        let Ok(manifest) = serde_json::from_str::<serde_json::Value>(contents) else {
+            continue;
+        };
+        let matches_app = manifest
+            .get("AppName")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|value| value.trim().eq_ignore_ascii_case(app_id.trim()));
+        let matches_install = manifest
+            .get("InstallLocation")
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .is_some_and(|value| Path::new(value) == install_path);
+        if !matches_app || !matches_install {
+            continue;
+        }
+        let executable = manifest
+            .get("LaunchExecutable")
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|value| !value.is_empty())?;
+        let relative = Path::new(executable);
+        if relative.is_absolute()
+            || relative
+                .components()
+                .any(|component| !matches!(component, std::path::Component::Normal(_)))
+        {
+            return None;
+        }
+        let candidate = install_path.join(relative);
+        let canonical_candidate = candidate.canonicalize().ok()?;
+        if !canonical_candidate.is_file()
+            || !canonical_candidate.starts_with(&canonical_root)
+        {
+            return None;
+        }
+        return canonical_candidate
+            .strip_prefix(&canonical_root)
+            .ok()
+            .map(Path::to_path_buf);
+    }
+    None
+}
+
 /// Builds Epic Games Launcher manifest locations from explicit platform inputs.
 /// Keeping path selection separate from environment access makes every OS layout
 /// testable on every CI runner.
@@ -2650,6 +2722,41 @@ HKEY_CURRENT_USER\Software\Valve\Steam
     }
 
     #[test]
+    #[test]
+    fn resolves_only_declared_epic_executables_inside_the_install_directory() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-epic-launch-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let manifests = root.join("Manifests");
+        let install = root.join("Installed").join("Example");
+        std::fs::create_dir_all(&manifests).expect("create manifests");
+        std::fs::create_dir_all(install.join("Binaries")).expect("create binaries");
+        std::fs::write(install.join("Binaries").join("Game.exe"), b"test").expect("create executable");
+        std::fs::write(
+            manifests.join("game.item"),
+            format!(
+                r#"{{"AppName":"ExampleApp","InstallLocation":{},"LaunchExecutable":"Binaries/Game.exe"}}"#,
+                serde_json::to_string(&install.to_string_lossy()).expect("encode path")
+            ),
+        )
+        .expect("write manifest");
+
+        assert_eq!(
+            epic_launch_executable(&manifests, "ExampleApp", &install),
+            Some(PathBuf::from("Binaries/Game.exe"))
+        );
+        assert_eq!(
+            epic_launch_executable(&manifests, "OtherApp", &install),
+            None
+        );
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
     fn reads_epic_manifests_with_uppercase_item_extension() {
         let root = std::env::temp_dir().join(format!(
             "amethys-epic-extension-{}-{}",
