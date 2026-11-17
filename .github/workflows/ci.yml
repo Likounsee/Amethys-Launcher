@@ -36,3 +36,5 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Run tests
         run: cargo test --workspace --all-targets
+      - name: Build release binaries
+        run: cargo build --workspace --release
