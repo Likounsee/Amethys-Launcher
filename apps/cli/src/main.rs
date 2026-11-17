@@ -295,7 +295,7 @@ async fn import_one_detected_game(
         platform: game.platform.to_owned(),
         platform_id: game.platform_id.clone(),
         install_path: game.install_path.to_string_lossy().into_owned(),
-        executable: None,
+        executable: inferred_executable(game),
     };
     let response = request_core(command).await.map_err(|error| {
         format!(
@@ -683,6 +683,19 @@ async fn verify_saved_games(json_output: bool) -> Result<(), Box<dyn Error>> {
     } else {
         Ok(())
     }
+}
+
+fn inferred_executable(game: &amethys_discovery::DetectedGame) -> Option<String> {
+    if !game.platform.eq_ignore_ascii_case("Epic Games") {
+        return None;
+    }
+    let app_id = game.platform_id.as_deref()?;
+    amethys_discovery::epic_manifest_roots()
+        .iter()
+        .find_map(|root| {
+            amethys_discovery::epic_launch_executable(root, app_id, &game.install_path)
+        })
+        .map(|path| path.to_string_lossy().into_owned())
 }
 
 async fn import_detected_game(platform: &str, platform_id: &str) -> Result<(), Box<dyn Error>> {
