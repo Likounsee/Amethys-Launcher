@@ -497,7 +497,7 @@ fn is_safe_relative_executable(executable: &str) -> bool {
     let Some(first) = components.next() else {
         return false;
     };
-    !components
+    components
         .chain(std::iter::once(first))
         .all(|component| {
             !component.contains(':') && component != "." && component != ".."
