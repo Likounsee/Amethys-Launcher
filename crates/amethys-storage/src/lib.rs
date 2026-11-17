@@ -840,6 +840,26 @@ mod tests {
     }
 
     #[test]
+    fn imported_games_can_be_configured_with_an_executable() {
+        let (database, path) = temporary_database();
+        let game = database
+            .add_game("Example", "Steam", "/games/example", None)
+            .expect("game is added");
+        let updated = database
+            .set_game_executable(&game.id, "bin/game")
+            .expect("executable is configured")
+            .expect("game exists");
+        assert_eq!(updated.executable.as_deref(), Some("bin/game"));
+        assert!(database.set_game_executable("missing-id", "bin/game").unwrap().is_none());
+        assert!(database.set_game_executable(&game.id, " ").is_err());
+        assert!(database.set_game_executable(&game.id, "bad\\0path").is_err());
+        drop(database);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[test]
     fn games_can_be_added_listed_found_and_removed() {
         let (database, path) = temporary_database();
         let game = database
