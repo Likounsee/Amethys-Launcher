@@ -61,25 +61,31 @@ Use `transport::IpcListener::bind()` to create a server endpoint and
 `accept()` to accept clients. Use `transport::connect()` for a client.
 The agent runs a persistent accept loop and handles each local request.
 
-On Unix, the socket path is restricted to mode `0600` and is unlinked when the
-listener is dropped. On Windows, remote named-pipe clients are explicitly rejected, the first
-instance is exclusive, and the server caps the pipe at 32 instances. The pipe
-still uses the default security descriptor associated with the creating
-process, so local-user access follows that inherited DACL; an explicit
-restrictive DACL remains required before claiming isolation between multiple
-local Windows users.
+On Unix, the socket path is restricted to mode `0600`. Stale-socket recovery
+checks the socket type and inode before unlinking, and listener cleanup removes
+only the socket inode it originally created.
+
+On Windows, the named pipe uses an explicit DACL built for the current user.
+Access is granted to that user and LocalSystem; access is not granted to
+Everyone or anonymous users. Remote clients are rejected, the first pipe
+instance is exclusive, and the listener creates subsequent instances with the
+same DACL. Client opens use identification-level QoS. The Windows transport
+test checks that the connected client and server report the expected SID and
+process identity. The agent limits concurrent IPC connections to 32 and
+applies a 15-second request timeout.
 
 ## Security requirements
 
-A local endpoint is not proof that a peer is trusted. The server validates
-the envelope version and applies a request timeout. Every new command must
-validate its inputs, authorize the requested operation, and apply resource
-limits. Do not expose these endpoints over TCP or forward them outside the
-local machine.
+A local endpoint is not proof that a peer is trusted. The operating-system
+endpoint ACL is the first access-control boundary; the server also validates
+the envelope version, bounds frames to 8 MiB, applies a request timeout and
+limits concurrent connections. Every new command must validate its inputs,
+authorize the requested operation and apply resource limits. Do not expose
+these endpoints over TCP or forward them outside the local machine.
 
 The current protocol is intended for local communication between the Amethys
 CLI and agent. The agent rejects library mutations unless its lifecycle state
 is `running`; storage validates metadata lengths, empty values and NUL bytes.
-Peer authentication and an explicit restrictive Windows pipe DACL remain
-hardening work before treating the IPC boundary as a security boundary against
-other local processes.
+The Windows ACL and Unix socket permissions restrict access to the current
+user context, but CI success is not a guarantee against compromise of that
+user account or malicious code already running as that user.
