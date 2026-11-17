@@ -455,15 +455,16 @@ fn epic_manifest_roots_for(
     let mut roots = BTreeSet::new();
     match target_os {
         "windows" => {
-            if let Some(program_data) = program_data.filter(|path| is_absolute_metadata_path(path)) {
+            if let Some(program_data) = program_data.filter(|path| is_absolute_metadata_path(path))
+            {
                 roots.insert(program_data.join("Epic/EpicGamesLauncher/Data/Manifests"));
             }
         }
         "macos" => {
             if let Some(home) = home.filter(|path| is_absolute_metadata_path(path)) {
-                roots.insert(home.join(
-                    "Library/Application Support/Epic/EpicGamesLauncher/Data/Manifests",
-                ));
+                roots.insert(
+                    home.join("Library/Application Support/Epic/EpicGamesLauncher/Data/Manifests"),
+                );
             }
         }
         // On Linux, Epic game installations are discovered through Heroic /
@@ -2126,21 +2127,13 @@ mod tests {
     #[test]
     fn epic_manifest_roots_cover_windows_and_macos_without_host_environment() {
         assert_eq!(
-            super::epic_manifest_roots_for(
-                "windows",
-                None,
-                Some(Path::new("C:/ProgramData")),
-            ),
+            super::epic_manifest_roots_for("windows", None, Some(Path::new("C:/ProgramData")),),
             vec![PathBuf::from(
                 "C:/ProgramData/Epic/EpicGamesLauncher/Data/Manifests"
             )]
         );
         assert_eq!(
-            super::epic_manifest_roots_for(
-                "macos",
-                Some(Path::new("/Users/test-user")),
-                None,
-            ),
+            super::epic_manifest_roots_for("macos", Some(Path::new("/Users/test-user")), None,),
             vec![PathBuf::from(
                 "/Users/test-user/Library/Application Support/Epic/EpicGamesLauncher/Data/Manifests"
             )]
@@ -2149,18 +2142,14 @@ mod tests {
 
     #[test]
     fn epic_manifest_roots_reject_relative_environment_paths_and_skip_linux_launcher() {
-        assert!(super::epic_manifest_roots_for(
-            "windows",
-            None,
-            Some(Path::new("relative/ProgramData")),
-        )
-        .is_empty());
-        assert!(super::epic_manifest_roots_for(
-            "macos",
-            Some(Path::new("relative/home")),
-            None,
-        )
-        .is_empty());
+        assert!(
+            super::epic_manifest_roots_for("windows", None, Some(Path::new("relative/ProgramData")),)
+                .is_empty()
+        );
+        assert!(
+            super::epic_manifest_roots_for("macos", Some(Path::new("relative/home")), None,)
+                .is_empty()
+        );
         assert!(super::epic_manifest_roots_for("linux", None, None).is_empty());
     }
 
