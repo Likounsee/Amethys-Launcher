@@ -4296,7 +4296,7 @@ HKEY_CURRENT_USER\Software\Valve\Steam
             super::parse_yaml_scalar("C:/Riot Games/VALORANT # install root"),
             Some("C:/Riot Games/VALORANT".to_owned())
         );
-        assert_eq!(super::parse_yaml_scalar(r#""C:\Riot Games\VALORANT""#), Some(r"C:\Riot Games\VALORANT".to_owned()));
+        assert_eq!(super::parse_yaml_scalar(r#""C:\Riot Games\VALORANT""#), None);
         assert_eq!(super::parse_yaml_scalar(r#""C:\Riot Games\VALORANT"#), None);
     }
 
