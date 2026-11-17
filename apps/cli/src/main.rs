@@ -543,16 +543,29 @@ fn resolve_launch_executable(
 
 fn inspect_game_executable(game: &amethys_ipc::IpcGameEntry) -> Option<PathCheck> {
     let executable = game.executable.as_deref()?;
+    let install_root = std::path::Path::new(&game.install_path);
+    let canonical_root = match install_root.canonicalize() {
+        Ok(path) if path.is_dir() => path,
+        Ok(_) => return Some(PathCheck::WrongType),
+        Err(_) => return Some(inspect_path(install_root, true)),
+    };
     let executable_path = std::path::Path::new(executable);
-    let resolved = if executable_path.is_absolute() {
+    let candidate = if executable_path.is_absolute() {
         executable_path.to_path_buf()
     } else {
         if !is_safe_relative_executable(executable) {
             return Some(PathCheck::InvalidPath);
         }
-        std::path::Path::new(&game.install_path).join(executable_path)
+        canonical_root.join(executable_path)
     };
-    Some(inspect_path(&resolved, false))
+    let canonical_executable = match candidate.canonicalize() {
+        Ok(path) => path,
+        Err(_) => return Some(inspect_path(&candidate, false)),
+    };
+    if !canonical_executable.starts_with(&canonical_root) {
+        return Some(PathCheck::InvalidPath);
+    }
+    Some(inspect_path(&canonical_executable, false))
 }
 
 /// Creates a versioned, read-only report of saved installation directories and
@@ -1057,6 +1070,33 @@ mod tests {
         let missing = super::build_verify_report(&[make_game("bin/missing.exe")]);
         assert_eq!(missing["games"][0]["executable_status"], "missing");
         assert_eq!(missing["games"][0]["healthy"], false);
+
+        let outside = root.parent().expect("parent").join(format!(
+            "amethys-verify-outside-{}.exe",
+            std::process::id()
+        ));
+        std::fs::write(&outside, b"outside").expect("create outside executable");
+        let external = super::build_verify_report(&[make_game(
+            &outside.to_string_lossy(),
+        )]);
+        assert_eq!(external["games"][0]["executable_status"], "invalid_path");
+        assert_eq!(external["games"][0]["healthy"], false);
+        std::fs::remove_file(&outside).expect("remove outside executable");
+
+        #[cfg(unix)]
+        {
+            let link = root.join("bin/outside-link.exe");
+            std::os::unix::fs::symlink(root.parent().unwrap().join("outside-target.exe"), &link)
+                .expect("create symlink");
+            let outside_target = root.parent().unwrap().join("outside-target.exe");
+            std::fs::write(&outside_target, b"outside").expect("create symlink target");
+            let symlinked = super::build_verify_report(&[make_game("bin/outside-link.exe")]);
+            assert_eq!(symlinked["games"][0]["executable_status"], "invalid_path");
+            assert_eq!(symlinked["games"][0]["healthy"], false);
+            std::fs::remove_file(link).expect("remove symlink");
+            std::fs::remove_file(outside_target).expect("remove symlink target");
+        }
+
         assert_eq!(
             std::fs::read(root.join("bin/game.exe")).expect("fixture remains"),
             b"sentinel"
