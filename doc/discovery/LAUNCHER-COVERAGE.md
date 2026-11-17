@@ -6,8 +6,8 @@ Amethys performs read-only discovery from local launcher metadata. A launcher be
 
 | Service | Detection source | Status |
 |---|---|---|
-| Steam | Steam library folders and app manifests; native Windows/macOS/Linux roots, Linux Flatpak root and custom XDG data root | Implemented |
-| Epic Games Launcher | Epic .item manifests; Windows ProgramData and macOS per-user Application Support roots | Implemented on Windows/macOS; Linux uses Heroic/Legendary metadata |
+| Steam | Steam library folders and app manifests; native Windows/Linux roots, Linux Flatpak root and custom XDG data root | Implemented |
+| Epic Games Launcher | Epic .item manifests; Windows ProgramData root | Implemented on Windows; Linux uses Heroic/Legendary metadata |
 | Heroic / Legendary | installed.json | Implemented |
 | GOG Galaxy | Local installed-product database, opened read-only | Implemented |
 | Amazon Games | Local launcher database, opened read-only | Implemented |
@@ -37,7 +37,7 @@ Amethys performs read-only discovery from local launcher metadata. A launcher be
 ## Safety and accuracy rules
 
 - Discovery is read-only and must not start launchers or modify their data.
-- Steam discovery on Linux checks conventional native roots, the Flatpak per-user root, and an absolute `XDG_DATA_HOME` root when configured; macOS uses the per-user Application Support root.
+- Steam discovery on Linux checks conventional native roots, the Flatpak per-user root, and an absolute `XDG_DATA_HOME` root when configured. macOS support is paused for the 0.1 release until it can be tested on physical Mac hardware.
 - Only absolute, existing installation directories are accepted.
 - Launcher runtimes, anti-cheat components and shared dependencies must not be reported as games.
 - Avoid guessing from generic folders. A folder name alone is not sufficient evidence of an installed game.
