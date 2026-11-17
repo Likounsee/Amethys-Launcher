@@ -3,16 +3,16 @@
 <p align="center">
   <a href="https://github.com/Likounsee/Amethys-Launcher/actions/workflows/ci.yml"><img src="https://github.com/Likounsee/Amethys-Launcher/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <img src="https://img.shields.io/badge/Rust-2024-orange?logo=rust" alt="Rust 2024">
-  <img src="https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux-blue" alt="Windows, Linux and macOS">
+  <img src="https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux-blue" alt="Windows and Linux">
 </p>
 
 A free, community-driven, cross-platform game library and launcher client.
 
-Amethys Launcher aims to bring game libraries, installations, updates, saves and platform integrations together without replacing the official stores, accounts, licenses, DRM or platform policies.
+Amethys Launcher aims to bring game libraries, installations and platform integrations together without replacing official stores, accounts, licenses, DRM or platform policies. Updates and save synchronization are future goals, not 0.1 features.
 
 ## Project status
 
-The project is at **Core Foundation 0.1**. The Rust foundation is being built alongside an early, read-only multi-platform game discovery system. The graphical interface and online store/catalogue come later.
+The project is preparing its **0.1 release**. The Rust core, local SQLite library, IPC service and CLI are implemented. Windows and Linux game discovery, explicit import, library management, read-only verification and configured-executable launch are in place. Current work is focused on hardening, cross-platform regression tests and release validation. The graphical interface and online store/catalogue come later.
 
 ## Principles
 
