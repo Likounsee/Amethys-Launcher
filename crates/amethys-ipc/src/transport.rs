@@ -452,9 +452,7 @@ mod windows_tests {
     #[tokio::test]
     async fn named_pipe_listener_accepts_multiple_clients() {
         let endpoint = test_endpoint();
-        let mut listener = IpcListener::bind(&endpoint)
-            .await
-            .expect("bind named pipe");
+        let mut listener = IpcListener::bind(&endpoint).await.expect("bind named pipe");
 
         for expected in [b"one".as_slice(), b"two".as_slice()] {
             let client_endpoint = endpoint.clone();
