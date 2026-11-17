@@ -415,7 +415,6 @@ mod tests {
     }
 }
 
-
 #[cfg(all(test, windows))]
 mod windows_tests {
     use super::{IpcListener, connect};
@@ -428,9 +427,7 @@ mod windows_tests {
     #[tokio::test]
     async fn named_pipe_accepts_a_client_and_exchanges_bytes() {
         let endpoint = test_endpoint();
-        let mut listener = IpcListener::bind(&endpoint)
-            .await
-            .expect("bind named pipe");
+        let mut listener = IpcListener::bind(&endpoint).await.expect("bind named pipe");
 
         let client_endpoint = endpoint.clone();
         let client_task = tokio::spawn(async move {
@@ -446,10 +443,7 @@ mod windows_tests {
 
         let mut server = listener.accept().await.expect("accept client");
         let mut request = [0_u8; 4];
-        server
-            .read_exact(&mut request)
-            .await
-            .expect("read request");
+        server.read_exact(&mut request).await.expect("read request");
         assert_eq!(&request, b"ping");
         server.write_all(b"pong").await.expect("write response");
         assert_eq!(&client_task.await.expect("client task"), b"pong");
