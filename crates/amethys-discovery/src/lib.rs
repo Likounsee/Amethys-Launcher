@@ -265,7 +265,7 @@ fn unix_steam_roots(
     xdg_data_home: Option<&Path>,
     target_os: &str,
 ) -> Vec<PathBuf> {
-    if !home.is_absolute() {
+    if !is_absolute_metadata_path(home) {
         return Vec::new();
     }
 
@@ -275,7 +275,7 @@ fn unix_steam_roots(
             roots.insert(home.join(".steam/steam"));
             roots.insert(home.join(".local/share/Steam"));
             roots.insert(home.join(".var/app/com.valvesoftware.Steam/.local/share/Steam"));
-            if let Some(data_home) = xdg_data_home.filter(|path| path.is_absolute()) {
+            if let Some(data_home) = xdg_data_home.filter(|path| is_absolute_metadata_path(path)) {
                 roots.insert(data_home.join("Steam"));
             }
         }
