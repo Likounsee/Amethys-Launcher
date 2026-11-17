@@ -65,6 +65,10 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "CLI game-list request failed." }
             & "$PWD/target/release/amethysctl.exe" games verify
             if ($LASTEXITCODE -ne 0) { throw "CLI game verification failed for an empty library." }
+            $verify = & "$PWD/target/release/amethysctl.exe" games verify --json | ConvertFrom-Json
+            if ($LASTEXITCODE -ne 0 -or $verify.schema_version -ne 2 -or $verify.read_only -ne $true -or $verify.total_games -ne 0 -or $verify.issues -ne 0) {
+              throw "CLI JSON verification did not return the expected empty read-only schema."
+            }
             $scan = & "$PWD/target/release/amethysctl.exe" games scan --json | ConvertFrom-Json
             if ($LASTEXITCODE -ne 0 -or $scan.schema_version -ne 1 -or $scan.read_only -ne $true) {
               throw "CLI JSON scan did not return the expected read-only schema."
@@ -108,6 +112,8 @@ jobs:
           target/release/amethysctl status
           target/release/amethysctl games
           target/release/amethysctl games verify
+          verify_json="$(target/release/amethysctl games verify --json)"
+          printf '%s' "$verify_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["schema_version"] == 2 and d["read_only"] is True and d["total_games"] == 0 and d["issues"] == 0'
           scan_json="$(target/release/amethysctl games scan --json)"
           printf '%s' "$scan_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["schema_version"] == 1 and d["read_only"] is True'
       - name: Smoke-test Windows release archive
