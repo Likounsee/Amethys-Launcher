@@ -41,6 +41,88 @@ jobs:
         with:
           ref: ${{ inputs.tag || github.ref }}
 
+      - name: Validate release tag
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?(?:\\+[0-9A-Za-z.-]+)?
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build release binaries
+        run: cargo build --workspace --release --target ${{ matrix.target }}
+
+      - name: Stage Windows binaries
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/amethys-agent.exe" dist/
+          Copy-Item "target/${{ matrix.target }}/release/amethysctl.exe" dist/
+          $archive = "amethys-$($env:RELEASE_TAG)-${{ matrix.target }}.zip"
+          Compress-Archive -Path dist/amethys-agent.exe,dist/amethysctl.exe -DestinationPath $archive
+
+      - name: Stage Unix binaries
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/amethys-agent" dist/
+          cp "target/${{ matrix.target }}/release/amethysctl" dist/
+          archive="amethys-${RELEASE_TAG}-${{ matrix.target }}.tar.gz"
+          tar -czf "$archive" -C dist amethys-agent amethysctl
+
+      - name: Upload platform archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: amethys-${{ matrix.target }}
+          path: amethys-${{ inputs.tag || github.ref_name }}-${{ matrix.target }}.${{ matrix.archive }}
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish draft GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download platform archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: amethys-*
+          path: dist
+          merge-multiple: true
+
+      - name: Generate SHA-256 checksums
+        working-directory: dist
+        run: sha256sum amethys-* > SHA256SUMS
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: Amethys Launcher ${{ inputs.tag || github.ref_name }}
+          draft: true
+          generate_release_notes: true
+          files: dist/*
+) {
+            throw "Release tag must be a semantic version such as v0.1.0."
+          }
+          git check-ref-format "refs/tags/$($env:RELEASE_TAG)"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release tag is not a valid Git reference."
+          }
+          git rev-parse --verify "refs/tags/$($env:RELEASE_TAG)^{commit}" | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            throw "The requested release tag does not exist in the checkout."
+          }
+
       - name: Install stable Rust target
         uses: dtolnay/rust-toolchain@stable
         with:
