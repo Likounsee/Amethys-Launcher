@@ -4,18 +4,18 @@ Amethys performs read-only discovery from local launcher metadata. A launcher be
 
 ## Implemented adapters
 
-| Service | Detection source | Status |
+| Service | Detection source | Implementation / validation |
 |---|---|---|
-| Steam | Steam library folders and app manifests; native Windows/Linux roots, Linux Flatpak root and custom XDG data root | Implemented |
-| Epic Games Launcher | Epic .item manifests; Windows ProgramData root | Implemented on Windows; Linux uses Heroic/Legendary metadata |
-| Heroic / Legendary | installed.json | Implemented |
-| GOG Galaxy | Local installed-product database, opened read-only | Implemented |
-| Amazon Games | Local launcher database, opened read-only | Implemented |
-| EA app | Installer metadata in both Program Files game-library roots, optional custom roots via `AMETHYS_EA_LIBRARY_ROOTS`, plus Windows registry install records | Implemented |
-| Ubisoft Connect | Windows registry install records | Implemented |
-| Battle.net | Local Agent product metadata | Implemented |
-| Riot Games | Riot Client JSON and per-product product_settings.yaml metadata (VALORANT, League of Legends, LoR, 2XKO) | Initial adapter; validate against real installations |
-| Xbox app (GDK titles) | Xbox library marker, `XboxGames` directory, and each game's `MicrosoftGame.config` identity plus declared executable | Initial adapter; validate against real installations |
+| Steam | Steam library folders and app manifests; native Windows/Linux roots, Linux Flatpak root and custom XDG data root | Implemented; locally exercised on Windows with real installations; Linux is covered by CI fixtures but still needs a real-machine check |
+| Epic Games Launcher | Epic .item manifests; Windows ProgramData root | Implemented on Windows; locally exercised with real installations; Linux uses Heroic/Legendary metadata |
+| Heroic / Legendary | installed.json | Implemented; fixture-tested in CI; local validation depends on having a Heroic/Legendary game installed |
+| GOG Galaxy | Local installed-product database, opened read-only | Implemented; fixture-tested in CI; local validation depends on having a GOG game installed |
+| Amazon Games | Local launcher database, opened read-only | Implemented; fixture-tested in CI; local validation depends on having an Amazon Games title installed |
+| EA app | Installer metadata in both Program Files game-library roots, optional custom roots via `AMETHYS_EA_LIBRARY_ROOTS`, plus Windows registry install records | Implemented; locally exercised with Apex Legends using a custom library root |
+| Ubisoft Connect | Windows registry install records | Implemented; fixture-tested in CI; local validation depends on having a Ubisoft game installed |
+| Battle.net | Local Agent product metadata | Implemented and fixture-tested in CI; **not locally validated with a real Battle.net game yet**. Community testing is needed |
+| Riot Games | Riot Client JSON and per-product product_settings.yaml metadata (VALORANT, League of Legends, LoR, 2XKO) | Implemented; locally exercised with VALORANT; other Riot titles still need real-install validation |
+| Xbox app (GDK titles) | Xbox library marker, `XboxGames` directory, and each game's `MicrosoftGame.config` identity plus declared executable | Initial adapter; local detection of Xbox app entries is not proof that the GDK-specific path has been validated; real GDK installs still need testing |
 
 ## Game-specific coverage notes
 
