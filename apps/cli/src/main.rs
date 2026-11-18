@@ -1149,15 +1149,14 @@ mod tests {
         assert_eq!(external["games"][0]["healthy"], false);
         std::fs::remove_file(&outside).expect("remove outside executable");
 
-        let missing_outside = root
-            .parent()
-            .expect("parent")
-            .join(format!("amethys-verify-missing-outside-{}.exe", std::process::id()));
+        let missing_outside = root.parent().expect("parent").join(format!(
+            "amethys-verify-missing-outside-{}.exe",
+            std::process::id()
+        ));
         let external_missing =
             super::build_verify_report(&[make_game(&missing_outside.to_string_lossy())]);
         assert_eq!(
-            external_missing["games"][0]["executable_status"],
-            "invalid_path",
+            external_missing["games"][0]["executable_status"], "invalid_path",
             "a missing absolute path outside the installation is still unsafe"
         );
         assert_eq!(external_missing["games"][0]["healthy"], false);
