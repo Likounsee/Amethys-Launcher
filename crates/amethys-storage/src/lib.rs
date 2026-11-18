@@ -682,6 +682,58 @@ mod tests {
     }
 
     #[test]
+    fn version_one_database_migrates_and_preserves_existing_settings() {
+        let path = std::env::temp_dir().join(format!("amethys-v1-{}.sqlite", uuid::Uuid::new_v4()));
+        {
+            let connection = rusqlite::Connection::open(&path).expect("fixture database opens");
+            connection
+                .execute_batch(
+                    "CREATE TABLE schema_migrations (
+                    version INTEGER PRIMARY KEY NOT NULL,
+                    applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                INSERT INTO schema_migrations (version) VALUES (1);
+                CREATE TABLE app_settings (
+                    key TEXT PRIMARY KEY NOT NULL,
+                    value TEXT NOT NULL
+                );
+                INSERT INTO app_settings (key, value)
+                VALUES ('theme', 'dark');",
+                )
+                .expect("version one fixture is created");
+        }
+
+        let database = Database::open(&path).expect("version one database migrates");
+        let setting: String = database
+            .connection()
+            .query_row(
+                "SELECT value FROM app_settings WHERE key = 'theme'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("existing setting remains readable");
+        assert_eq!(setting, "dark");
+
+        let version: i64 = database
+            .connection()
+            .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
+            .expect("migration version is readable");
+        assert_eq!(version, 3);
+        assert!(
+            database
+                .list_games()
+                .expect("new game table is readable")
+                .is_empty()
+        );
+        drop(database);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[test]
     fn game_metadata_rejects_embedded_nul_characters() {
         let (database, path) = temporary_database();
         assert!(
