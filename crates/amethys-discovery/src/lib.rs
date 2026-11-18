@@ -1736,7 +1736,22 @@ pub fn scan_riot_client_installs(installs_json: &Path) -> Vec<DetectedGame> {
 fn parse_yaml_scalar(raw: &str) -> Option<String> {
     let value = raw.trim();
     if value.starts_with('"') {
-        let inner = value.strip_prefix('"')?.strip_suffix('"')?;
+        let mut escaped = false;
+        let closing = value.char_indices().skip(1).find_map(|(index, character)| {
+            if escaped {
+                escaped = false;
+            } else if character == '\\' {
+                escaped = true;
+            } else if character == '"' {
+                return Some(index);
+            }
+            None
+        })?;
+        let trailing = value[closing + 1..].trim();
+        if !trailing.is_empty() && !trailing.starts_with('#') {
+            return None;
+        }
+        let inner = &value[1..closing];
         let mut output = String::with_capacity(inner.len());
         let mut chars = inner.chars();
         while let Some(character) = chars.next() {
@@ -1766,8 +1781,28 @@ fn parse_yaml_scalar(raw: &str) -> Option<String> {
         return Some(output);
     }
     if value.starts_with('\'') {
-        let inner = value.strip_prefix('\'')?.strip_suffix('\'')?;
-        return Some(inner.replace("''", "'"));
+        let mut inner = String::new();
+        let mut chars = value[1..].chars().peekable();
+        let mut closed = false;
+        while let Some(character) = chars.next() {
+            if character == '\'' {
+                if chars.peek() == Some(&'\'') {
+                    chars.next();
+                    inner.push('\'');
+                } else {
+                    closed = true;
+                    break;
+                }
+            } else {
+                inner.push(character);
+            }
+        }
+        let trailing: String = chars.collect();
+        let trailing = trailing.trim();
+        if !closed || (!trailing.is_empty() && !trailing.starts_with('#')) {
+            return None;
+        }
+        return Some(inner);
     }
     let plain = value
         .split_once(" #")
@@ -4329,6 +4364,15 @@ HKEY_CURRENT_USER\Software\Valve\Steam
             super::parse_yaml_scalar("C:/Riot Games/VALORANT # install root"),
             Some("C:/Riot Games/VALORANT".to_owned())
         );
+        assert_eq!(
+            super::parse_yaml_scalar(r#""C:\\Riot Games\\VALORANT" # install root"#),
+            Some(r"C:\Riot Games\VALORANT".to_owned())
+        );
+        assert_eq!(
+            super::parse_yaml_scalar("'C:/Riot Games/Player''s VALORANT' # install root"),
+            Some("C:/Riot Games/Player's VALORANT".to_owned())
+        );
+        assert_eq!(super::parse_yaml_scalar(r#""C:/Game" unexpected"#), None);
     }
 
     #[test]
