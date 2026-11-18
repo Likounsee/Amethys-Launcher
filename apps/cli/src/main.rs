@@ -1084,6 +1084,36 @@ mod tests {
             std::fs::remove_file(link).expect("remove symlink");
         }
 
+        #[cfg(windows)]
+        {
+            let outside_directory = root.join("outside-directory");
+            std::fs::create_dir_all(&outside_directory).expect("create external directory");
+            std::fs::write(outside_directory.join("game.exe"), b"outside")
+                .expect("create external executable");
+            let junction = install.join("bin/outside-junction");
+            let output = std::process::Command::new("powershell.exe")
+                .args([
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    "New-Item -ItemType Junction -Path $env:AMETHYS_JUNCTION -Target $env:AMETHYS_TARGET | Out-Null",
+                ])
+                .env("AMETHYS_JUNCTION", &junction)
+                .env("AMETHYS_TARGET", &outside_directory)
+                .output()
+                .expect("create external directory junction");
+            assert!(
+                output.status.success(),
+                "failed to create external junction: {}{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(
+                resolve_launch_executable(&make_game("bin/outside-junction/game.exe")).is_err(),
+                "launch resolution must reject an executable reached through an external junction"
+            );
+        }
+
         assert_eq!(
             std::fs::read(&executable).expect("game file remains"),
             b"game"
