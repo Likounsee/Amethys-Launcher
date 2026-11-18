@@ -147,7 +147,7 @@ where
                             executable: game.executable,
                         },
                     })
-                },
+                }
                 IpcCommand::SetGameExecutable { id, executable } => database
                     .set_game_executable(&id, &executable)
                     .and_then(|game| {
