@@ -200,6 +200,11 @@ jobs:
           if ((Get-ChildItem archive-check -File).Count -ne $expected.Count) {
             throw "Windows release archive contains unexpected files."
           }
+          foreach ($binary in @("amethys-agent.exe", "amethysctl.exe")) {
+            if ((Get-Item (Join-Path archive-check $binary)).Length -le 0) {
+              throw "Windows release archive contains an empty binary: $binary."
+            }
+          }
       - name: Smoke-test Linux release archive
         if: runner.os == 'Linux'
         shell: bash
@@ -210,3 +215,7 @@ jobs:
           tar -tzf amethys-ci-linux.tar.gz | sort > archive-contents.txt
           printf '%s\n' LICENSE README.md RELEASES.md amethys-agent amethysctl | sort > expected-contents.txt
           diff -u expected-contents.txt archive-contents.txt
+          test -s archive-check/amethys-agent
+          test -s archive-check/amethysctl
+          test -x archive-check/amethys-agent
+          test -x archive-check/amethysctl
