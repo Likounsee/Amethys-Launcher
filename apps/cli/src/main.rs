@@ -565,6 +565,19 @@ fn inspect_game_executable(game: &amethys_ipc::IpcGameEntry) -> Option<PathCheck
         Err(_) => {
             // A missing executable outside the game directory is still an
             // invalid configuration, not merely a missing in-game file.
+            // An absolute path containing ".." cannot be safely classified
+            // from an existing ancestor once an earlier component is missing:
+            // the unresolved traversal may escape the installation root.
+            // Existing paths are canonicalized above, so valid in-root paths
+            // with parent components remain accepted.
+            if candidate.is_absolute()
+                && candidate
+                    .components()
+                    .any(|component| component == std::path::Component::ParentDir)
+            {
+                return Some(PathCheck::InvalidPath);
+            }
+
             // Resolve the nearest existing ancestor so symlinked parents are
             // handled consistently without creating or modifying anything.
             let mut ancestor = candidate.as_path();
@@ -1160,6 +1173,19 @@ mod tests {
             "a missing absolute path outside the installation is still unsafe"
         );
         assert_eq!(external_missing["games"][0]["healthy"], false);
+
+        let missing_traversal = root
+            .join("missing-parent")
+            .join("..")
+            .join("..")
+            .join("outside.exe");
+        let traversal_report =
+            super::build_verify_report(&[make_game(&missing_traversal.to_string_lossy())]);
+        assert_eq!(
+            traversal_report["games"][0]["executable_status"], "invalid_path",
+            "an unresolved absolute traversal must not be classified as a harmless missing file"
+        );
+        assert_eq!(traversal_report["games"][0]["healthy"], false);
 
         #[cfg(unix)]
         {
