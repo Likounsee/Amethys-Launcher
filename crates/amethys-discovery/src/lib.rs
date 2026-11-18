@@ -1833,6 +1833,9 @@ pub fn scan_riot_product_settings(metadata_root: &Path) -> Vec<DetectedGame> {
         let Some(contents) = read_bounded_text(&file) else {
             continue;
         };
+        // YAML files may be saved with a UTF-8 BOM; it belongs to the
+        // encoding marker, not to the first mapping key.
+        let contents = contents.strip_prefix('\u{feff}').unwrap_or(&contents);
         let install_root = contents.lines().find_map(|line| {
             let (key, value) = line.split_once(':')?;
             if !key.trim().eq_ignore_ascii_case("product_install_root") {
@@ -4391,9 +4394,9 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         std::fs::create_dir_all(&install).expect("create game install");
         std::fs::write(
             metadata.join("valorant.live.product_settings.yaml"),
-            format!("product_install_root: \"{}\"\n", install.display()),
+            format!("\u{feff}product_install_root: \"{}\"\n", install.display()),
         )
-        .expect("write Riot product settings");
+        .expect("write Riot product settings with UTF-8 BOM");
 
         let games = super::scan_riot_product_settings(&root.join("Metadata"));
         assert_eq!(games.len(), 1);
