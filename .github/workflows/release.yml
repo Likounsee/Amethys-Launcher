@@ -55,6 +55,15 @@ jobs:
             throw "The requested release tag does not exist in the checkout."
           }
 
+          $manifest = Get-Content Cargo.toml -Raw
+          if ($manifest -notmatch '(?ms)^\[workspace\.package\]\s*.*?^version\s*=\s*"([^"]+)"') {
+            throw "Could not read the workspace package version from Cargo.toml."
+          }
+          $workspaceVersion = $Matches[1]
+          if ($env:RELEASE_TAG -ne "v$workspaceVersion") {
+            throw "Release tag $($env:RELEASE_TAG) does not match workspace version v$workspaceVersion."
+          }
+
       - name: Install stable Rust target
         uses: dtolnay/rust-toolchain@stable
         with:
