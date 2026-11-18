@@ -100,7 +100,7 @@ jobs:
           }
           $cli = Join-Path $verify "amethysctl.exe"
           $versionOutput = & $cli --version
-          if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch "^Amethys Launcher $($workspaceVersion)$") {
+          if ($LASTEXITCODE -ne 0 -or $versionOutput -ne "Amethys Launcher $($env:RELEASE_TAG.Substring(1))") {
             throw "Packaged Windows CLI returned an unexpected version: $versionOutput"
           }
           $helpOutput = & $cli --help
@@ -156,7 +156,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t archives < <(find . -maxdepth 1 -type f \\( -name 'amethys-*.zip' -o -name 'amethys-*.tar.gz' \\) -printf '%f\\n' | sort)
+          mapfile -t archives < <(find . -maxdepth 1 -type f \( -name 'amethys-*.zip' -o -name 'amethys-*.tar.gz' \) -printf '%f\n' | sort)
           test "${#archives[@]}" -eq 2
           sha256sum "${archives[@]}" > SHA256SUMS
           sha256sum --check SHA256SUMS
