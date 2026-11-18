@@ -98,6 +98,11 @@ jobs:
           if ((Get-ChildItem $verify -File).Count -ne $expected.Count) {
             throw "Release archive contains unexpected top-level files."
           }
+          foreach ($binary in @("amethys-agent.exe", "amethysctl.exe")) {
+            if ((Get-Item (Join-Path $verify $binary)).Length -le 0) {
+              throw "Release archive contains an empty binary: $binary."
+            }
+          }
           $cli = Join-Path (Resolve-Path $verify).Path "amethysctl.exe"
           $versionOutput = & $cli --version
           if ($LASTEXITCODE -ne 0 -or $versionOutput -ne "Amethys Launcher $($env:RELEASE_TAG.Substring(1))") {
@@ -125,6 +130,10 @@ jobs:
           diff -u expected-contents.txt archive-contents.txt
           mkdir archive-check
           tar -xzf "$archive" -C archive-check
+          test -s archive-check/amethys-agent
+          test -s archive-check/amethysctl
+          test -x archive-check/amethys-agent
+          test -x archive-check/amethysctl
           version_output="$(archive-check/amethysctl --version)"
           test "$version_output" = "Amethys Launcher $(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
           archive-check/amethysctl --help | grep -Fq "games scan"
