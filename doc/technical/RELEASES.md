@@ -22,7 +22,7 @@ git push origin v0.1.0
 
 The release workflow builds both targets, archives the two executables for each target, calculates SHA-256 checksums, and creates a **draft** GitHub release. The maintainer must inspect and manually publish the draft; a successful build does not automatically make a release public.
 
-The workflow can also be started manually for an existing tag through the GitHub Actions interface.
+The workflow can also be started manually for an existing tag through the GitHub Actions interface. Before building, it verifies that the tag exists and exactly matches the workspace version in `Cargo.toml`; this prevents publishing binaries under a version label that differs from the compiled project version.
 
 ## First-run notes
 
