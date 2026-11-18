@@ -331,6 +331,55 @@ mod tests {
         fs::remove_dir_all(root).expect("cleanup");
     }
 
+    #[cfg(windows)]
+    #[test]
+    fn ignores_declared_executables_reached_through_content_junctions_outside_game_root() {
+        use std::process::Command;
+
+        let root = fixture_root();
+        let library = root.join("XboxGames");
+        let game = library.join("Example Game");
+        let outside_content = root.join("OutsideContent");
+        fs::create_dir_all(&game).expect("create game root");
+        fs::create_dir_all(&outside_content).expect("create external content");
+
+        fs::write(
+            outside_content.join("ExampleGame.exe"),
+            b"outside executable",
+        )
+        .expect("write external executable");
+        fs::write(
+            outside_content.join("MicrosoftGame.config"),
+            r#"<Game><Identity Name="Publisher.ExampleGame"/><ExecutableList><Executable Name="ExampleGame.exe"/></ExecutableList></Game>"#,
+        )
+        .expect("write external config");
+
+        // Directory junctions do not require the symlink privilege on Windows.
+        // The metadata appears below the game folder lexically, but resolves
+        // outside its canonical root and therefore must not be accepted.
+        let junction = game.join("Content");
+        let command = format!(
+            "mklink /J \"{}\" \"{}\"" ,
+            junction.display(),
+            outside_content.display()
+        );
+        let output = Command::new("cmd")
+            .args(["/C", &command])
+            .output()
+            .expect("run mklink to create content junction");
+        assert!(
+            output.status.success(),
+            "failed to create junction: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        assert!(
+            scan_xbox_game_roots(&[library]).is_empty(),
+            "an executable reached through a Content junction outside the game root must not be discovered"
+        );
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
     #[test]
     fn rejects_unsafe_declared_executable_paths() {
         for executable in [
