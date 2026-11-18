@@ -1737,16 +1737,19 @@ fn parse_yaml_scalar(raw: &str) -> Option<String> {
     let value = raw.trim();
     if value.starts_with('"') {
         let mut escaped = false;
-        let closing = value.char_indices().skip(1).find_map(|(index, character)| {
-            if escaped {
-                escaped = false;
-            } else if character == '\\' {
-                escaped = true;
-            } else if character == '"' {
-                return Some(index);
-            }
-            None
-        })?;
+        let closing = value
+            .char_indices()
+            .skip(1)
+            .find_map(|(index, character)| {
+                if escaped {
+                    escaped = false;
+                } else if character == '\\' {
+                    escaped = true;
+                } else if character == '"' {
+                    return Some(index);
+                }
+                None
+            })?;
         let trailing = value[closing + 1..].trim();
         if !trailing.is_empty() && !trailing.starts_with('#') {
             return None;
