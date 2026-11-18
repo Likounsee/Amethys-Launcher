@@ -358,20 +358,17 @@ mod tests {
         // The metadata appears below the game folder lexically, but resolves
         // outside its canonical root and therefore must not be accepted.
         let junction = game.join("Content");
-        let command = format!(
-            "mklink /J \"{}\" \"{}\"",
-            junction.display(),
-            outside_content.display()
-        );
-        let output = Command::new("cmd")
-            .args(["/C", &command])
+        let output = Command::new("powershell.exe")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "New-Item -ItemType Junction -Path $env:AMETHYS_JUNCTION -Target $env:AMETHYS_TARGET | Out-Null",
+            ])
+            .env("AMETHYS_JUNCTION", &junction)
+            .env("AMETHYS_TARGET", &outside_content)
             .output()
-            .expect("run mklink to create content junction");
-        assert!(
-            output.status.success(),
-            "failed to create junction: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+            .expect("run PowerShell to create content junction");
 
         assert!(
             scan_xbox_game_roots(&[library]).is_empty(),
