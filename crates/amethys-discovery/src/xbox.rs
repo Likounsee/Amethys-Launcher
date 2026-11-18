@@ -93,6 +93,10 @@ fn parse_microsoft_game_config(contents: &str) -> Option<(String, String, String
     let executable_path = Path::new(&executable);
     if executable.trim().is_empty()
         || executable.contains('\\')
+        // A colon can introduce a drive-relative path or an NTFS alternate
+        // data stream on Windows, neither of which is a valid GDK executable.
+        || executable.contains(':')
+        || executable.contains('\0')
         || executable_path.is_absolute()
         || executable_path
             .components()
@@ -287,8 +291,21 @@ mod tests {
     }
 
     #[test]
-    fn rejects_path_traversal_in_declared_executable() {
-        let config = r#"<Game><Identity Name="Publisher.Game"/><ExecutableList><Executable Name="../game.exe"/></ExecutableList></Game>"#;
-        assert!(super::parse_microsoft_game_config(config).is_none());
+    fn rejects_unsafe_declared_executable_paths() {
+        for executable in [
+            "../game.exe",
+            "C:game.exe",
+            "game.exe:stream",
+            "/absolute/game.exe",
+            "nested\\\\game.exe",
+        ] {
+            let config = format!(
+                r#"<Game><Identity Name="Publisher.Game"/><ExecutableList><Executable Name="{executable}"/></ExecutableList></Game>"#
+            );
+            assert!(
+                super::parse_microsoft_game_config(&config).is_none(),
+                "accepted unsafe executable path: {executable}"
+            );
+        }
     }
 }
