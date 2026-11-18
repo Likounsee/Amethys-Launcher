@@ -83,6 +83,21 @@ jobs:
             $gameId = $Matches[1]
             & "$PWD/target/release/amethysctl.exe" games set-executable $gameId "bin/game.exe"
             if ($LASTEXITCODE -ne 0) { throw "CLI executable configuration failed." }
+
+            # Exercise the launcher's security boundary through the real IPC/CLI path.
+            & "$PWD/target/release/amethysctl.exe" games set-executable $gameId "../outside.exe"
+            if ($LASTEXITCODE -ne 0) { throw "CLI rejected executable metadata before the launch safety check." }
+            & "$PWD/target/release/amethysctl.exe" games launch $gameId *> $null
+            if ($LASTEXITCODE -eq 0) { throw "CLI launched an executable outside the registered installation." }
+
+            # Use the CLI itself as a harmless, short-lived executable to test a real process launch.
+            $launchExecutable = Join-Path $installDir "bin/launch-smoke.exe"
+            Copy-Item "$PWD/target/release/amethysctl.exe" $launchExecutable
+            & "$PWD/target/release/amethysctl.exe" games set-executable $gameId "bin/launch-smoke.exe"
+            if ($LASTEXITCODE -ne 0) { throw "CLI could not configure the in-installation launch fixture." }
+            & "$PWD/target/release/amethysctl.exe" games launch $gameId
+            if ($LASTEXITCODE -ne 0) { throw "CLI failed to launch an executable inside the registered installation." }
+
             $search = & "$PWD/target/release/amethysctl.exe" games search "smoke game"
             if ($LASTEXITCODE -ne 0 -or ($search -join " ") -notmatch "Smoke Game") { throw "CLI game search failed." }
             & "$PWD/target/release/amethysctl.exe" games list --platform CI
@@ -146,6 +161,20 @@ jobs:
           game_id="$(printf '%s' "$add_output" | sed -n 's/.*identifiant : \([^)]*\).*/\1/p')"
           if [ -z "$game_id" ]; then echo "CLI game add did not return a game ID."; exit 1; fi
           target/release/amethysctl games set-executable "$game_id" bin/game
+
+          # Exercise the launcher's security boundary through the real IPC/CLI path.
+          target/release/amethysctl games set-executable "$game_id" ../outside
+          if target/release/amethysctl games launch "$game_id"; then
+            echo "CLI launched an executable outside the registered installation."
+            exit 1
+          fi
+
+          # Use the CLI itself as a harmless, short-lived executable to test a real process launch.
+          cp target/release/amethysctl "$install_dir/bin/launch-smoke"
+          chmod +x "$install_dir/bin/launch-smoke"
+          target/release/amethysctl games set-executable "$game_id" bin/launch-smoke
+          target/release/amethysctl games launch "$game_id"
+
           search_output="$(target/release/amethysctl games search "smoke game")"
           printf '%s' "$search_output" | grep -q "Smoke Game"
           target/release/amethysctl games list --platform CI
