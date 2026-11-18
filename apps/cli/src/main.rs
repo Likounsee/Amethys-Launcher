@@ -562,7 +562,23 @@ fn inspect_game_executable(game: &amethys_ipc::IpcGameEntry) -> Option<PathCheck
     };
     let canonical_executable = match candidate.canonicalize() {
         Ok(path) => path,
-        Err(_) => return Some(inspect_path(&candidate, false)),
+        Err(_) => {
+            // A missing executable outside the game directory is still an
+            // invalid configuration, not merely a missing in-game file.
+            // Resolve the nearest existing ancestor so symlinked parents are
+            // handled consistently without creating or modifying anything.
+            let mut ancestor = candidate.as_path();
+            while let Some(parent) = ancestor.parent() {
+                if let Ok(canonical_parent) = parent.canonicalize() {
+                    if !canonical_parent.starts_with(&canonical_root) {
+                        return Some(PathCheck::InvalidPath);
+                    }
+                    return Some(inspect_path(&candidate, false));
+                }
+                ancestor = parent;
+            }
+            return Some(PathCheck::Missing);
+        }
     };
     if !canonical_executable.starts_with(&canonical_root) {
         return Some(PathCheck::InvalidPath);
@@ -1132,6 +1148,19 @@ mod tests {
         assert_eq!(external["games"][0]["executable_status"], "invalid_path");
         assert_eq!(external["games"][0]["healthy"], false);
         std::fs::remove_file(&outside).expect("remove outside executable");
+
+        let missing_outside = root
+            .parent()
+            .expect("parent")
+            .join(format!("amethys-verify-missing-outside-{}.exe", std::process::id()));
+        let external_missing =
+            super::build_verify_report(&[make_game(&missing_outside.to_string_lossy())]);
+        assert_eq!(
+            external_missing["games"][0]["executable_status"],
+            "invalid_path",
+            "a missing absolute path outside the installation is still unsafe"
+        );
+        assert_eq!(external_missing["games"][0]["healthy"], false);
 
         #[cfg(unix)]
         {
