@@ -98,7 +98,7 @@ jobs:
           if ((Get-ChildItem $verify -File).Count -ne $expected.Count) {
             throw "Release archive contains unexpected top-level files."
           }
-          $cli = Join-Path $verify "amethysctl.exe"
+          $cli = Join-Path (Resolve-Path $verify).Path "amethysctl.exe"
           $versionOutput = & $cli --version
           if ($LASTEXITCODE -ne 0 -or $versionOutput -ne "Amethys Launcher $($env:RELEASE_TAG.Substring(1))") {
             throw "Packaged Windows CLI returned an unexpected version: $versionOutput"
