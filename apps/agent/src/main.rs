@@ -515,4 +515,56 @@ mod tests {
             "invalid metadata must not create a database row"
         );
     }
+
+    #[tokio::test]
+    async fn concurrent_detected_game_imports_with_same_platform_identity_are_idempotent() {
+        let database = Arc::new(Mutex::new(
+            Database::open(":memory:").expect("database opens"),
+        ));
+        let state = Arc::new(AtomicU8::new(super::STATE_RUNNING));
+
+        let first = round_trip(
+            &database,
+            &state,
+            IpcCommand::AddDetectedGame {
+                name: "Original name".to_owned(),
+                platform: "Steam".to_owned(),
+                platform_id: Some("570".to_owned()),
+                install_path: "/games/original".to_owned(),
+                executable: None,
+            },
+        );
+        let second = round_trip(
+            &database,
+            &state,
+            IpcCommand::AddDetectedGame {
+                name: "Second observation".to_owned(),
+                platform: "steam".to_owned(),
+                platform_id: Some("570".to_owned()),
+                install_path: "/games/second-observation".to_owned(),
+                executable: None,
+            },
+        );
+
+        let (first, second) = tokio::join!(first, second);
+        let extract_game = |response: IpcResponse| match response
+            .result
+            .expect("concurrent import succeeds")
+        {
+            amethys_ipc::IpcResponsePayload::GameAdded { game } => game,
+            other => panic!("unexpected import response: {other:?}"),
+        };
+        let first_game = extract_game(first);
+        let second_game = extract_game(second);
+
+        assert_eq!(first_game.id, second_game.id);
+        let games = database
+            .lock()
+            .await
+            .list_games()
+            .expect("list imported games");
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].id, first_game.id);
+    }
+
 }
