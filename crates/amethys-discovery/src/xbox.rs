@@ -359,7 +359,7 @@ mod tests {
         // outside its canonical root and therefore must not be accepted.
         let junction = game.join("Content");
         let command = format!(
-            "mklink /J \"{}\" \"{}\",
+            "mklink /J \"{}\" \"{}\"",
             junction.display(),
             outside_content.display()
         );
