@@ -48,9 +48,23 @@ pub fn scan_xbox_game_roots(roots: &[PathBuf]) -> Vec<DetectedGame> {
             let Some((identity, title, executable)) = parse_microsoft_game_config(&contents) else {
                 continue;
             };
+            // Resolve both paths before accepting the installation. A declared
+            // executable can be a symlink (or Windows junction) that escapes
+            // the game directory even though is_file() reports true.
+            let Ok(canonical_game_root) = game_root.canonicalize() else {
+                continue;
+            };
+            if !canonical_game_root.is_dir() {
+                continue;
+            }
             let content_root = config.parent().unwrap_or(&game_root);
             let executable_path = content_root.join(executable);
-            if !executable_path.is_file() {
+            let Ok(canonical_executable) = executable_path.canonicalize() else {
+                continue;
+            };
+            if !canonical_executable.starts_with(&canonical_game_root)
+                || !canonical_executable.is_file()
+            {
                 continue;
             }
             if !seen.insert(normalize_path(&game_root)) {
@@ -287,6 +301,33 @@ mod tests {
         .expect("write invalid config");
 
         assert!(scan_xbox_game_roots(&[library]).is_empty());
+        fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ignores_declared_executable_symlinks_that_escape_game_root() {
+        use std::os::unix::fs::symlink;
+
+        let root = fixture_root();
+        let library = root.join("XboxGames");
+        let game = library.join("Example Game");
+        let content = game.join("Content");
+        fs::create_dir_all(&content).expect("create game content");
+
+        let outside = root.join("outside.exe");
+        fs::write(&outside, b"outside executable").expect("write outside executable");
+        symlink(&outside, content.join("ExampleGame.exe")).expect("create escaping symlink");
+        fs::write(
+            content.join("MicrosoftGame.config"),
+            r#"<Game><Identity Name="Publisher.ExampleGame"/><ExecutableList><Executable Name="ExampleGame.exe"/></ExecutableList></Game>"#,
+        )
+        .expect("write config");
+
+        assert!(
+            scan_xbox_game_roots(&[library]).is_empty(),
+            "an executable symlink outside the game root must not be discovered"
+        );
         fs::remove_dir_all(root).expect("cleanup");
     }
 
