@@ -547,13 +547,11 @@ mod tests {
         );
 
         let (first, second) = tokio::join!(first, second);
-        let extract_game = |response: IpcResponse| match response
-            .result
-            .expect("concurrent import succeeds")
-        {
-            amethys_ipc::IpcResponsePayload::GameAdded { game } => game,
-            other => panic!("unexpected import response: {other:?}"),
-        };
+        let extract_game =
+            |response: IpcResponse| match response.result.expect("concurrent import succeeds") {
+                amethys_ipc::IpcResponsePayload::GameAdded { game } => game,
+                other => panic!("unexpected import response: {other:?}"),
+            };
         let first_game = extract_game(first);
         let second_game = extract_game(second);
 
@@ -566,5 +564,4 @@ mod tests {
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].id, first_game.id);
     }
-
 }
