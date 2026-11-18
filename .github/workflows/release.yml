@@ -98,6 +98,15 @@ jobs:
           if ((Get-ChildItem $verify -File).Count -ne $expected.Count) {
             throw "Release archive contains unexpected top-level files."
           }
+          $cli = Join-Path $verify "amethysctl.exe"
+          $versionOutput = & $cli --version
+          if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch "^Amethys Launcher $($workspaceVersion)$") {
+            throw "Packaged Windows CLI returned an unexpected version: $versionOutput"
+          }
+          $helpOutput = & $cli --help
+          if ($LASTEXITCODE -ne 0 -or ($helpOutput -join "`n") -notmatch "games scan") {
+            throw "Packaged Windows CLI help smoke test failed."
+          }
 
       - name: Stage Unix binaries
         if: runner.os != 'Windows'
@@ -114,6 +123,11 @@ jobs:
           tar -tzf "$archive" | sort > archive-contents.txt
           printf '%s\n' LICENSE README.md RELEASES.md amethys-agent amethysctl | sort > expected-contents.txt
           diff -u expected-contents.txt archive-contents.txt
+          mkdir archive-check
+          tar -xzf "$archive" -C archive-check
+          version_output="$(archive-check/amethysctl --version)"
+          test "$version_output" = "Amethys Launcher $(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
+          archive-check/amethysctl --help | grep -Fq "games scan"
 
       - name: Upload platform archive
         uses: actions/upload-artifact@v4
@@ -137,9 +151,16 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Generate SHA-256 checksums
+      - name: Generate and verify SHA-256 checksums
         working-directory: dist
-        run: sha256sum amethys-* > SHA256SUMS
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t archives < <(find . -maxdepth 1 -type f \\( -name 'amethys-*.zip' -o -name 'amethys-*.tar.gz' \\) -printf '%f\\n' | sort)
+          test "${#archives[@]}" -eq 2
+          sha256sum "${archives[@]}" > SHA256SUMS
+          sha256sum --check SHA256SUMS
+          test "$(wc -l < SHA256SUMS)" -eq 2
 
       - name: Create draft release
         uses: softprops/action-gh-release@v2
