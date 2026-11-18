@@ -112,15 +112,32 @@ where
                     platform_id,
                     install_path,
                     executable,
-                } => database
-                    .add_game_with_platform_id(
-                        &name,
-                        &platform,
-                        platform_id.as_deref(),
-                        &install_path,
-                        executable.as_deref(),
-                    )
-                    .map(|game| IpcResponsePayload::GameAdded {
+                } => {
+                    // Import is idempotent by source identity. The database mutex
+                    // makes lookup + insert atomic relative to other IPC requests.
+                    let game = if let Some(platform_id) = platform_id.as_deref() {
+                        database
+                            .get_game_by_platform_id(&platform, platform_id)
+                            .and_then(|existing| match existing {
+                                Some(game) => Ok(game),
+                                None => database.add_game_with_platform_id(
+                                    &name,
+                                    &platform,
+                                    Some(platform_id),
+                                    &install_path,
+                                    executable.as_deref(),
+                                ),
+                            })
+                    } else {
+                        database.add_game_with_platform_id(
+                            &name,
+                            &platform,
+                            None,
+                            &install_path,
+                            executable.as_deref(),
+                        )
+                    };
+                    game.map(|game| IpcResponsePayload::GameAdded {
                         game: IpcGameEntry {
                             id: game.id,
                             name: game.name,
@@ -129,7 +146,8 @@ where
                             install_path: game.install_path,
                             executable: game.executable,
                         },
-                    }),
+                    })
+                },
                 IpcCommand::SetGameExecutable { id, executable } => database
                     .set_game_executable(&id, &executable)
                     .and_then(|game| {
@@ -407,6 +425,61 @@ mod tests {
             listed_after_remove.result,
             Ok(amethys_ipc::IpcResponsePayload::Games { games: Vec::new() })
         );
+    }
+
+    #[tokio::test]
+    async fn importing_the_same_platform_game_twice_is_idempotent_over_ipc() {
+        let database = Arc::new(Mutex::new(
+            Database::open(":memory:").expect("database opens"),
+        ));
+        let state = Arc::new(AtomicU8::new(super::STATE_RUNNING));
+
+        let first = round_trip(
+            &database,
+            &state,
+            IpcCommand::AddDetectedGame {
+                name: "Original name".to_owned(),
+                platform: "Steam".to_owned(),
+                platform_id: Some("570".to_owned()),
+                install_path: "/games/original".to_owned(),
+                executable: None,
+            },
+        )
+        .await;
+        let first_game = match first.result.expect("first import succeeds") {
+            amethys_ipc::IpcResponsePayload::GameAdded { game } => game,
+            other => panic!("unexpected first import response: {other:?}"),
+        };
+
+        // A second scan may observe renamed or relocated metadata for the same
+        // platform identity. It must reuse the existing library entry.
+        let second = round_trip(
+            &database,
+            &state,
+            IpcCommand::AddDetectedGame {
+                name: "Updated name".to_owned(),
+                platform: "steam".to_owned(),
+                platform_id: Some("570".to_owned()),
+                install_path: "/games/moved".to_owned(),
+                executable: Some("game.exe".to_owned()),
+            },
+        )
+        .await;
+        let second_game = match second.result.expect("repeat import is idempotent") {
+            amethys_ipc::IpcResponsePayload::GameAdded { game } => game,
+            other => panic!("unexpected repeat import response: {other:?}"),
+        };
+
+        assert_eq!(second_game, first_game);
+        let games = database
+            .lock()
+            .await
+            .list_games()
+            .expect("list imported games");
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].id, first_game.id);
+        assert_eq!(games[0].name, "Original name");
+        assert_eq!(games[0].install_path, "/games/original");
     }
 
     #[tokio::test]
