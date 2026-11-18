@@ -1783,9 +1783,9 @@ fn parse_yaml_scalar(raw: &str) -> Option<String> {
         }
         return Some(output);
     }
-    if value.starts_with('\'') {
+    if let Some(value) = value.strip_prefix('\'') {
         let mut inner = String::new();
-        let mut chars = value[1..].chars().peekable();
+        let mut chars = value.chars().peekable();
         let mut closed = false;
         while let Some(character) = chars.next() {
             if character == '\'' {
