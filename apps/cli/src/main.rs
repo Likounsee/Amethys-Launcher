@@ -147,11 +147,18 @@ fn game_is_already_imported(
     detected: &amethys_discovery::DetectedGame,
 ) -> bool {
     saved_games.iter().any(|saved| {
-        saved.platform.eq_ignore_ascii_case(detected.platform)
-            && (matches!(
-                (&saved.platform_id, &detected.platform_id),
-                (Some(saved_id), Some(detected_id)) if saved_id == detected_id
-            ) || same_install_location(&saved.install_path, &detected.install_path))
+        if !saved.platform.eq_ignore_ascii_case(detected.platform) {
+            return false;
+        }
+
+        match (&saved.platform_id, &detected.platform_id) {
+            // A known platform identity is authoritative: a different ID must
+            // not be hidden merely because a launcher reports the same path.
+            (Some(saved_id), Some(detected_id)) => saved_id == detected_id,
+            // Fall back to the installation path only when at least one
+            // observation has no stable platform ID.
+            _ => same_install_location(&saved.install_path, &detected.install_path),
+        }
     })
 }
 
@@ -1381,6 +1388,46 @@ mod tests {
             );
         }
         assert_eq!(platforms.len(), expected.len());
+    }
+
+    #[test]
+    fn detected_import_does_not_merge_different_platform_ids_at_the_same_path() {
+        let saved = amethys_ipc::IpcGameEntry {
+            id: "steam-1".to_owned(),
+            name: "First game".to_owned(),
+            platform: "Steam".to_owned(),
+            platform_id: Some("100".to_owned()),
+            install_path: "/games/shared".to_owned(),
+            executable: None,
+        };
+        let detected = amethys_discovery::DetectedGame {
+            name: "Second game".to_owned(),
+            platform: "Steam",
+            platform_id: Some("200".to_owned()),
+            install_path: std::path::PathBuf::from("/games/shared"),
+        };
+
+        assert!(!super::game_is_already_imported(&[saved], &detected));
+    }
+
+    #[test]
+    fn detected_import_falls_back_to_path_when_platform_id_is_missing() {
+        let saved = amethys_ipc::IpcGameEntry {
+            id: "steam-1".to_owned(),
+            name: "Example".to_owned(),
+            platform: "Steam".to_owned(),
+            platform_id: None,
+            install_path: "/games/example".to_owned(),
+            executable: None,
+        };
+        let detected = amethys_discovery::DetectedGame {
+            name: "Example".to_owned(),
+            platform: "steam",
+            platform_id: Some("100".to_owned()),
+            install_path: std::path::PathBuf::from("/games/example"),
+        };
+
+        assert!(super::game_is_already_imported(&[saved], &detected));
     }
 
     #[test]
