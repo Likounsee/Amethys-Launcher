@@ -42,7 +42,7 @@ fn parse_command(argument: Option<&str>) -> Result<IpcCommand, &'static str> {
         Some("ping") => Ok(IpcCommand::Ping),
         Some("status") => Ok(IpcCommand::GetStatus),
         Some("games") => Ok(IpcCommand::ListGames),
-        _ => Err("Commande inconnue. Utilisation : amethysctl <ping|status|games>"),
+        _ => Err("Commande inconnue. Utilise « amethysctl --help » pour afficher les commandes disponibles."),
     }
 }
 
@@ -63,14 +63,21 @@ async fn connect_to_core() -> Result<BoxedIpcStream, Box<dyn Error>> {
 
 /// Sends one local command with bounded connection and response times.
 async fn request_core(command: IpcCommand) -> Result<amethys_ipc::IpcResponse, Box<dyn Error>> {
-    let mut connection =
-        tokio::time::timeout(std::time::Duration::from_secs(5), connect_to_core()).await??;
+    let mut connection = tokio::time::timeout(
+        std::time::Duration::from_secs(5),
+        connect_to_core(),
+    )
+    .await
+    .map_err(|_| "Délai dépassé : impossible de se connecter au cœur Amethys après 5 secondes.".to_owned())?
+    .map_err(|error| format!("Connexion au cœur Amethys impossible : {error}"))?;
 
     let response = tokio::time::timeout(
         std::time::Duration::from_secs(15),
         send_request(&mut connection, IpcRequest::new(command)),
     )
-    .await??;
+    .await
+    .map_err(|_| "Le cœur Amethys n'a pas répondu dans le délai de 15 secondes.".to_owned())?
+    .map_err(|error| format!("Échange IPC avec le cœur Amethys impossible : {error}"))?;
 
     Ok(response)
 }
