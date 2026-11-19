@@ -975,16 +975,15 @@ mod tests {
             &other_store
         ));
 
-        // Store metadata can change (for example after a game is moved or
-        // re-registered). A matching installation path must still prevent a
-        // duplicate even when both platform identifiers are present.
+        // A matching path is not enough to merge two distinct, known
+        // platform identities: both identifiers are authoritative.
         let same_path_different_id = amethys_discovery::DetectedGame {
             platform_id: Some("999".to_owned()),
             name: "Example".to_owned(),
             install_path: std::path::PathBuf::from("/games/example"),
             platform: "Steam",
         };
-        assert!(super::game_is_already_imported(
+        assert!(!super::game_is_already_imported(
             std::slice::from_ref(&saved),
             &same_path_different_id
         ));
