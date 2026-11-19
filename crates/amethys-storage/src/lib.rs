@@ -20,6 +20,39 @@ const MAX_PLATFORM_NAME_BYTES: usize = 128;
 const MAX_PLATFORM_ID_BYTES: usize = 512;
 const MAX_GAME_PATH_BYTES: usize = 32 * 1024;
 
+/// Enables WAL while tolerating another process opening the same new database.
+fn enable_wal_mode(connection: &Connection) -> rusqlite::Result<()> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+
+    loop {
+        match connection.query_row("PRAGMA journal_mode = WAL", [], |row| {
+            row.get::<_, String>(0)
+        }) {
+            Ok(mode) if mode.eq_ignore_ascii_case("wal") => return Ok(()),
+            Ok(mode) => {
+                return Err(rusqlite::Error::InvalidQuery).map_err(|error| {
+                    let _ = mode;
+                    error
+                });
+            }
+            Err(error)
+                if matches!(
+                    &error,
+                    rusqlite::Error::SqliteFailure(code, _)
+                        if matches!(
+                            code.code,
+                            rusqlite::ffi::ErrorCode::DatabaseBusy
+                                | rusqlite::ffi::ErrorCode::DatabaseLocked
+                        )
+                ) && std::time::Instant::now() < deadline =>
+            {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
 /// SQLite database owned by the core process.
 pub struct Database {
     connection: Connection,
@@ -102,7 +135,6 @@ impl Database {
         connection
             .execute_batch(
                 "PRAGMA foreign_keys = ON;
-             PRAGMA journal_mode = WAL;
              PRAGMA synchronous = FULL;",
             )
             .map_err(|error| {
@@ -111,6 +143,12 @@ impl Database {
                     format!("Could not configure database: {error}"),
                 )
             })?;
+        enable_wal_mode(&connection).map_err(|error| {
+            AmethysError::new(
+                ErrorCode::StorageOpen,
+                format!("Could not enable database WAL mode: {error}"),
+            )
+        })?;
 
         // Keep schema creation and migration markers in one transaction. A
         // failed statement must not leave a partially initialized database.
