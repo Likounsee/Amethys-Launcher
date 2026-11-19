@@ -1190,6 +1190,61 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_initial_opens_apply_schema_migrations_once() {
+        let path = std::env::temp_dir().join(format!(
+            "amethys-concurrent-migration-{}.sqlite",
+            uuid::Uuid::new_v4()
+        ));
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(3));
+
+        let first_path = path.clone();
+        let first_barrier = std::sync::Arc::clone(&barrier);
+        let first = std::thread::spawn(move || {
+            first_barrier.wait();
+            Database::open(first_path).expect("first concurrent open succeeds")
+        });
+
+        let second_path = path.clone();
+        let second_barrier = std::sync::Arc::clone(&barrier);
+        let second = std::thread::spawn(move || {
+            second_barrier.wait();
+            Database::open(second_path).expect("second concurrent open succeeds")
+        });
+
+        barrier.wait();
+        let first = first.join().expect("first opener thread completes");
+        let second = second.join().expect("second opener thread completes");
+
+        for database in [&first, &second] {
+            let version: i64 = database
+                .connection
+                .query_row(
+                    "SELECT COALESCE(MAX(version), 0) FROM schema_migrations",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("migration history is readable");
+            assert_eq!(version, 3, "all schema migrations must be applied");
+
+            let platform_id_column: i64 = database
+                .connection
+                .query_row(
+                    "SELECT COUNT(*) FROM pragma_table_info('games') WHERE name = 'platform_id'",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("game schema is readable");
+            assert_eq!(platform_id_column, 1);
+        }
+
+        drop(first);
+        drop(second);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[test]
     fn games_remain_available_after_reopening_database() {
         let path = std::env::temp_dir().join(format!("amethys-{}.sqlite", uuid::Uuid::new_v4()));
         let id = {
