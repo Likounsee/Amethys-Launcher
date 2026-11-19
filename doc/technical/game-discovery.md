@@ -62,8 +62,10 @@ When an executable path is configured on a library entry, verification also
 checks it. Relative executable paths are resolved beneath the saved installation
 directory; paths containing traversal components (`.` or `..`), rooted relative
 paths, and drive-relative paths are rejected as `invalid_path`. Absolute paths
-are checked as supplied. Executable states use `available`, `missing`,
-`wrong_type`, `inaccessible`, `invalid_path`, or `error`.
+are accepted only when their canonical target remains inside the saved
+installation directory. This also rejects symlinks and Windows junctions that
+redirect an executable outside that directory. Executable states use
+`available`, `missing`, `wrong_type`, `inaccessible`, `invalid_path`, or `error`.
 Entries without a configured executable report `not_configured` and are not
 penalized.
 
