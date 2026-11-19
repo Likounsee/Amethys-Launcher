@@ -135,7 +135,10 @@ where
                         let existing = database
                             .list_games()?
                             .into_iter()
-                            .find(|game| same_install_path(&game.install_path, &install_path));
+                            .find(|game| {
+                                game.platform.eq_ignore_ascii_case(&platform)
+                                    && same_install_path(&game.install_path, &install_path)
+                            });
                         match existing {
                             Some(game) => Ok(game),
                             None => database.add_game_with_platform_id(
@@ -546,6 +549,42 @@ mod tests {
             .expect("list imported games");
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].install_path, "/games/legacy");
+    }
+
+    #[tokio::test]
+    async fn detected_import_does_not_merge_same_path_from_another_platform() {
+        let database = Arc::new(Mutex::new(
+            Database::open(":memory:").expect("database opens"),
+        ));
+        let state = Arc::new(AtomicU8::new(super::STATE_RUNNING));
+
+        let import = |platform: &str| {
+            round_trip(
+                &database,
+                &state,
+                IpcCommand::AddDetectedGame {
+                    name: format!("{platform} game"),
+                    platform: platform.to_owned(),
+                    platform_id: None,
+                    install_path: "/games/shared".to_owned(),
+                    executable: None,
+                },
+            )
+        };
+        let first = import("Platform A").await;
+        let second = import("Platform B").await;
+        let extract_id = |response: IpcResponse| match response.result.expect("import succeeds") {
+            amethys_ipc::IpcResponsePayload::GameAdded { game } => game.id,
+            other => panic!("unexpected import response: {other:?}"),
+        };
+
+        assert_ne!(extract_id(first), extract_id(second));
+        let games = database
+            .lock()
+            .await
+            .list_games()
+            .expect("list imported games");
+        assert_eq!(games.len(), 2);
     }
 
     #[tokio::test]
