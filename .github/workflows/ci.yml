@@ -66,7 +66,7 @@ jobs:
             & "$PWD/target/release/amethysctl.exe" games verify
             if ($LASTEXITCODE -ne 0) { throw "CLI game verification failed for an empty library." }
             $verify = & "$PWD/target/release/amethysctl.exe" games verify --json | ConvertFrom-Json
-            if ($LASTEXITCODE -ne 0 -or $verify.schema_version -ne 3 -or $verify.read_only -ne $true -or $verify.total_games -ne 0 -or $verify.issues -ne 0) {
+            if ($LASTEXITCODE -ne 0 -or $verify.schema_version -ne 3 -or $verify.read_only -ne $true -or $verify.total_games -ne 0 -or $verify.issues -ne 0 -or $verify.launch_ready -ne 0) {
               throw "CLI JSON verification did not return the expected empty read-only schema."
             }
             $scan = & "$PWD/target/release/amethysctl.exe" games scan --json | ConvertFrom-Json
@@ -103,7 +103,7 @@ jobs:
             & "$PWD/target/release/amethysctl.exe" games list --platform CI
             if ($LASTEXITCODE -ne 0) { throw "CLI platform-filtered game list failed." }
             $populatedVerify = & "$PWD/target/release/amethysctl.exe" games verify --json | ConvertFrom-Json
-            if ($LASTEXITCODE -ne 0 -or $populatedVerify.total_games -ne 1 -or $populatedVerify.healthy -ne 1 -or $populatedVerify.games[0].executable_status -ne "available") {
+            if ($LASTEXITCODE -ne 0 -or $populatedVerify.total_games -ne 1 -or $populatedVerify.healthy -ne 1 -or $populatedVerify.games[0].executable_status -ne "available" -or $populatedVerify.launch_ready -ne 1 -or $populatedVerify.games[0].launch_ready -ne $true) {
               throw "CLI verification did not recognize the healthy smoke-test installation."
             }
             & "$PWD/target/release/amethysctl.exe" games remove $gameId
@@ -150,7 +150,7 @@ jobs:
           target/release/amethysctl games
           target/release/amethysctl games verify
           verify_json="$(target/release/amethysctl games verify --json)"
-          printf '%s' "$verify_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["schema_version"] == 3 and d["read_only"] is True and d["total_games"] == 0 and d["issues"] == 0'
+          printf '%s' "$verify_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["schema_version"] == 3 and d["read_only"] is True and d["total_games"] == 0 and d["issues"] == 0 and d["launch_ready"] == 0'
           scan_json="$(target/release/amethysctl games scan --json)"
           printf '%s' "$scan_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["schema_version"] == 1 and d["read_only"] is True'
 
@@ -179,7 +179,7 @@ jobs:
           printf '%s' "$search_output" | grep -q "Smoke Game"
           target/release/amethysctl games list --platform CI
           populated_verify="$(target/release/amethysctl games verify --json)"
-          printf '%s' "$populated_verify" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["total_games"] == 1 and d["healthy"] == 1 and d["games"][0]["executable_status"] == "available"'
+          printf '%s' "$populated_verify" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["total_games"] == 1 and d["healthy"] == 1 and d["games"][0]["executable_status"] == "available" and d["launch_ready"] == 1 and d["games"][0]["launch_ready"] is True'
           target/release/amethysctl games remove "$game_id"
           final_verify="$(target/release/amethysctl games verify --json)"
           printf '%s' "$final_verify" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["total_games"] == 0'
