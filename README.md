@@ -12,7 +12,7 @@ Amethys Launcher aims to bring game libraries, installations and platform integr
 
 ## Project status
 
-The project is preparing its **0.1 release**. The Rust core, local SQLite library, IPC service and CLI are implemented. Windows and Linux game discovery, explicit import, library management, read-only verification and configured-executable launch are in place. Current work is focused on hardening, cross-platform regression tests and release validation. The graphical interface and online store/catalogue come later.
+The project is preparing its **0.1 release**. The Rust core, local SQLite library, IPC service and CLI are implemented. Windows and Linux game discovery, explicit import, library management, read-only verification and configured-executable launch are in place. Current work is focused on code hardening, automated Windows/Linux regression tests, documentation and release packaging. Real-install checks are recorded separately for each launcher; physical testing of every launcher or operating system is not a 0.1 blocker. Cases that have only fixture/CI coverage or have not been tested must remain clearly labelled as such. The graphical interface and online store/catalogue come later.
 
 ## Principles
 
