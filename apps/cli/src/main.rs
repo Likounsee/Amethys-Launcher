@@ -642,7 +642,14 @@ fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value
         .filter(|entry| entry["launch_ready"] == true)
         .count();
     let issues = entries.len() - healthy;
-    json_verify_summary(games.len(), available, healthy, launch_ready, issues, entries)
+    json_verify_summary(
+        games.len(),
+        available,
+        healthy,
+        launch_ready,
+        issues,
+        entries,
+    )
 }
 
 fn json_verify_summary(
