@@ -369,6 +369,12 @@ mod tests {
             .env("AMETHYS_TARGET", &outside_content)
             .output()
             .expect("run PowerShell to create content junction");
+        assert!(
+            output.status.success(),
+            "failed to create Content junction: {}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
 
         assert!(
             scan_xbox_game_roots(&[library]).is_empty(),
