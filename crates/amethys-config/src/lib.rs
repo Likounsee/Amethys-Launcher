@@ -4,7 +4,7 @@ use std::{
     io,
     path::{Path, PathBuf},
 };
-use tokio::{fs, io::AsyncWriteExt};
+use tokio::{fs, io::{AsyncReadExt, AsyncWriteExt}};
 
 /// Resolves the shared per-user data directory used by both the agent and CLI.
 ///
@@ -156,7 +156,7 @@ fn create_private_data_directory(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
-/// User-level application settings.
+/// Maximum accepted size for the user-controlled configuration file.\nconst MAX_CONFIG_FILE_SIZE: u64 = 1024 * 1024;\n\n/// User-level application settings.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct AppConfig {
@@ -179,8 +179,8 @@ impl AppConfig {
     /// Loads configuration; defaults are used only when the file is absent.
     pub async fn load(path: impl AsRef<Path>) -> Result<Self, AmethysError> {
         let path = path.as_ref();
-        let bytes = match fs::read(path).await {
-            Ok(bytes) => bytes,
+        let file = match fs::File::open(path).await {
+            Ok(file) => file,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 return Ok(Self::default());
             }
@@ -191,6 +191,24 @@ impl AppConfig {
                 ));
             }
         };
+        let mut bytes = Vec::new();
+        file.take(MAX_CONFIG_FILE_SIZE + 1)
+            .read_to_end(&mut bytes)
+            .await
+            .map_err(|error| {
+                AmethysError::new(
+                    ErrorCode::ConfigurationRead,
+                    format!("Could not read {}: {error}", path.display()),
+                )
+            })?;
+        if bytes.len() as u64 > MAX_CONFIG_FILE_SIZE {
+            return Err(AmethysError::new(
+                ErrorCode::ConfigurationRead,
+                format!(
+                    "Configuration file exceeds the maximum size of {MAX_CONFIG_FILE_SIZE} bytes."
+                ),
+            ));
+        }
         let config: Self = serde_json::from_slice(&bytes).map_err(|error| {
             AmethysError::new(
                 ErrorCode::ConfigurationRead,
