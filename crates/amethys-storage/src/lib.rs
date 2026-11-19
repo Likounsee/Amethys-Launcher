@@ -350,7 +350,8 @@ impl Database {
     ) -> Result<Option<GameEntry>, AmethysError> {
         let id = validate_game_id(id)?;
         let (platform, platform_id) = validate_platform_identity(platform, platform_id)?;
-        self.connection
+        let changed = self
+            .connection
             .execute(
                 "UPDATE games SET platform_id = ?1
              WHERE id = ?2 AND platform = ?3 COLLATE NOCASE AND platform_id IS NULL",
@@ -359,6 +360,16 @@ impl Database {
             .map_err(|error| {
                 storage_error(format!("Could not attach game platform ID: {error}"))
             })?;
+
+        if changed == 0 {
+            // Make retries idempotent, but never report success for a conflicting
+            // platform or an already assigned, different platform identifier.
+            return Ok(self.get_game(id)?.filter(|game| {
+                game.platform.eq_ignore_ascii_case(platform)
+                    && game.platform_id.as_deref() == Some(platform_id)
+            }));
+        }
+
         self.get_game(id)
     }
 
@@ -580,6 +591,41 @@ mod tests {
                 .id,
             legacy.id
         );
+    }
+
+    #[test]
+    fn legacy_platform_identity_upgrade_rejects_conflicting_existing_identity() {
+        let database = Database::open(":memory:").expect("database opens");
+        let legacy = database
+            .add_game("Legacy game", "Steam", "/games/legacy", None)
+            .expect("legacy game is added");
+        let upgraded = database
+            .set_game_platform_id(&legacy.id, "Steam", "12345")
+            .expect("first identity assignment succeeds")
+            .expect("legacy entry is upgraded");
+
+        assert!(
+            database
+                .set_game_platform_id(&legacy.id, "Steam", "67890")
+                .expect("conflicting assignment is handled")
+                .is_none(),
+            "a different existing platform ID must not be reported as assigned"
+        );
+        assert!(
+            database
+                .set_game_platform_id(&legacy.id, "Epic", "12345")
+                .expect("wrong-platform assignment is handled")
+                .is_none(),
+            "an identity from another platform must not be accepted"
+        );
+
+        let stored = database
+            .get_game(&legacy.id)
+            .expect("game lookup succeeds")
+            .expect("game remains present");
+        assert_eq!(stored.id, upgraded.id);
+        assert_eq!(stored.platform, "Steam");
+        assert_eq!(stored.platform_id.as_deref(), Some("12345"));
     }
 
     #[test]
