@@ -220,6 +220,30 @@ jobs:
           if ($LASTEXITCODE -ne 0 -or ($helpOutput -join "`n") -notmatch "games scan") {
             throw "Packaged Windows CLI help smoke test failed."
           }
+
+          # Exercise the agent and CLI from the extracted archive, not only the build directory.
+          $dataDir = Join-Path $env:RUNNER_TEMP ("amethys-archive-smoke-" + [guid]::NewGuid())
+          New-Item -ItemType Directory -Force $dataDir | Out-Null
+          $env:AMETHYS_DATA_DIR = $dataDir
+          $agentPath = Join-Path (Resolve-Path archive-check).Path "amethys-agent.exe"
+          $agent = Start-Process -FilePath $agentPath -PassThru -NoNewWindow
+          try {
+            $ready = $false
+            for ($attempt = 0; $attempt -lt 30; $attempt++) {
+              if ($agent.HasExited) { throw "Packaged Windows agent exited during startup (code $($agent.ExitCode))." }
+              & $cli ping *> $null
+              if ($LASTEXITCODE -eq 0) { $ready = $true; break }
+              Start-Sleep -Seconds 1
+            }
+            if (-not $ready) { throw "Packaged Windows agent did not become ready within 30 seconds." }
+            & $cli status
+            if ($LASTEXITCODE -ne 0) { throw "Packaged Windows agent status request failed." }
+          }
+          finally {
+            if (-not $agent.HasExited) { Stop-Process -Id $agent.Id -Force }
+            Wait-Process -Id $agent.Id -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $dataDir -Recurse -Force -ErrorAction SilentlyContinue
+          }
       - name: Smoke-test Linux release archive
         if: runner.os == 'Linux'
         shell: bash
@@ -236,5 +260,35 @@ jobs:
           test -s archive-check/amethysctl
           test -x archive-check/amethys-agent
           test -x archive-check/amethysctl
-          archive-check/amethysctl --version | grep -Eq '^Amethys Launcher [0-9]+[.][0-9]+[.][0-9]+$'
+          archive-check/amethysctl --version | grep -Eq '^Amethys Launcher [0-9]+[.][0-9]+[.][0-9]+
+
           archive-check/amethysctl --help | grep -Fq "games scan"
+
+          # Exercise the agent and CLI from the extracted archive, not only the build directory.
+          data_dir="$(mktemp -d)"
+          export AMETHYS_DATA_DIR="$data_dir"
+          archive-check/amethys-agent &
+          agent_pid=$!
+          cleanup() {
+            kill "$agent_pid" 2>/dev/null || true
+            wait "$agent_pid" 2>/dev/null || true
+            rm -rf "$data_dir"
+          }
+          trap cleanup EXIT
+          ready=false
+          for attempt in $(seq 1 30); do
+            if ! kill -0 "$agent_pid" 2>/dev/null; then
+              echo "Packaged Linux agent exited during startup."
+              exit 1
+            fi
+            if archive-check/amethysctl ping >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            echo "Packaged Linux agent did not become ready within 30 seconds."
+            exit 1
+          fi
+          archive-check/amethysctl status
