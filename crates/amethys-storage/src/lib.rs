@@ -34,6 +34,12 @@ fn enable_wal_mode(connection: &Connection) -> rusqlite::Result<()> {
             row.get::<_, String>(0)
         }) {
             Ok(mode) if mode.eq_ignore_ascii_case("wal") => break Ok(()),
+            // Another opener may still be initializing the same database.
+            // SQLite can return the current mode instead of SQLITE_BUSY, so
+            // keep retrying until the same bounded deadline.
+            Ok(_) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
             Ok(_) => break Err(rusqlite::Error::InvalidQuery),
             Err(error)
                 if matches!(
