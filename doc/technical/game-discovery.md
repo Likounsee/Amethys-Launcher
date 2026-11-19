@@ -70,11 +70,16 @@ Entries without a configured executable report `not_configured` and are not
 penalized.
 
 Use `amethysctl games verify --json` for the versioned JSON report
-(`schema_version: 2`). It includes `directory_status`,
-`executable_status`, per-entry `healthy`, and aggregate `available`,
-`missing`, `healthy`, and `issues` counts. A directory being available
-does not prove that all game files are intact or that the game can start; this
-check validates only path metadata and any explicitly configured executable.
+(`schema_version: 3`). It includes `directory_status`,
+`executable_status`, per-entry `healthy` and `launch_ready`, plus
+aggregate `available`, `missing`, `healthy`, `launch_ready`, and
+`issues` counts. `healthy` means the installation directory exists and
+any configured executable passes path validation; an unconfigured executable
+does not make the installation unhealthy. `launch_ready` is stricter: it is
+true only when the installation directory exists and a configured executable
+is present inside it. A directory being available does not prove that all game
+files are intact or that the game can start; this check validates only path
+metadata and any explicitly configured executable.
 
 ## Development priorities
 
