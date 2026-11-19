@@ -337,6 +337,31 @@ impl Database {
             .map_err(|error| storage_error(format!("Could not read game list: {error}")))
     }
 
+    /// Attaches a source-platform identifier to a legacy game entry.
+    ///
+    /// This is used when a previously imported game had no stable platform ID
+    /// but a later discovery scan can identify it. The platform must match and
+    /// an existing identifier is never overwritten.
+    pub fn set_game_platform_id(
+        &self,
+        id: &str,
+        platform: &str,
+        platform_id: &str,
+    ) -> Result<Option<GameEntry>, AmethysError> {
+        let id = validate_game_id(id)?;
+        let (platform, platform_id) = validate_platform_identity(platform, platform_id)?;
+        self.connection
+            .execute(
+                "UPDATE games SET platform_id = ?1
+             WHERE id = ?2 AND platform = ?3 COLLATE NOCASE AND platform_id IS NULL",
+                params![platform_id, id, platform],
+            )
+            .map_err(|error| {
+                storage_error(format!("Could not attach game platform ID: {error}"))
+            })?;
+        self.get_game(id)
+    }
+
     /// Updates the executable configured for an existing game.
     pub fn set_game_executable(
         &self,
@@ -531,6 +556,30 @@ mod tests {
         let path = std::env::temp_dir().join(format!("amethys-{}.sqlite", uuid::Uuid::new_v4()));
         let database = Database::open(&path).expect("database opens");
         (database, path)
+    }
+
+    #[test]
+    fn legacy_game_can_be_upgraded_with_platform_identity_without_changing_library_id() {
+        let database = Database::open(":memory:").expect("database opens");
+        let legacy = database
+            .add_game("Legacy game", "Steam", "/games/legacy", None)
+            .expect("legacy game is added");
+
+        let upgraded = database
+            .set_game_platform_id(&legacy.id, "steam", "12345")
+            .expect("platform ID is attached")
+            .expect("game remains present");
+
+        assert_eq!(upgraded.id, legacy.id);
+        assert_eq!(upgraded.platform_id.as_deref(), Some("12345"));
+        assert_eq!(
+            database
+                .get_game_by_platform_id("Steam", "12345")
+                .expect("platform identity lookup succeeds")
+                .expect("upgraded game is found")
+                .id,
+            legacy.id
+        );
     }
 
     #[test]
