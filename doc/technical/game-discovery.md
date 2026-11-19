@@ -39,10 +39,14 @@ different products on different stores.
 
 The local database schema migration adds an optional `platform_id` field and
 a uniqueness constraint on the case-insensitive platform name plus the
-platform-specific ID. Existing library entries are preserved and receive a
-null platform ID; they remain addressable by their Amethys library ID and
-installation path. Detection remains read-only: importing changes only the
-Amethys database and never modifies the original launcher or game installation.
+platform-specific ID. Existing library entries are preserved and initially
+receive a null platform ID. If a later scan identifies one of these legacy
+entries by the same platform and canonical installation path, import attaches
+the newly discovered platform ID to that existing row without changing its
+Amethys library ID. Future imports can then find it by stable platform identity,
+even if its installation path changes. Detection remains read-only: importing
+changes only the Amethys database and never modifies the original launcher or
+game installation.
 
 ## Read-only installation verification
 
