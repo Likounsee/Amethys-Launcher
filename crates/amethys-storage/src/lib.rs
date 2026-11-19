@@ -1352,6 +1352,15 @@ mod tests {
         let first = first.join().expect("first opener thread completes");
         let second = second.join().expect("second opener thread completes");
 
+        // SQLite stores the journal mode in the database header: value 2 at
+        // offsets 18 and 19 means WAL. Checking the header avoids relying on
+        // rusqlite's PRAGMA query APIs, which cannot read journal_mode here.
+        let header = std::fs::read(&path).expect("database header is readable");
+        assert!(header.len() >= 100, "SQLite database header is complete");
+        assert_eq!(&header[..16], b"SQLite format 3\0");
+        assert_eq!(header[18], 2, "database write version must be WAL");
+        assert_eq!(header[19], 2, "database read version must be WAL");
+
         for database in [&first, &second] {
             let version: i64 = database
                 .connection
