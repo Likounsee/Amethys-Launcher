@@ -41,13 +41,23 @@ The agent currently runs in the foreground. Closing its terminal stops it. Do no
 A release candidate is not ready merely because compilation succeeded. Before publishing a draft, check:
 
 - the CI workflow is green on Windows and Linux;
-- each archive contains both expected executables;
-- `amethysctl --version` and `amethysctl --help` work;
-- the agent starts and responds to `ping` and `status`;
-- scan, import, list, search and read-only verify behave as documented;
-- the archive and checksum files can be downloaded and verified on Windows and Linux.
+- each archive contains both expected executables and is extracted and checked by its platform CI job;
+- `amethysctl --version` and `amethysctl --help` work from the packaged archive;
+- the agent starts and responds to `ping` and `status` in automated smoke tests;
+- scan, import, list, search and read-only verify are covered by automated tests and behave as documented;
+- SHA-256 checksums are generated and verified by the release workflow.
 
-macOS is temporarily out of scope for the 0.1 release because it cannot currently be tested on physical Apple hardware. Its development can resume when a suitable Mac test machine is available.
+### Test evidence and physical validation
+
+Keep three evidence levels distinct in release notes and bug reports:
+
+1. **Automated CI / fixture-tested:** parser, command, IPC, storage, packaging or security behavior exercised by automated tests. A fixture does not prove compatibility with every installed launcher version.
+2. **Real-install validated:** a reproducible scan or operation was checked against an actual game installation and launcher on a real machine. Record only the platforms and cases that were genuinely exercised.
+3. **Not yet tested:** no suitable physical machine, launcher account or installed game was available. State this plainly; do not imply that the case passed.
+
+Physical testing on every operating system and every launcher is **not a blocker for Amethys 0.1**. Windows and Linux remain the supported release targets because their automated CI jobs build and test both targets. Real-install validation is recorded per adapter in [launcher discovery coverage](../discovery/LAUNCHER-COVERAGE.md); untested adapters must remain labelled as pending rather than being presented as verified. macOS is outside the 0.1 support target and is deferred until a suitable Mac test machine is available.
+
+Community reports can improve real-install coverage after or around the initial release. Ask testers to follow the discovery document's checklist and redact personal paths. Never request credentials, tokens, or private launcher databases. Missing access to a physical test machine or a particular game is a documented limitation, not a reason to hold up otherwise passing 0.1 work.
 
 Windows named-pipe access uses an explicit DACL granting access to the
 current process user and LocalSystem, while omitting Everyone and anonymous
