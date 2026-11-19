@@ -612,6 +612,8 @@ fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value
                 .unwrap_or("not_configured");
             let healthy = directory_status.is_available()
                 && executable_status.is_none_or(PathCheck::is_available);
+            let launch_ready = directory_status.is_available()
+                && executable_status.is_some_and(PathCheck::is_available);
             serde_json::json!({
                 "id": game.id,
                 "name": game.name,
@@ -623,6 +625,7 @@ fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value
                 "executable": game.executable,
                 "executable_status": executable_label,
                 "healthy": healthy,
+                "launch_ready": launch_ready,
             })
         })
         .collect::<Vec<_>>();
@@ -634,24 +637,30 @@ fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value
         .iter()
         .filter(|entry| entry["healthy"] == true)
         .count();
+    let launch_ready = entries
+        .iter()
+        .filter(|entry| entry["launch_ready"] == true)
+        .count();
     let issues = entries.len() - healthy;
-    json_verify_summary(games.len(), available, healthy, issues, entries)
+    json_verify_summary(games.len(), available, healthy, launch_ready, issues, entries)
 }
 
 fn json_verify_summary(
     total: usize,
     available: usize,
     healthy: usize,
+    launch_ready: usize,
     issues: usize,
     games: Vec<serde_json::Value>,
 ) -> serde_json::Value {
     serde_json::json!({
-        "schema_version": 2,
+        "schema_version": 3,
         "read_only": true,
         "total_games": total,
         "available": available,
         "missing": total - available,
         "healthy": healthy,
+        "launch_ready": launch_ready,
         "issues": issues,
         "games": games,
     })
@@ -703,7 +712,15 @@ async fn verify_saved_games(json_output: bool) -> Result<(), Box<dyn Error>> {
             let executable_status = inspect_game_executable(game);
             let healthy = directory_status.is_available()
                 && executable_status.is_none_or(PathCheck::is_available);
-            let marker = if healthy { "OK" } else { "ATTENTION" };
+            let launch_ready = directory_status.is_available()
+                && executable_status.is_some_and(PathCheck::is_available);
+            let marker = if launch_ready {
+                "PRÊT"
+            } else if healthy {
+                "À CONFIGURER"
+            } else {
+                "ATTENTION"
+            };
             println!(
                 "[{marker}] {} ({}) — dossier : {}",
                 game.name,
@@ -1141,17 +1158,19 @@ mod tests {
             executable: None,
         };
         let report = super::build_verify_report(&[game]);
-        assert_eq!(report["schema_version"], 2);
+        assert_eq!(report["schema_version"], 3);
         assert_eq!(report["read_only"], true);
         assert_eq!(report["total_games"], 1);
         assert_eq!(report["available"], 1);
         assert_eq!(report["missing"], 0);
         assert_eq!(report["healthy"], 1);
+        assert_eq!(report["launch_ready"], 0);
         assert_eq!(report["issues"], 0);
         assert_eq!(report["games"][0]["directory_available"], true);
         assert_eq!(report["games"][0]["directory_status"], "available");
         assert_eq!(report["games"][0]["executable_status"], "not_configured");
         assert_eq!(report["games"][0]["healthy"], true);
+        assert_eq!(report["games"][0]["launch_ready"], false);
         std::fs::remove_dir_all(root).expect("remove test installation");
     }
 
@@ -1178,6 +1197,8 @@ mod tests {
         let present = super::build_verify_report(&[make_game("bin/game.exe")]);
         assert_eq!(present["games"][0]["executable_status"], "available");
         assert_eq!(present["games"][0]["healthy"], true);
+        assert_eq!(present["games"][0]["launch_ready"], true);
+        assert_eq!(present["launch_ready"], 1);
         let missing = super::build_verify_report(&[make_game("bin/missing.exe")]);
         assert_eq!(missing["games"][0]["executable_status"], "missing");
         assert_eq!(missing["games"][0]["healthy"], false);
