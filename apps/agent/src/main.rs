@@ -120,13 +120,26 @@ where
                             .get_game_by_platform_id(&platform, platform_id)
                             .and_then(|existing| match existing {
                                 Some(game) => Ok(game),
-                                None => database.add_game_with_platform_id(
-                                    &name,
-                                    &platform,
-                                    Some(platform_id),
-                                    &install_path,
-                                    executable.as_deref(),
-                                ),
+                                None => {
+                                    // A previously imported entry may predate stable
+                                    // platform IDs. Reuse it only when its identity is
+                                    // unknown and its platform-scoped path matches.
+                                    let legacy = database.list_games()?.into_iter().find(|game| {
+                                        game.platform.eq_ignore_ascii_case(&platform)
+                                            && game.platform_id.is_none()
+                                            && same_install_path(&game.install_path, &install_path)
+                                    });
+                                    match legacy {
+                                        Some(game) => Ok(game),
+                                        None => database.add_game_with_platform_id(
+                                            &name,
+                                            &platform,
+                                            Some(platform_id),
+                                            &install_path,
+                                            executable.as_deref(),
+                                        ),
+                                    }
+                                }
                             })
                     } else {
                         // Some discovery adapters cannot provide a stable platform ID.
@@ -505,6 +518,57 @@ mod tests {
         assert_eq!(games[0].id, first_game.id);
         assert_eq!(games[0].name, "Original name");
         assert_eq!(games[0].install_path, "/games/original");
+    }
+
+    #[tokio::test]
+    async fn detected_import_with_platform_id_reuses_legacy_entry_at_same_path() {
+        let database = Arc::new(Mutex::new(
+            Database::open(":memory:").expect("database opens"),
+        ));
+        let state = Arc::new(AtomicU8::new(super::STATE_RUNNING));
+
+        let legacy = round_trip(
+            &database,
+            &state,
+            IpcCommand::AddDetectedGame {
+                name: "Legacy game".to_owned(),
+                platform: "Steam".to_owned(),
+                platform_id: None,
+                install_path: "/games/legacy".to_owned(),
+                executable: None,
+            },
+        )
+        .await;
+        let legacy_game = match legacy.result.expect("legacy import succeeds") {
+            amethys_ipc::IpcResponsePayload::GameAdded { game } => game,
+            other => panic!("unexpected legacy import response: {other:?}"),
+        };
+
+        let detected = round_trip(
+            &database,
+            &state,
+            IpcCommand::AddDetectedGame {
+                name: "Detected game".to_owned(),
+                platform: "steam".to_owned(),
+                platform_id: Some("12345".to_owned()),
+                install_path: "/games/legacy".to_owned(),
+                executable: None,
+            },
+        )
+        .await;
+        let detected_game = match detected.result.expect("detected import succeeds") {
+            amethys_ipc::IpcResponsePayload::GameAdded { game } => game,
+            other => panic!("unexpected detected import response: {other:?}"),
+        };
+
+        assert_eq!(detected_game.id, legacy_game.id);
+        let games = database
+            .lock()
+            .await
+            .list_games()
+            .expect("list imported games");
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].platform_id, None);
     }
 
     #[tokio::test]
