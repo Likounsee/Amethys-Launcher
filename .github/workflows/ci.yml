@@ -260,7 +260,7 @@ jobs:
           test -s archive-check/amethysctl
           test -x archive-check/amethys-agent
           test -x archive-check/amethysctl
-          archive-check/amethysctl --version | grep -Eq '^Amethys Launcher [0-9]+[.][0-9]+[.][0-9]+
+          archive-check/amethysctl --version | grep -Eq '^Amethys Launcher [0-9]+[.][0-9]+[.][0-9]+'
 
           archive-check/amethysctl --help | grep -Fq "games scan"
 
