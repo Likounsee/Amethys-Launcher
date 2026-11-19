@@ -29,12 +29,20 @@ Before upload, each platform job extracts its own archive and executes the packa
 ## First-run notes
 
 1. Extract the archive to a directory owned by the current user.
-2. Start `amethys-agent` (Windows: `amethys-agent.exe`) in a terminal.
-3. In another terminal, run `amethysctl ping` and `amethysctl status`.
-4. Run `amethysctl games scan` to inspect supported local launcher metadata.
-5. Use `amethysctl games import-all` only when you want to add all detected installations to the Amethys database.
+2. Open a terminal in that extracted directory and start the agent:
+   - **Windows PowerShell:** `./amethys-agent.exe`
+   - **Linux:** `./amethys-agent`
+3. Keep that terminal open. Open a second terminal in the same directory and check the connection:
+   - **Windows PowerShell:** `./amethysctl.exe ping`, then `./amethysctl.exe status`
+   - **Linux:** `./amethysctl ping`, then `./amethysctl status`
+4. Inspect supported local launcher metadata:
+   - **Windows PowerShell:** `./amethysctl.exe games scan`
+   - **Linux:** `./amethysctl games scan`
+5. Use `games import-all` only when you explicitly want to add all detected installations to the Amethys database:
+   - **Windows PowerShell:** `./amethysctl.exe games import-all`
+   - **Linux:** `./amethysctl games import-all`
 
-The agent currently runs in the foreground. Closing its terminal stops it. Do not expose the IPC endpoint over a network.
+The agent currently runs in the foreground. Closing its terminal stops it. The CLI commands must be run from the extracted directory (or with the full executable path). Do not expose the IPC endpoint over a network.
 
 ## Validation before publication
 
