@@ -30,13 +30,12 @@ fn enable_wal_mode(connection: &Connection) -> rusqlite::Result<()> {
     connection.busy_timeout(BUSY_SLICE)?;
     let deadline = std::time::Instant::now() + RETRY_WINDOW;
     let result = loop {
-        match connection
-            .execute_batch("PRAGMA journal_mode = WAL;")
-            .and_then(|()| {
-                connection.query_row("SELECT * FROM pragma_journal_mode", [], |row| {
-                    row.get::<_, String>(0)
-                })
-            }) {
+        match connection.pragma_update_and_check(
+            None,
+            "journal_mode",
+            "WAL",
+            |row| row.get::<_, String>(0),
+        ) {
             Ok(mode) if mode.eq_ignore_ascii_case("wal") => break Ok(()),
             // Another opener may still be initializing the same database.
             // SQLite can return the current mode instead of SQLITE_BUSY, so
