@@ -1420,9 +1420,21 @@ pub fn scan_battlenet_product_db(database: &Path) -> Vec<DetectedGame> {
     if !metadata.is_file() || metadata.len() == 0 || metadata.len() > MAX_DATABASE_SIZE {
         return Vec::new();
     }
-    let Ok(bytes) = fs::read(database) else {
+    // The file can be replaced or grow after the metadata check above.
+    // Bound the actual read as well, so a concurrent change cannot trigger an
+    // unbounded allocation from launcher-controlled metadata.
+    let Ok(file) = fs::File::open(database) else {
         return Vec::new();
     };
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    if file
+        .take(MAX_DATABASE_SIZE + 1)
+        .read_to_end(&mut bytes)
+        .is_err()
+        || bytes.len() as u64 > MAX_DATABASE_SIZE
+    {
+        return Vec::new();
+    }
 
     let mut installs = protobuf_length_delimited_fields(&bytes, 1).unwrap_or_default();
     // Some Agent versions store a single ProductInstall message directly.
