@@ -29,12 +29,7 @@ fn enable_wal_mode(connection: &Connection) -> rusqlite::Result<()> {
             row.get::<_, String>(0)
         }) {
             Ok(mode) if mode.eq_ignore_ascii_case("wal") => return Ok(()),
-            Ok(mode) => {
-                return Err(rusqlite::Error::InvalidQuery).map_err(|error| {
-                    let _ = mode;
-                    error
-                });
-            }
+            Ok(_) => return Err(rusqlite::Error::InvalidQuery),
             Err(error)
                 if matches!(
                     &error,
