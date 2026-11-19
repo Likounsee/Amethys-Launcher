@@ -129,13 +129,23 @@ where
                                 ),
                             })
                     } else {
-                        database.add_game_with_platform_id(
-                            &name,
-                            &platform,
-                            None,
-                            &install_path,
-                            executable.as_deref(),
-                        )
+                        // Some discovery adapters cannot provide a stable platform ID.
+                        // Reuse the existing library entry by installation path so a
+                        // repeated scan/import does not create duplicate rows.
+                        let existing = database
+                            .list_games()?
+                            .into_iter()
+                            .find(|game| same_install_path(&game.install_path, &install_path));
+                        match existing {
+                            Some(game) => Ok(game),
+                            None => database.add_game_with_platform_id(
+                                &name,
+                                &platform,
+                                None,
+                                &install_path,
+                                executable.as_deref(),
+                            ),
+                        }
                     };
                     game.map(|game| IpcResponsePayload::GameAdded {
                         game: IpcGameEntry {
@@ -184,6 +194,21 @@ where
     };
     write_message(stream, &response).await?;
     Ok(())
+}
+
+fn same_install_path(left: &str, right: &str) -> bool {
+    let left = std::fs::canonicalize(left).unwrap_or_else(|_| std::path::PathBuf::from(left));
+    let right = std::fs::canonicalize(right).unwrap_or_else(|_| std::path::PathBuf::from(right));
+
+    #[cfg(windows)]
+    {
+        left.to_string_lossy()
+            .eq_ignore_ascii_case(&right.to_string_lossy())
+    }
+    #[cfg(not(windows))]
+    {
+        left == right
+    }
 }
 
 fn store_runtime_state(shared: &AtomicU8, state: RuntimeState) {
@@ -480,6 +505,47 @@ mod tests {
         assert_eq!(games[0].id, first_game.id);
         assert_eq!(games[0].name, "Original name");
         assert_eq!(games[0].install_path, "/games/original");
+    }
+
+    #[tokio::test]
+    async fn detected_import_without_platform_id_reuses_existing_installation_path() {
+        let database = Arc::new(Mutex::new(
+            Database::open(":memory:").expect("database opens"),
+        ));
+        let state = Arc::new(AtomicU8::new(super::STATE_RUNNING));
+
+        let import = || {
+            round_trip(
+                &database,
+                &state,
+                IpcCommand::AddDetectedGame {
+                    name: "Legacy launcher game".to_owned(),
+                    platform: "Legacy".to_owned(),
+                    platform_id: None,
+                    install_path: "/games/legacy".to_owned(),
+                    executable: None,
+                },
+            )
+        };
+        let first = import().await;
+        let second = import().await;
+        let extract_game = |response: IpcResponse| {
+            match response.result.expect("import succeeds") {
+                amethys_ipc::IpcResponsePayload::GameAdded { game } => game,
+                other => panic!("unexpected import response: {other:?}"),
+            }
+        };
+        let first_game = extract_game(first);
+        let second_game = extract_game(second);
+
+        assert_eq!(first_game.id, second_game.id);
+        let games = database
+            .lock()
+            .await
+            .list_games()
+            .expect("list imported games");
+        assert_eq!(games.len(), 1);
+        assert_eq!(games[0].install_path, "/games/legacy");
     }
 
     #[tokio::test]
