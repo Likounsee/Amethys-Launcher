@@ -22,14 +22,19 @@ const MAX_GAME_PATH_BYTES: usize = 32 * 1024;
 
 /// Enables WAL while tolerating another process opening the same new database.
 fn enable_wal_mode(connection: &Connection) -> rusqlite::Result<()> {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    const RETRY_WINDOW: std::time::Duration = std::time::Duration::from_secs(5);
+    const BUSY_SLICE: std::time::Duration = std::time::Duration::from_millis(100);
 
-    loop {
+    // A long SQLite busy timeout would consume the entire retry window in a
+    // single attempt. Use short waits here so we can retry until the deadline.
+    connection.busy_timeout(BUSY_SLICE)?;
+    let deadline = std::time::Instant::now() + RETRY_WINDOW;
+    let result = loop {
         match connection.query_row("PRAGMA journal_mode = WAL", [], |row| {
             row.get::<_, String>(0)
         }) {
-            Ok(mode) if mode.eq_ignore_ascii_case("wal") => return Ok(()),
-            Ok(_) => return Err(rusqlite::Error::InvalidQuery),
+            Ok(mode) if mode.eq_ignore_ascii_case("wal") => break Ok(()),
+            Ok(_) => break Err(rusqlite::Error::InvalidQuery),
             Err(error)
                 if matches!(
                     &error,
@@ -43,9 +48,14 @@ fn enable_wal_mode(connection: &Connection) -> rusqlite::Result<()> {
             {
                 std::thread::sleep(std::time::Duration::from_millis(10));
             }
-            Err(error) => return Err(error),
+            Err(error) => break Err(error),
         }
-    }
+    };
+
+    // Restore the normal timeout regardless of whether WAL initialization
+    // succeeded, so subsequent migrations and queries retain expected behavior.
+    let restore_timeout = connection.busy_timeout(std::time::Duration::from_secs(5));
+    result.and(restore_timeout)
 }
 
 /// SQLite database owned by the core process.
