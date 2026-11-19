@@ -1382,8 +1382,10 @@ mod tests {
             "Riot Games",
             "Xbox app",
         ];
+        // macOS is intentionally excluded from the 0.1 support matrix until
+        // discovery can be validated on physical Mac hardware.
         #[cfg(target_os = "macos")]
-        let expected: &[&str] = &["Steam", "Heroic", "GOG Galaxy"];
+        let expected: &[&str] = &[];
         #[cfg(target_os = "linux")]
         let expected: &[&str] = &["Steam", "Heroic"];
 
