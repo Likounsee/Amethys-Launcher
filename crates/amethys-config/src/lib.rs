@@ -156,7 +156,10 @@ fn create_private_data_directory(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
-/// Maximum accepted size for the user-controlled configuration file.\nconst MAX_CONFIG_FILE_SIZE: u64 = 1024 * 1024;\n\n/// User-level application settings.
+/// Maximum accepted size for the user-controlled configuration file.
+const MAX_CONFIG_FILE_SIZE: u64 = 1024 * 1024;
+
+/// User-level application settings.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct AppConfig {
@@ -530,6 +533,25 @@ mod tests {
         tokio::fs::remove_file(path)
             .await
             .expect("fixture is removed");
+    }
+
+    #[tokio::test]
+    async fn load_rejects_oversized_configuration_without_reading_it_all() {
+        let path = std::env::temp_dir().join(format!("amethys-{}.json", uuid::Uuid::new_v4()));
+        let oversized = vec![b' '; (super::MAX_CONFIG_FILE_SIZE + 1) as usize];
+        tokio::fs::write(&path, oversized)
+            .await
+            .expect("oversized config fixture is written");
+
+        let error = AppConfig::load(&path)
+            .await
+            .expect_err("oversized configuration must be rejected");
+        assert_eq!(error.code(), amethys_errors::ErrorCode::ConfigurationRead);
+        assert!(error.message().contains("maximum size"));
+
+        tokio::fs::remove_file(path)
+            .await
+            .expect("temporary config is removed");
     }
 
     #[tokio::test]
