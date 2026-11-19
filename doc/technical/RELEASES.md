@@ -24,7 +24,7 @@ The release workflow builds both targets, archives the two executables for each 
 
 The workflow can also be started manually for an existing tag through the GitHub Actions interface. Before building, it verifies that the tag exists and exactly matches the workspace version in `Cargo.toml`; this prevents publishing binaries under a version label that differs from the compiled project version.
 
-Before upload, each platform job extracts its own archive and executes the packaged `amethysctl --version` and `amethysctl --help` commands. The publish job requires exactly one Windows ZIP and one Linux TAR.GZ, generates `SHA256SUMS`, and verifies the checksums before creating the draft release.
+Before upload, each platform job extracts its own archive and checks the packaged `amethysctl --version` and `amethysctl --help` commands. It then starts the `amethys-agent` binary from that extracted archive, waits for the IPC endpoint, and verifies `amethysctl ping` and `amethysctl status` against that packaged agent. The smoke test uses a temporary `AMETHYS_DATA_DIR` and cleans up the process and data afterward. The publish job requires exactly one Windows ZIP and one Linux TAR.GZ, generates `SHA256SUMS`, and verifies the checksums before creating the draft release.
 
 ## First-run notes
 
