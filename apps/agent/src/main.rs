@@ -132,13 +132,10 @@ where
                         // Some discovery adapters cannot provide a stable platform ID.
                         // Reuse the existing library entry by installation path so a
                         // repeated scan/import does not create duplicate rows.
-                        let existing = database
-                            .list_games()?
-                            .into_iter()
-                            .find(|game| {
-                                game.platform.eq_ignore_ascii_case(&platform)
-                                    && same_install_path(&game.install_path, &install_path)
-                            });
+                        let existing = database.list_games()?.into_iter().find(|game| {
+                            game.platform.eq_ignore_ascii_case(&platform)
+                                && same_install_path(&game.install_path, &install_path)
+                        });
                         match existing {
                             Some(game) => Ok(game),
                             None => database.add_game_with_platform_id(
@@ -532,11 +529,9 @@ mod tests {
         };
         let first = import().await;
         let second = import().await;
-        let extract_game = |response: IpcResponse| {
-            match response.result.expect("import succeeds") {
-                amethys_ipc::IpcResponsePayload::GameAdded { game } => game,
-                other => panic!("unexpected import response: {other:?}"),
-            }
+        let extract_game = |response: IpcResponse| match response.result.expect("import succeeds") {
+            amethys_ipc::IpcResponsePayload::GameAdded { game } => game,
+            other => panic!("unexpected import response: {other:?}"),
         };
         let first_game = extract_game(first);
         let second_game = extract_game(second);
