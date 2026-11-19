@@ -130,7 +130,14 @@ where
                                             && same_install_path(&game.install_path, &install_path)
                                     });
                                     match legacy {
-                                        Some(game) => Ok(game),
+                                        Some(game) => database
+                                            .set_game_platform_id(&game.id, &platform, platform_id)?
+                                            .ok_or_else(|| {
+                                                amethys_errors::AmethysError::new(
+                                                    amethys_errors::ErrorCode::StorageQuery,
+                                                    "Legacy game disappeared while attaching its platform ID.",
+                                                )
+                                            }),
                                         None => database.add_game_with_platform_id(
                                             &name,
                                             &platform,
@@ -562,13 +569,36 @@ mod tests {
         };
 
         assert_eq!(detected_game.id, legacy_game.id);
+        assert_eq!(detected_game.platform_id.as_deref(), Some("12345"));
+
+        // Once upgraded, the stable source ID must find the same library row
+        // even if the launcher later reports a changed installation path.
+        let moved = round_trip(
+            &database,
+            &state,
+            IpcCommand::AddDetectedGame {
+                name: "Detected game".to_owned(),
+                platform: "Steam".to_owned(),
+                platform_id: Some("12345".to_owned()),
+                install_path: "/games/moved".to_owned(),
+                executable: None,
+            },
+        )
+        .await;
+        let moved_game = match moved.result.expect("reimport by platform ID succeeds") {
+            amethys_ipc::IpcResponsePayload::GameAdded { game } => game,
+            other => panic!("unexpected moved import response: {other:?}"),
+        };
+        assert_eq!(moved_game.id, legacy_game.id);
+
         let games = database
             .lock()
             .await
             .list_games()
             .expect("list imported games");
         assert_eq!(games.len(), 1);
-        assert_eq!(games[0].platform_id, None);
+        assert_eq!(games[0].platform_id.as_deref(), Some("12345"));
+        assert_eq!(games[0].install_path, "/games/legacy");
     }
 
     #[tokio::test]
