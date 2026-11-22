@@ -217,7 +217,7 @@ mod tests {
         let store = MediaStore::new("amethys-data");
         let provider = ProviderKey::new("steam").expect("valid provider");
         let path = store
-            .catalogue_asset(&provider, "../../game/42", MediaKind::Banner, ".webp")
+            .catalogue_asset(&provider, "../../game/42", MediaKind::Banner, "png")
             .expect("external IDs are encoded");
         assert!(
             path.to_string_lossy()
