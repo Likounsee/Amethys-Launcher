@@ -1,77 +1,71 @@
-# Amethys Launcher 0.2 — feuille de route
+# Amethys Launcher — feuille de route produit
 
-Cette feuille de route décrit les critères de sortie de la version 0.2. Elle distingue les fonctions réellement disponibles des travaux à réaliser. Aucune donnée de catalogue, aucun prix, aucune promotion, aucun temps de jeu et aucun compte connecté ne doivent être simulés.
+La priorité de la 0.2 est une interface de bureau complète, cohérente et soignée, reposant sur la vraie bibliothèque locale. La boutique commerciale n'est pas un objectif de la 0.2.
 
-## Déjà opérationnel
+## Version 0.2 — interface et fondations locales
 
-- Application de bureau Rust avec le prototype de fenêtre GhostEngine intégré dans ce dépôt.
-- Communication avec Amethys Core par IPC ; le launcher ne lit pas directement la base SQLite.
-- Démarrage de l'agent local lorsque celui-ci est livré à côté du launcher.
-- Lecture, actualisation, recherche et filtrage de la bibliothèque réelle.
-- Détection locale en tâche de fond et import individuel des installations trouvées.
-- Fiche d'un jeu avec métadonnées réellement enregistrées, vérification du dossier et configuration de l'exécutable.
-- Lancement après canonicalisation du chemin et vérification qu'il reste dans le dossier d'installation.
-- Retrait d'une entrée de bibliothèque avec confirmation explicite ; les fichiers du jeu restent intacts.
-- Snapshot GhostEngine épinglé dans `vendor/ghostengine`, donc un seul dépôt Git est nécessaire.
+### Interface
+- [x] Fenêtre de bureau GhostEngine expérimentale intégrée au dépôt.
+- [x] Bibliothèque réelle connectée à Amethys Core par IPC.
+- [x] Recherche, filtres, tri, fiches de jeux, import et lancement sécurisé.
+- [x] Détection en arrière-plan avec progression et annulation.
+- [ ] Finaliser la direction visuelle, la typographie, les espacements et la cohérence des composants.
+- [ ] Refaire les cartes de jeux autour de proportions d'illustrations fixes et de placeholders originaux.
+- [ ] Compléter les états vides, chargements, erreurs, confirmations et notifications.
+- [ ] Rendre la mise en page adaptative aux dimensions réelles de la fenêtre.
+- [ ] Terminer la navigation clavier et le focus accessible des champs et dialogues.
+- [ ] Concevoir des paramètres cohérents, en distinguant les réglages réellement enregistrés des fonctions à venir.
 
-## Travaux nécessaires avant 0.2
+### Bibliothèque et métadonnées
+- [ ] Introduire un Game ID Amethys stable, indépendant des identifiants Steam/Epic/GOG/Xbox.
+- [ ] Définir les métadonnées : nom, genres, développeur, éditeur, date de sortie, description et identifiants externes.
+- [ ] Prévoir les références de médias icon, logo, cover et banner sans lier ces ressources à un fournisseur.
+- [ ] Stocker localement les médias des jeux de la bibliothèque et les préférences propres à l'utilisateur.
+- [ ] Utiliser des illustrations originales de remplacement pendant le développement ; aucun visuel de jeu non autorisé ne doit être distribué.
+- [ ] Améliorer le rapport d'import et les erreurs par installation.
 
-### P0 — Interface de bureau aboutie
-- [x] Cartes de bibliothèque avec couverture, plateforme, statut réel, chemin et actions.
-- [ ] Finaliser la hiérarchie visuelle et les états de chargement.
-- [x] Ajouter le parcours clavier Tab / Maj+Tab, l'activation Entrée et un indicateur de focus visible.
-- [ ] Adapter la grille et les panneaux à la taille réelle de la fenêtre ; supprimer les hypothèses rigides 1600×900.
-- Rendre les interactions évidentes : focus clavier, retour visuel, raccourcis, navigation et états de chargement.
-- Conserver les données réelles et afficher clairement les fonctionnalités non connectées.
+### Qualité
+- [ ] Éliminer les hypothèses de résolution fixe et vérifier les tailles de bibliothèque importantes.
+- [ ] Stabiliser les interactions et les états d'erreur.
+- [ ] Tests unitaires/intégration, packaging portable reproductible et documentation.
+- [ ] Conserver Core comme propriétaire des données persistantes ; l'interface ne doit pas accéder directement à SQLite.
 
-### P0 — Bibliothèque fiable
-- [x] Tri réel par nom, plateforme et état de lancement, avec filtres de plateforme et recherche multicritère.
-- [x] Navigation clavier de base (Tab / Maj+Tab / Entrée) et focus visuel des actions visibles.
-- [ ] Compléter les raccourcis de page et le focus accessible des champs.
-- [x] Afficher la cause réelle d'indisponibilité du lancement (exécutable absent, chemin invalide, dossier inaccessible ou tentative de sortie du dossier du jeu) sans bloquer l'accès aux détails.
-- [x] Confirmation avant retrait et explication que les fichiers ne sont pas supprimés.
-- [x] Dédupliquer les résultats de détection contre la bibliothèque existante et entre eux (identité plateforme + chemin canonique).
-- [x] Ajouter une progression par fournisseur et une annulation coopérative entre les scans de métadonnées (un fournisseur déjà lancé termine son étape avant l'arrêt).
-- [ ] Rapport détaillé des imports réussis/échoués et gestion des erreurs par entrée.
-- Ne pas afficher de temps de jeu ni de dernière session tant que Core ne les fournit pas.
+**Hors périmètre 0.2 :** catalogue commercial connecté, prix, promotions, achats, licences, téléchargement et installation depuis une boutique. Les écrans futurs peuvent être présentés comme indisponibles, jamais avec des données commerciales fictives.
 
-### P1 — Cycle de vie des jeux
-- Déplacer le lancement dans Core ou un service dédié, plutôt que de lancer directement depuis l'interface.
-- Suivre les processus lancés, détecter leur fermeture et enregistrer les sessions.
-- Ajouter arguments et options de lancement avec validation et stockage persistant.
-- Ajouter déplacement/réparation des chemins d'installation avec confirmation et vérification.
+## Version 0.3 — boutique et services en ligne
 
-### P1 — Paramètres persistants
-- Préférences de l'interface et du comportement du launcher.
-- Gestion des dossiers de bibliothèque et des emplacements de détection.
-- Diagnostics, journaux accessibles et informations de version.
+- Intégrer des fournisseurs réels au moyen d'adaptateurs documentés et autorisés.
+- Charger le catalogue, les fiches, les médias, les prix et les offres depuis des sources fiables, avec date et provenance.
+- Ouvrir les pages d'achat officielles ou utiliser les API officielles lorsque les opérations sont autorisées.
+- Vérifier les jeux possédés uniquement via des mécanismes autorisés.
+- Ajouter les flux d'installation/téléchargement lorsque les plateformes le permettent : progression, reprise, vérification, erreurs et annulation.
+- Mettre en cache les médias du catalogue avec limites de taille, expiration, déduplication et nettoyage.
+- Charger d'abord les éléments visibles de l'accueil, puis précharger progressivement les fiches en arrière-plan.
+- Ne pas exiger un serveur privé payant pour commencer : évaluer les services gratuits, l'hébergement statique et le fonctionnement local. Ne jamais placer de secrets fournisseurs dans le client.
+- Définir les données personnelles par utilisateur et les synchroniser uniquement si un backend et une politique de confidentialité adaptés existent.
 
-### P2 — Catalogue et installation
-- Définir des adaptateurs fournisseurs réels et documentés (authentification, recherche, fiches, liens).
-- Afficher les prix et offres uniquement lorsqu'ils viennent d'une source fiable et datée.
-- Téléchargement, reprise, vérification d'intégrité et désinstallation uniquement lorsqu'un fournisseur autorise réellement ces opérations.
-- Tant qu'aucun fournisseur n'est intégré, conserver une boutique honnête indiquant son indisponibilité.
+## Version 1.0 — stabilisation et préparation publique
 
-### P0 — Stabilisation et livraison
-- Tests unitaires et d'intégration sur Windows x64.
-- Vérifier le démarrage autonome, les chemins d'assets, l'agent et les permissions IPC.
-- Packaging portable reproductible, notes de version et procédure de mise à jour.
-- Mesurer le rendu sur bibliothèque volumineuse et éviter les scans filesystem dans le chemin de rendu.
+- Stabiliser l'architecture, la sécurité, les mises à jour et la récupération après erreur.
+- Valider les flux fournisseurs et les limites d'utilisation de leurs API.
+- Finaliser les performances, l'accessibilité, la documentation et les packages.
+- Remplacer les placeholders par des médias originaux, fournis par les utilisateurs ou autorisés par leurs ayants droit.
+- Obtenir les autorisations nécessaires pour les marques, contenus et intégrations avant toute diffusion publique.
+- Préparer les éléments de présentation et les échanges partenaires lorsque le produit est suffisamment complet.
 
-## Ordre d'exécution
+## Architecture média cible
 
-1. Interface et bibliothèque (sans inventer de données).
-2. Sécurisation des actions et qualité de la détection.
-3. Cycle de vie des processus et sessions via Core.
-4. Paramètres persistants et diagnostics.
-5. Fournisseurs réels, catalogue et installation si les API le permettent.
-6. Validation Windows, package portable et documentation de sortie.
+- **Bibliothèque locale :** fichiers d'illustration stockés dans le répertoire de données Amethys, indépendamment du dossier d'installation du jeu.
+- **Boutique distante :** médias récupérés depuis les fournisseurs intégrés, mis en cache localement et réutilisés entre les sessions.
+- **Références :** les métadonnées ne contiennent que des références d'assets ; le Game ID ne change pas lorsqu'une jaquette est remplacée.
+- **Résilience :** placeholder original si un fichier est absent, corrompu ou hors ligne.
+- **Préchargement :** priorité aux visuels visibles, puis chargement progressif ; quotas, expiration et nettoyage du cache.
+- **Serveur :** aucune infrastructure distante obligatoire pour la bibliothèque locale. GitHub peut héberger des ressources statiques publiques, mais ne remplace pas un backend privé pour les comptes, achats ou données personnelles.
 
-## Limites connues à ne pas masquer
+## État actuel et limites à ne pas masquer
 
-- Le catalogue de boutique n'est pas connecté.
-- Le temps de jeu et l'historique des sessions ne sont pas disponibles.
+- Le catalogue commercial n'est pas connecté.
+- Les temps de jeu et l'historique des sessions ne sont pas fournis par Core.
 - Le lancement est encore effectué côté client de bureau.
-- La confirmation de retrait et le tri sont présents ; la navigation clavier complète reste à faire.
 - Le backend de fenêtre/rendu GhostEngine est expérimental et temporaire.
-- La mise en page du launcher reste actuellement conçue autour d'une fenêtre 1600×900.
+- Le prototype d'interface utilise encore une mise en page conçue autour de 1600×900.
