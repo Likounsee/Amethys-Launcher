@@ -732,7 +732,8 @@ pub fn library_live(
             // Artwork-first library card, matching the visual language of the
             // original concept while keeping every label backed by Core data.
             p.rrect(x, cy, card_w, card_h, 14, PANEL);
-            if !p.draw_cover_for_game(&game.id, &game.name, x, cy, card_w, 150) {
+            let artwork_id = game.catalogue_game_id.as_deref().unwrap_or(&game.id);
+            if !p.draw_cover_for_game(artwork_id, &game.name, x, cy, card_w, 150) {
                 let (top, bottom) = cover(&game.name);
                 p.gradient(x, cy, card_w, 150, 160.0, &[(0.0, hex(top)), (1.0, hex(bottom))]);
             }
@@ -847,7 +848,8 @@ pub fn game_detail_live(
     let y = 96;
     p.rrect(MX, y, MW, 410, 18, PANEL);
     p.rrect_line(MX, y, MW, 410, 18, LINE);
-    if !p.draw_cover_for_game(&game.id, &game.name, MX + MW - 330, y + 20, 290, 250) {
+    let artwork_id = game.catalogue_game_id.as_deref().unwrap_or(&game.id);
+    if !p.draw_cover_for_game(artwork_id, &game.name, MX + MW - 330, y + 20, 290, 250) {
         let (top, bottom) = cover(&game.name);
         p.gradient(MX + MW - 330, y + 20, 290, 250, 160.0, &[(0.0, hex(top)), (1.0, hex(bottom))]);
     }
@@ -863,7 +865,11 @@ pub fn game_detail_live(
     let launch_status = launch_block_reason.as_deref().unwrap_or("Prêt à lancer");
 
     let rows = [
-        ("Identifiant Amethys", game.id.as_str()),
+        (
+            "Game ID Amethys",
+            game.catalogue_game_id.as_deref().unwrap_or("Non attribué"),
+        ),
+        ("ID installation locale", game.id.as_str()),
         ("Identifiant plateforme", game.platform_id.as_deref().unwrap_or("Non fourni")),
         ("Dossier d'installation", game.install_path.as_str()),
         ("Exécutable configuré", executable),
