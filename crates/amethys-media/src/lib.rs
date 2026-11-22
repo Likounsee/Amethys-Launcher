@@ -176,6 +176,17 @@ impl MediaStore {
             let _ = fs::remove_file(&temporary);
         }
         result?;
+
+        // A game has exactly one active local asset per media kind. Remove stale
+        // extensions only after the new file has been installed successfully.
+        let active_extension = extension.trim_start_matches('.').to_ascii_lowercase();
+        for stale_extension in ["png", "jpg", "jpeg", "bmp"] {
+            if stale_extension != active_extension {
+                if let Ok(stale_path) = self.library_asset(game_id, kind, stale_extension) {
+                    let _ = fs::remove_file(stale_path);
+                }
+            }
+        }
         Ok(destination)
     }
 
