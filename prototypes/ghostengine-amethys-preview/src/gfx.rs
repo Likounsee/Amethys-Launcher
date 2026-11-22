@@ -41,6 +41,7 @@ pub enum Action {
     StoreFilter(usize),
     LibFilter(usize),
     RefreshLibrary,
+    LaunchGame(usize),
 }
 
 /// A clickable region recorded while a page is drawn (page coordinates).
