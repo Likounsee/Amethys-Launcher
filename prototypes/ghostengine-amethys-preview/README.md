@@ -18,17 +18,15 @@ workspace-parent/
 
 ## Run on Windows
 
-Open a first PowerShell terminal in the Amethys-Launcher repository and start the real core agent:
+From a PowerShell terminal in the Amethys-Launcher repository, build the agent and desktop app into the same target directory:
 
 ```powershell
-cargo run --release -p amethys-agent
+$env:CARGO_TARGET_DIR = "$PWD/target"
+cargo build --release -p amethys-agent
+cargo run --release --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml --bin amethys-launcher
 ```
 
-Keep that terminal running. In a second terminal, launch the desktop application:
-
-```powershell
-cargo run --release --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml
-```
+The desktop application first tries the existing Core IPC endpoint. If it cannot connect, it starts the bundled `amethys-agent.exe` beside itself and waits for the agent to become ready.
 
 The desktop application reads the library through the Amethys Core named pipe `\\.\pipe\amethys-core`. On Unix, it uses the socket `amethys.sock` in the Amethys data directory. It does not open the SQLite database itself.
 
@@ -69,4 +67,10 @@ cargo check --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml
 cargo run --release --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml
 ```
 
-The prototype has not yet been built or run on the user's PC as part of this change. Its fixed 1600×900 page layout is also still a limitation; responsive layout is a follow-up task.
+Create a portable Windows x64 package from the repository root with:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/package-desktop-windows.ps1
+```
+
+The script builds both executables, stages the fonts/covers beside the launcher and creates `dist/Amethys-Windows-x64.zip`. This is a portable ZIP, not an MSI installer. The prototype has not yet been built or run on the user's PC as part of this change. Its fixed 1600×900 page layout is still a limitation; responsive layout is a follow-up task.
