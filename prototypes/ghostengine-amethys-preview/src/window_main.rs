@@ -31,7 +31,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let fonts: &'static Fonts = Box::leak(Box::new(Fonts::load(&font_dir)?));
     let covers: &'static CoverStore = Box::leak(Box::new(CoverStore::load(&PathBuf::from(ASSETS).join("covers"))));
     println!("{} jaquettes décodées en {:.0} ms ({} échecs)", covers.files, covers.decode_ms, covers.failed.len());
-    let library = core_client::list_games();
+    let library = core_client::list_games_or_start_agent();
     match &library {
         Ok(games) => println!("{} jeu(x) chargé(s) depuis Amethys Core", games.len()),
         Err(error) => eprintln!("Amethys Core indisponible : {error}"),
