@@ -45,6 +45,8 @@ pub struct App {
     pub core_error: Option<String>,
     pub notice: Option<String>,
     pub selected_game: Option<usize>,
+    search_query: String,
+    search_focused: bool,
     /// Whole page pre-rendered once (sidebar occupies the first WIN_H rows).
     content: Framebuffer,
     hits: Vec<Hit>,
@@ -71,6 +73,8 @@ impl App {
             core_error,
             notice: None,
             selected_game: None,
+            search_query: String::new(),
+            search_focused: false,
             content: blank(),
             hits: Vec::new(),
             scroll: ScrollViewport::new(Rect::new(SIDE_W as u32, 0, WIN_W - SIDE_W as u32, WIN_H), LayoutDirection::Vertical, WIN_H),
@@ -99,7 +103,7 @@ impl App {
         let mut p = Painter::new(WIN_W, MAX_PAGE_H, self.fonts).with_covers(self.covers);
         pages::sidebar(&mut p, active, vh);
         let h = (if self.page == Page::Library {
-            pages::library_live(&mut p, vh, &self.games, self.st.lib_filter, self.core_error.as_deref(), self.notice.as_deref())
+            pages::library_live(&mut p, vh, &self.games, self.st.lib_filter, &self.search_query, self.core_error.as_deref(), self.notice.as_deref())
         } else if self.page == Page::Product {
             pages::game_detail_live(&mut p, self.games.get(self.selected_game.unwrap_or(usize::MAX)), self.selected_game.unwrap_or(usize::MAX), self.notice.as_deref())
         } else if self.page == Page::Store {
@@ -119,6 +123,9 @@ impl App {
     }
 
     fn apply(&mut self, action: Action) {
+        if !matches!(action, Action::FocusLibrarySearch) {
+            self.search_focused = false;
+        }
         match action {
             Action::Go(page) => {
                 self.page = page;
@@ -138,6 +145,10 @@ impl App {
             }
             Action::LibFilter(i) => {
                 self.st.lib_filter = i;
+                self.render(false);
+            }
+            Action::FocusLibrarySearch => {
+                self.search_focused = true;
                 self.render(false);
             }
             Action::RefreshLibrary => {
@@ -395,6 +406,54 @@ impl App {
     }
 
     /// Runs one frame: input -> state -> pixels. Returns whether to keep running.
+    fn handle_search_input(&mut self, input: &InputState) {
+        if self.page != Page::Library || !self.search_focused {
+            return;
+        }
+        let mut changed = false;
+        if input.backspace_pressed {
+            changed |= self.search_query.pop().is_some();
+        }
+        if input.paste_pressed {
+            if let Some(text) = input.clipboard_text.as_deref() {
+                if !text.is_empty() {
+                    self.search_query.push_str(text);
+                    changed = true;
+                }
+            }
+        }
+        if !input.text_events.is_empty() {
+            for event in &input.text_events {
+                match event {
+                    ghostengine::TextInputEvent::Insert(text)
+                    | ghostengine::TextInputEvent::CompositionCommit(text) => {
+                        if !text.is_empty() {
+                            self.search_query.push_str(text);
+                            changed = true;
+                        }
+                    }
+                    ghostengine::TextInputEvent::CompositionUpdate(_)
+                    | ghostengine::TextInputEvent::CompositionCancel => {}
+                }
+            }
+        } else {
+            for character in &input.pressed_characters {
+                if !character.is_control() {
+                    self.search_query.push(*character);
+                    changed = true;
+                }
+            }
+        }
+        if input.enter_pressed {
+            self.search_focused = false;
+        }
+        if changed {
+            self.render(false);
+        } else if input.enter_pressed {
+            self.render(false);
+        }
+    }
+
     pub fn frame(&mut self, fb: &mut Framebuffer, input: &InputState) -> Output {
         let start = Instant::now();
         if let Some(last) = self.last_frame {
@@ -405,8 +464,14 @@ impl App {
         }
         self.last_frame = Some(start);
         if input.escape_down {
-            return Output { keep_running: false };
+            if self.search_focused {
+                self.search_focused = false;
+                self.render(false);
+            } else {
+                return Output { keep_running: false };
+            }
         }
+        self.handle_search_input(input);
         let ptr = input.mouse_position;
         let over_chip = ptr.is_some_and(|p| self.chip_rect().contains(p));
         let over_panel = self.stats_open && ptr.is_some_and(|p| self.panel_rect().contains(p));
