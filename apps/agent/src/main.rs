@@ -436,8 +436,12 @@ mod tests {
         .expect("catalogue identity attached");
 
         assert_eq!(
-            database.get_catalogue_game_id(&epic.id).expect("Epic catalogue ID"),
-            database.get_catalogue_game_id(&steam.id).expect("Steam catalogue ID")
+            database
+                .get_catalogue_game_id(&epic.id)
+                .expect("Epic catalogue ID"),
+            database
+                .get_catalogue_game_id(&steam.id)
+                .expect("Steam catalogue ID")
         );
     }
 
