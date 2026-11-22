@@ -256,11 +256,8 @@ impl App {
         // real engine text field for the search bar (scrolls away with the page)
         let mut clipboard = None;
         self.search_rect = None;
-        let slot = match self.page {
-            Page::Store => Some((0, MX)),
-            Page::Library => Some((1, MX + MW - 520)),
-            _ => None,
-        };
+        // Search is intentionally hidden until it is wired to real catalogue/library queries.
+        let slot: Option<(usize, i32)> = None;
         if let Some((idx, x)) = slot {
             let off = self.scroll.offset();
             if off <= 24 {
