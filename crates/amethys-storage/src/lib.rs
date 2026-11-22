@@ -222,7 +222,7 @@ impl Database {
             return Err(AmethysError::new(
                 ErrorCode::StorageMigration,
                 format!(
-                    "Database schema version {current_version} is newer than the supported version 4."
+                    "Database schema version {current_version} is newer than the supported version 5."
                 ),
             ));
         }
@@ -1571,6 +1571,13 @@ mod tests {
             .expect("legacy game remains");
         assert_eq!(game.name, "Legacy Game");
         assert_eq!(game.platform_id, None);
+        assert_eq!(
+            database
+                .get_catalogue_game_id(&game.id)
+                .expect("legacy catalogue ID lookup")
+                .as_deref(),
+            Some("3000")
+        );
         let version: i64 = database
             .connection()
             .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
