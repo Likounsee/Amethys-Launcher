@@ -785,6 +785,8 @@ pub fn game_detail_live(
     p: &mut Painter,
     game: Option<&amethys_ipc::IpcGameEntry>,
     index: usize,
+    executable_draft: &str,
+    editing_executable: bool,
     notice: Option<&str>,
 ) -> i32 {
     let back_width = button(p, MX, 24, None, "Retour à la bibliothèque", false);
@@ -827,6 +829,10 @@ pub fn game_detail_live(
         p.paragraph(MX + 28, y + 356, MW - 56, 18, message, 12.0, W::Med, color, 2);
     }
 
+    let configure_x = MX + MW - 300;
+    button(p, configure_x, y + 366, Some(116), "Configurer", false);
+    p.hit(configure_x, y + 366, 116, 30, 8, Action::EditExecutable, false);
+
     let remove_x = MX + MW - 176;
     p.rrect(remove_x, y + 366, 72, 30, 8, ACT);
     p.rrect_line(remove_x, y + 366, 72, 30, 8, LINE);
@@ -839,7 +845,43 @@ pub fn game_detail_live(
         p.text(launch_x + 14, y + 366, 30, "Lancer", 12.0, W::Semi, VIO_DARK);
         p.hit(launch_x, y + 366, 80, 30, 8, Action::LaunchGame(index), false);
     }
-    y + 450
+    if editing_executable {
+        let editor_y = y + 422;
+        p.rrect(MX, editor_y, MW, 132, 16, PANEL);
+        p.rrect_line(MX, editor_y, MW, 132, 16, LINE);
+        p.text(MX + 22, editor_y + 10, 22, "Configurer l'exécutable", 17.0, W::Semi, TXT);
+        p.text(
+            MX + 22,
+            editor_y + 32,
+            18,
+            "Chemin relatif au dossier du jeu conseillé (ex. bin/game.exe).",
+            12.0,
+            W::Reg,
+            MUT,
+        );
+        let input_x = MX + 22;
+        let input_y = editor_y + 54;
+        let input_w = MW - 44;
+        p.rrect(input_x, input_y, input_w, 34, 8, BG);
+        p.rrect_line(input_x, input_y, input_w, 34, 8, VIO);
+        let display_path = if executable_draft.is_empty() {
+            "bin/game.exe"
+        } else {
+            executable_draft
+        };
+        p.text(input_x + 12, input_y, 34, display_path, 12.0, W::Reg, if executable_draft.is_empty() { MUT } else { TXT });
+        p.hit(input_x, input_y, input_w, 34, 8, Action::EditExecutable, false);
+
+        let save_x = MX + MW - 22 - 120;
+        button(p, save_x, editor_y + 94, Some(120), "Enregistrer", true);
+        p.hit(save_x, editor_y + 94, 120, 38, 10, Action::SaveExecutable, false);
+        let cancel_x = save_x - 112;
+        button(p, cancel_x, editor_y + 94, Some(104), "Annuler", false);
+        p.hit(cancel_x, editor_y + 94, 104, 38, 10, Action::CancelExecutableEdit, false);
+        editor_y + 160
+    } else {
+        y + 450
+    }
 }
 
 
