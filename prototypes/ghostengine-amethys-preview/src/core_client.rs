@@ -371,6 +371,28 @@ mod tests {
     }
 
     #[test]
+    fn launch_block_reason_explains_missing_executable_configuration() {
+        let (root, mut game) = fixture();
+        game.executable = None;
+        assert_eq!(
+            launch_block_reason(&game).as_deref(),
+            Some("Aucun exécutable n'est configuré pour ce jeu.")
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn launch_block_reason_explains_rejected_relative_path() {
+        let (root, mut game) = fixture();
+        game.executable = Some("../outside.exe".to_owned());
+        assert_eq!(
+            launch_block_reason(&game).as_deref(),
+            Some("Chemin d'exécutable relatif non sûr.")
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn rejects_absolute_executable_outside_install_root() {
         let (root, mut game) = fixture();
         let outside = root.parent().unwrap().join("outside-amethys-test.exe");
