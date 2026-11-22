@@ -646,7 +646,7 @@ pub fn library_live(
     p.hit(scan_x, 68, 180, 44, 12, Action::ScanGames, false);
 
     let mut filter_x = MX;
-    let filter_y = 128;
+    let mut filter_y = 128;
     let all_width = p.width("Tous", 13.0, W::Semi).round() as i32 + 32;
     let _ = pill(p, filter_x, filter_y, "Tous", active_filter == 0, Some(Action::LibFilter(0)));
     filter_x += all_width + 8;
@@ -654,6 +654,7 @@ pub fn library_live(
         let width = p.width(platform, 13.0, if active_filter == index + 1 { W::Semi } else { W::Med }).round() as i32 + 32;
         if filter_x + width > MX + MW {
             filter_x = MX;
+            filter_y += 42;
         }
         let _ = pill(p, filter_x, filter_y, platform, active_filter == index + 1, Some(Action::LibFilter(index + 1)));
         filter_x += width + 8;
