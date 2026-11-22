@@ -614,7 +614,7 @@ pub fn library_live(
     let columns = 4_i32;
     let gap = 18_i32;
     let card_w = (MW - gap * (columns - 1)) / columns;
-    let card_h = 174_i32;
+    let card_h = 190_i32;
     for (index, game) in games.iter().enumerate() {
         let col = index as i32 % columns;
         let row = index as i32 / columns;
@@ -624,15 +624,16 @@ pub fn library_live(
         p.rrect(x, y, card_w, card_h, 14, PANEL);
         p.rrect_line(x, y, card_w, card_h, 14, LINE);
         chip(p, x + 14, y + 14, &game.platform);
-        let title_y = y + 52;
-        p.paragraph(x + 14, title_y, card_w - 28, 22, &game.name, 17.0, W::Semi, TXT, 2);
-        let (status, color) = if exists { ("Dossier présent", GREEN) } else { ("Chemin introuvable", AMBER) };
-        p.text(x + 14, y + 112, 18, status, 12.0, W::Med, color);
-        p.paragraph(x + 14, y + 136, card_w - 28, 16, &game.install_path, 10.0, W::Reg, MUT, 2);
+        let title_y = y + 48;
+        p.paragraph(x + 14, title_y, card_w - 28, 20, &game.name, 17.0, W::Semi, TXT, 1);
+        let (status, color) = if !exists { ("Chemin introuvable", AMBER) } else if game.executable.is_some() { ("Exécutable configuré", GREEN) } else { ("Exécutable à configurer", AMBER) };
+        p.text(x + 14, y + 76, 18, status, 12.0, W::Med, color);
+        p.paragraph(x + 14, y + 100, card_w - 28, 16, &game.install_path, 10.0, W::Reg, MUT, 2);
         if game.executable.is_some() && exists {
             let launch_x = x + card_w - 94;
-            button(p, launch_x, y + 76, Some(80), "Lancer", true);
-            p.hit(launch_x, y + 76, 80, 44, 12, Action::LaunchGame(index), false);
+            p.rrect(launch_x, y + 146, 80, 30, 8, VIO);
+            p.text(launch_x + 14, y + 146, 30, "Lancer", 12.0, W::Semi, VIO_DARK);
+            p.hit(launch_x, y + 146, 80, 30, 8, Action::LaunchGame(index), false);
         }
     }
 
