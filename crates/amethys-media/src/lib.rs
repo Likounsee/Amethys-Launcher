@@ -38,9 +38,9 @@ impl ProviderKey {
         let value = value.into();
         if value.is_empty()
             || value.len() > 48
-            || !value.bytes().all(|byte| {
-                byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-'
-            })
+            || !value
+                .bytes()
+                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
         {
             return Err(MediaPathError::InvalidProvider);
         }
@@ -153,9 +153,9 @@ impl MediaStore {
 fn validate_game_id(value: &str) -> Result<(), MediaPathError> {
     if value.is_empty()
         || value.len() > 128
-        || !value.bytes().all(|byte| {
-            byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.')
-        })
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
     {
         return Err(MediaPathError::InvalidProvider);
     }
@@ -195,9 +195,21 @@ mod tests {
     #[test]
     fn library_game_ids_are_safe_path_components() {
         let store = MediaStore::new("amethys-data");
-        assert!(store.library_asset("../escape", MediaKind::Cover, "png").is_err());
-        assert!(store.library_asset("game/42", MediaKind::Cover, "png").is_err());
-        assert!(store.library_asset("game-42", MediaKind::Cover, "png").is_ok());
+        assert!(
+            store
+                .library_asset("../escape", MediaKind::Cover, "png")
+                .is_err()
+        );
+        assert!(
+            store
+                .library_asset("game/42", MediaKind::Cover, "png")
+                .is_err()
+        );
+        assert!(
+            store
+                .library_asset("game-42", MediaKind::Cover, "png")
+                .is_ok()
+        );
     }
 
     #[test]

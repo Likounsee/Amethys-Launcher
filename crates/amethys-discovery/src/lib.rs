@@ -1931,10 +1931,16 @@ pub fn discover_all_games_with_progress(
         ));
     }
     for database in gog_galaxy_databases() {
-        stages.push(("GOG Galaxy".to_owned(), Box::new(move || scan_gog_galaxy(&database))));
+        stages.push((
+            "GOG Galaxy".to_owned(),
+            Box::new(move || scan_gog_galaxy(&database)),
+        ));
     }
     if let Some(database) = amazon_games_database() {
-        stages.push(("Amazon Games".to_owned(), Box::new(move || scan_amazon_games(&database))));
+        stages.push((
+            "Amazon Games".to_owned(),
+            Box::new(move || scan_amazon_games(&database)),
+        ));
     }
 
     #[cfg(windows)]
