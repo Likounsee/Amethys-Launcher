@@ -879,7 +879,6 @@ mod tests {
         (database, path)
     }
 
-
     #[test]
     fn deleting_a_library_entry_cascades_its_metadata_and_provider_ids() {
         let database = Database::open(":memory:").expect("database opens");
@@ -900,7 +899,9 @@ mod tests {
             .expect("external ID saved");
         assert!(database.remove_game(&game.id).expect("game removed"));
         assert_eq!(
-            database.get_game_metadata(&game.id).expect("metadata lookup"),
+            database
+                .get_game_metadata(&game.id)
+                .expect("metadata lookup"),
             None
         );
         assert!(
