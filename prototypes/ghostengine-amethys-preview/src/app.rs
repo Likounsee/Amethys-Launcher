@@ -47,6 +47,8 @@ pub struct App {
     pub selected_game: Option<usize>,
     search_query: String,
     search_focused: bool,
+    executable_draft: String,
+    editing_executable: bool,
     /// Whole page pre-rendered once (sidebar occupies the first WIN_H rows).
     content: Framebuffer,
     hits: Vec<Hit>,
@@ -75,6 +77,8 @@ impl App {
             selected_game: None,
             search_query: String::new(),
             search_focused: false,
+            executable_draft: String::new(),
+            editing_executable: false,
             content: blank(),
             hits: Vec::new(),
             scroll: ScrollViewport::new(Rect::new(SIDE_W as u32, 0, WIN_W - SIDE_W as u32, WIN_H), LayoutDirection::Vertical, WIN_H),
@@ -105,7 +109,14 @@ impl App {
         let h = (if self.page == Page::Library {
             pages::library_live(&mut p, vh, &self.games, self.st.lib_filter, &self.search_query, self.search_focused, self.core_error.as_deref(), self.notice.as_deref())
         } else if self.page == Page::Product {
-            pages::game_detail_live(&mut p, self.games.get(self.selected_game.unwrap_or(usize::MAX)), self.selected_game.unwrap_or(usize::MAX), self.notice.as_deref())
+            pages::game_detail_live(
+                &mut p,
+                self.games.get(self.selected_game.unwrap_or(usize::MAX)),
+                self.selected_game.unwrap_or(usize::MAX),
+                &self.executable_draft,
+                self.editing_executable,
+                self.notice.as_deref(),
+            )
         } else if self.page == Page::Store {
             pages::catalogue_unavailable(&mut p, vh)
         } else if self.page == Page::Settings {
@@ -126,6 +137,9 @@ impl App {
         if !matches!(action, Action::FocusLibrarySearch) {
             self.search_focused = false;
         }
+        if !matches!(action, Action::EditExecutable | Action::SaveExecutable | Action::CancelExecutableEdit) {
+            self.editing_executable = false;
+        }
         match action {
             Action::Go(page) => {
                 self.page = page;
@@ -133,7 +147,8 @@ impl App {
                 self.render(true);
             }
             Action::SelectGame(index) => {
-                if index < self.games.len() {
+                if let Some(game) = self.games.get(index) {
+                    self.executable_draft = game.executable.clone().unwrap_or_default();
                     self.selected_game = Some(index);
                     self.page = Page::Product;
                     self.render(true);
@@ -149,6 +164,45 @@ impl App {
             }
             Action::FocusLibrarySearch => {
                 self.search_focused = true;
+                self.render(false);
+            }
+            Action::EditExecutable => {
+                self.editing_executable = true;
+                self.search_focused = false;
+                self.render(false);
+            }
+            Action::SaveExecutable => {
+                let result = match self.selected_game.and_then(|index| self.games.get(index).map(|game| (index, game))) {
+                    Some((_, _)) if self.executable_draft.trim().is_empty() => {
+                        Err("Indique le chemin de l'exécutable avant de l'enregistrer.".to_owned())
+                    }
+                    Some((index, game)) => crate::core_client::set_game_executable(
+                        &game.id,
+                        self.executable_draft.trim(),
+                    )
+                    .map(|updated| (index, updated)),
+                    None => Err("Aucun jeu n'est sélectionné.".to_owned()),
+                };
+                match result {
+                    Ok((index, updated)) => {
+                        self.games[index] = updated;
+                        self.notice = Some("Chemin de l'exécutable enregistré dans Amethys Core.".to_owned());
+                        self.executable_draft = self.games[index].executable.clone().unwrap_or_default();
+                        self.editing_executable = false;
+                    }
+                    Err(error) => {
+                        self.notice = Some(format!("Impossible d'enregistrer l'exécutable : {error}"));
+                        self.editing_executable = true;
+                    }
+                }
+                self.render(false);
+            }
+            Action::CancelExecutableEdit => {
+                self.executable_draft = self.selected_game
+                    .and_then(|index| self.games.get(index))
+                    .and_then(|game| game.executable.clone())
+                    .unwrap_or_default();
+                self.editing_executable = false;
                 self.render(false);
             }
             Action::RefreshLibrary => {
@@ -409,17 +463,22 @@ impl App {
 
     /// Runs one frame: input -> state -> pixels. Returns whether to keep running.
     fn handle_search_input(&mut self, input: &InputState) {
-        if self.page != Page::Library || !self.search_focused {
+        if !self.search_focused && !self.editing_executable {
             return;
         }
         let mut changed = false;
+        let target = if self.search_focused {
+            &mut self.search_query
+        } else {
+            &mut self.executable_draft
+        };
         if input.backspace_pressed {
-            changed |= self.search_query.pop().is_some();
+            changed |= target.pop().is_some();
         }
         if input.paste_pressed {
             if let Some(text) = input.clipboard_text.as_deref() {
                 if !text.is_empty() {
-                    self.search_query.push_str(text);
+                    target.push_str(text);
                     changed = true;
                 }
             }
@@ -430,7 +489,7 @@ impl App {
                     ghostengine::TextInputEvent::Insert(text)
                     | ghostengine::TextInputEvent::CompositionCommit(text) => {
                         if !text.is_empty() {
-                            self.search_query.push_str(text);
+                            target.push_str(text);
                             changed = true;
                         }
                     }
@@ -441,17 +500,15 @@ impl App {
         } else {
             for character in &input.pressed_characters {
                 if !character.is_control() {
-                    self.search_query.push(*character);
+                    target.push(*character);
                     changed = true;
                 }
             }
         }
-        if input.enter_pressed {
+        if input.enter_pressed && self.search_focused {
             self.search_focused = false;
         }
-        if changed {
-            self.render(false);
-        } else if input.enter_pressed {
+        if changed || (input.enter_pressed && self.search_focused == false) {
             self.render(false);
         }
     }
@@ -466,8 +523,9 @@ impl App {
         }
         self.last_frame = Some(start);
         if input.escape_down {
-            if self.search_focused {
+            if self.search_focused || self.editing_executable {
                 self.search_focused = false;
+                self.editing_executable = false;
                 self.render(false);
             } else {
                 return Output { keep_running: false };
