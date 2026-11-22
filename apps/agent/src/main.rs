@@ -72,15 +72,13 @@ where
         command => {
             let database = database.lock().await;
             match command {
-                IpcCommand::ListGames => {
-                    database.list_games().and_then(|entries| {
-                        entries
-                            .into_iter()
-                            .map(|game| ipc_game_entry(&database, game))
-                            .collect::<Result<Vec<_>, _>>()
-                            .map(|games| IpcResponsePayload::Games { games })
-                    })
-                }
+                IpcCommand::ListGames => database.list_games().and_then(|entries| {
+                    entries
+                        .into_iter()
+                        .map(|game| ipc_game_entry(&database, game))
+                        .collect::<Result<Vec<_>, _>>()
+                        .map(|games| IpcResponsePayload::Games { games })
+                }),
                 IpcCommand::AddGame {
                     name,
                     platform,
@@ -164,7 +162,7 @@ where
                         game.map(|game| ipc_game_entry(&database, game))
                             .transpose()?
                             .map(|game| IpcResponsePayload::GameAdded { game })
-                        .ok_or_else(|| {
+                            .ok_or_else(|| {
                             amethys_errors::AmethysError::new(
                                 amethys_errors::ErrorCode::StorageQuery,
                                 "Game not found.",

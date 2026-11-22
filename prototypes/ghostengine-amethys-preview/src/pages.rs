@@ -958,6 +958,7 @@ mod live_library_tests {
             name: "Fixture".to_owned(),
             platform: platform.to_owned(),
             platform_id: None,
+            catalogue_game_id: Some("3000".to_owned()),
             install_path: ".".to_owned(),
             executable: None,
         }
