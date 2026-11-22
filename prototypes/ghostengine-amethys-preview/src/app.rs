@@ -48,6 +48,7 @@ pub struct App {
     pub core_error: Option<String>,
     pub notice: Option<String>,
     pub selected_game: Option<usize>,
+    pending_remove: Option<usize>,
     search_query: String,
     search_focused: bool,
     executable_draft: String,
@@ -81,6 +82,7 @@ impl App {
             core_error,
             notice: None,
             selected_game: None,
+            pending_remove: None,
             search_query: String::new(),
             search_focused: false,
             executable_draft: String::new(),
@@ -141,6 +143,29 @@ impl App {
         } else {
             page(&mut p, vh, &self.st)
         }).clamp(vh, MAX_PAGE_H as i32);
+        if let Some(index) = self.pending_remove {
+            // A modal must be the only interactive layer while it is open.
+            p.hits.clear();
+            let game_name = self.games.get(index).map(|game| game.name.as_str()).unwrap_or("ce jeu");
+            let title = format!("Retirer « {game_name} » ?");
+            let mw = 520;
+            let mh = 210;
+            let mx = (WIN_W as i32 - mw) / 2;
+            let my = (WIN_H as i32 - mh) / 2;
+            p.fill(0, 0, WIN_W as i32, WIN_H as i32, Color::rgba(0, 0, 0, 150));
+            p.rrect(mx, my, mw, mh, 18, BG);
+            p.rrect_line(mx, my, mw, mh, 18, Color::rgba(255, 255, 255, 35));
+            p.text(mx + 26, my + 22, 32, "Confirmer le retrait", 22.0, W::Semi, Color::WHITE);
+            p.paragraph(mx + 26, my + 64, mw - 52, 20, &title, 15.0, W::Med, Color::WHITE, 2);
+            p.paragraph(mx + 26, my + 100, mw - 52, 18, "Cette action retire uniquement l'entrée de la bibliothèque. Les fichiers du jeu sur le disque ne seront pas supprimés.", 12.0, W::Reg, Color::rgba(210, 205, 220, 255), 3);
+            p.rrect(mx + mw - 250, my + 158, 104, 34, 9, PANEL);
+            p.rrect_line(mx + mw - 250, my + 158, 104, 34, 9, LINE);
+            p.text(mx + mw - 232, my + 158, 34, "Annuler", 13.0, W::Med, TXT);
+            p.hit(mx + mw - 250, my + 158, 104, 34, 9, Action::CancelRemoveGame, true);
+            p.rrect(mx + mw - 134, my + 158, 108, 34, 9, VIO);
+            p.text(mx + mw - 116, my + 158, 34, "Retirer", 13.0, W::Semi, BG);
+            p.hit(mx + mw - 134, my + 158, 108, 34, 9, Action::ConfirmRemoveGame, true);
+        }
         self.hits = std::mem::take(&mut p.hits);
         self.content = p.fb;
         let old = self.scroll.offset();
@@ -271,13 +296,26 @@ impl App {
                 self.render(false);
             }
             Action::RemoveGame(index) => {
-                let result = match self.games.get(index) {
-                    Some(game) => crate::core_client::remove_game(&game.id),
+                if self.games.get(index).is_some() {
+                    self.pending_remove = Some(index);
+                    self.render(false);
+                } else {
+                    self.notice = Some("Ce jeu n'existe plus dans la bibliothèque chargée.".to_owned());
+                    self.render(false);
+                }
+            }
+            Action::CancelRemoveGame => {
+                self.pending_remove = None;
+                self.render(false);
+            }
+            Action::ConfirmRemoveGame => {
+                let result = match self.pending_remove.take().and_then(|index| self.games.get(index).map(|game| game.id.clone())) {
+                    Some(id) => crate::core_client::remove_game(&id),
                     None => Err("Ce jeu n'existe plus dans la bibliothèque chargée.".to_owned()),
                 };
                 match result {
                     Ok(true) => {
-                        self.notice = Some("Jeu retiré de la bibliothèque.".to_owned());
+                        self.notice = Some("Jeu retiré de la bibliothèque. Ses fichiers n'ont pas été supprimés.".to_owned());
                         self.st.lib_filter = 0;
                         self.page = Page::Library;
                         self.selected_game = None;

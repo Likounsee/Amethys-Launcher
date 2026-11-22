@@ -11,7 +11,7 @@ Cette feuille de route décrit les critères de sortie de la version 0.2. Elle d
 - Détection locale en tâche de fond et import individuel des installations trouvées.
 - Fiche d'un jeu avec métadonnées réellement enregistrées, vérification du dossier et configuration de l'exécutable.
 - Lancement après canonicalisation du chemin et vérification qu'il reste dans le dossier d'installation.
-- Retrait d'une entrée de bibliothèque sans supprimer les fichiers du jeu.
+- Retrait d'une entrée de bibliothèque avec confirmation explicite ; les fichiers du jeu restent intacts.
 - Snapshot GhostEngine épinglé dans `vendor/ghostengine`, donc un seul dépôt Git est nécessaire.
 
 ## Travaux nécessaires avant 0.2
@@ -25,7 +25,8 @@ Cette feuille de route décrit les critères de sortie de la version 0.2. Elle d
 ### P0 — Bibliothèque fiable
 - Tri réel (nom, plateforme, état d'installation) et filtres robustes.
 - Afficher les erreurs de chemin et les exécutables non configurés sans bloquer l'accès aux détails.
-- Éviter les actions destructrices involontaires : confirmation avant retrait et explication que les fichiers ne sont pas supprimés.
+- [x] Confirmation avant retrait et explication que les fichiers ne sont pas supprimés.
+- [ ] Tri réel (nom, plateforme, état) et navigation clavier complète.
 - Améliorer la détection/import : progression, annulation, déduplication et rapport des résultats.
 - Ne pas afficher de temps de jeu ni de dernière session tant que Core ne les fournit pas.
 
@@ -66,5 +67,6 @@ Cette feuille de route décrit les critères de sortie de la version 0.2. Elle d
 - Le catalogue de boutique n'est pas connecté.
 - Le temps de jeu et l'historique des sessions ne sont pas disponibles.
 - Le lancement est encore effectué côté client de bureau.
+- La confirmation de retrait est désormais présente ; tri et navigation clavier restent à faire.
 - Le backend de fenêtre/rendu GhostEngine est expérimental et temporaire.
 - La mise en page du launcher reste actuellement conçue autour d'une fenêtre 1600×900.
