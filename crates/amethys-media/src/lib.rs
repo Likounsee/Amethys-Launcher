@@ -85,6 +85,11 @@ impl MediaStore {
         Ok(())
     }
 
+    /// Root directory containing all local Amethys media.
+    pub fn root(&self) -> &Path {
+        &self.root
+    }
+
     pub fn library_root(&self) -> PathBuf {
         self.root.join("library")
     }
