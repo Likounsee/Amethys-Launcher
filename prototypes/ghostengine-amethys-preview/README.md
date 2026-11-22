@@ -46,7 +46,7 @@ If the agent is not running or the IPC connection fails, the UI reports the conn
 
 ## Not implemented yet
 
-The current Amethys Core IPC protocol does not expose playtime tracking, download/install management, store catalogue queries, wishlists, platform account linking or settings mutation. The UI does not pretend those features work. They need real Core services and IPC commands before they can be exposed as functional controls.
+Game launching is currently performed by the desktop client after it retrieves the saved executable metadata; it is not yet a Core IPC command. The current Core protocol does not expose playtime tracking, download/install management, store catalogue queries, wishlists, platform account linking or settings mutation. Those features need real services before they can be exposed as functional controls.
 
 The library is loaded at startup and can be refreshed manually. Real search, add/import flows inside the GUI, selected-game detail pages and live synchronization remain to be implemented. Executables can currently be configured through the existing Amethys CLI.
 
