@@ -153,8 +153,32 @@ impl<'a> Painter<'a> {
     /// Draws a decoded cover image into the rectangle (mipmapped when the aspect
     /// matches, otherwise centre-cropped with bilinear sampling). False if no image.
     pub fn draw_cover(&mut self, title: &str, x: i32, y: i32, w: i32, h: i32) -> bool {
+        self.draw_cover_asset(None, title, x, y, w, h)
+    }
+
+    pub fn draw_cover_for_game(
+        &mut self,
+        game_id: &str,
+        title: &str,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+    ) -> bool {
+        self.draw_cover_asset(Some(game_id), title, x, y, w, h)
+    }
+
+    fn draw_cover_asset(
+        &mut self,
+        game_id: Option<&str>,
+        title: &str,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+    ) -> bool {
         let Some(store) = self.covers else { return false };
-        let Some(mips) = store.get(title) else { return false };
+        let Some(mips) = game_id.and_then(|id| store.get_for_game(id, title)).or_else(|| store.get(title)) else { return false };
         let base = &mips.levels()[0];
         let (bw, bh) = (base.width() as i64, base.height() as i64);
         let dest = rect(x, y, w, h);

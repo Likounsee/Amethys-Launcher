@@ -40,7 +40,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let fonts_path = fonts_dir.to_string_lossy().into_owned();
     let fonts: &'static Fonts = Box::leak(Box::new(Fonts::load(&fonts_path)?));
-    let covers: &'static CoverStore = Box::leak(Box::new(CoverStore::load(&assets_dir.join("covers"))));
+    let media_library_dir = amethys_config::data_directory()
+        .ok()
+        .map(|directory| directory.join("media").join("library"));
+    let covers: &'static CoverStore = Box::leak(Box::new(CoverStore::load_with_library(
+        &assets_dir.join("covers"),
+        media_library_dir.as_deref(),
+    )));
     let library = core_client::list_games_or_start_agent();
     let mut app = App::new(fonts, covers, library);
 

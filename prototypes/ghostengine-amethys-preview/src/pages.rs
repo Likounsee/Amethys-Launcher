@@ -732,7 +732,12 @@ pub fn library_live(
             // Artwork-first library card, matching the visual language of the
             // original concept while keeping every label backed by Core data.
             p.rrect(x, cy, card_w, card_h, 14, PANEL);
-            gradient_cover(p, x, cy, card_w, 104, 14, &game.name, 160.0, PANEL);
+            if !p.draw_cover_for_game(&game.id, &game.name, x, cy, card_w, 104) {
+                let (top, bottom) = cover(&game.name);
+                p.gradient(x, cy, card_w, 104, 160.0, &[(0.0, hex(top)), (1.0, hex(bottom))]);
+            }
+            p.round_corners(x, cy, card_w, 104, 14, PANEL);
+            p.rrect_line(x, cy, card_w, 104, 14, ghostengine::Color::rgba(255, 255, 255, 22));
             chip(p, x + 12, cy + 12, &game.platform);
             let (status, color, status_bg) = if !exists {
                 ("Dossier introuvable", AMBER, AMBER_DARK)
@@ -842,6 +847,11 @@ pub fn game_detail_live(
     let y = 96;
     p.rrect(MX, y, MW, 410, 18, PANEL);
     p.rrect_line(MX, y, MW, 410, 18, LINE);
+    if !p.draw_cover_for_game(&game.id, &game.name, MX + MW - 330, y + 20, 290, 250) {
+        let (top, bottom) = cover(&game.name);
+        p.gradient(MX + MW - 330, y + 20, 290, 250, 160.0, &[(0.0, hex(top)), (1.0, hex(bottom))]);
+    }
+    p.round_corners(MX + MW - 330, y + 20, 290, 250, 14, PANEL);
     p.text(MX + 28, y + 24, 38, &game.name, 30.0, W::Disp, TXT);
     chip(p, MX + 28, y + 78, &game.platform);
 

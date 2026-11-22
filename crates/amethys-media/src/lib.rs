@@ -97,13 +97,13 @@ impl MediaStore {
     /// Path for an image owned by the user's local library entry.
     pub fn library_asset(
         &self,
-        game_id: u64,
+        game_id: &str,
         kind: MediaKind,
         extension: &str,
     ) -> Result<PathBuf, MediaPathError> {
         Ok(self
             .library_root()
-            .join(game_id.to_string())
+            .join(game_id)
             .join(format!("{}.{}", kind.file_stem(), valid_extension(extension)?)))
     }
 
@@ -116,7 +116,8 @@ impl MediaStore {
         kind: MediaKind,
         extension: &str,
     ) -> Result<PathBuf, MediaPathError> {
-        if external_id.is_empty() || external_id.len() > 256 {
+        validate_path_key(external_id)?;
+        if external_id.len() > 256 {
             return Err(MediaPathError::InvalidProvider);
         }
         let encoded_id = external_id
@@ -145,6 +146,18 @@ impl MediaStore {
     }
 }
 
+fn validate_path_key(value: &str) -> Result<(), MediaPathError> {
+    if value.is_empty()
+        || value.len() > 256
+        || value == "."
+        || value == ".."
+        || !value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+    {
+        return Err(MediaPathError::InvalidProvider);
+    }
+    Ok(())
+}
+
 fn valid_extension(extension: &str) -> Result<&str, MediaPathError> {
     match extension.trim_start_matches('.').to_ascii_lowercase().as_str() {
         "png" => Ok("png"),
@@ -165,9 +178,17 @@ mod tests {
     fn library_assets_are_independent_of_install_paths_and_provider_ids() {
         let store = MediaStore::new("amethys-data");
         assert_eq!(
-            store.library_asset(3000, MediaKind::Cover, "png").expect("valid path"),
-            PathBuf::from("amethys-data/media/library/3000/cover.png")
+            store.library_asset("game-3000", MediaKind::Cover, "png").expect("valid path"),
+            PathBuf::from("amethys-data/media/library/game-3000/cover.png")
         );
+    }
+
+    #[test]
+    fn library_game_ids_are_safe_path_components() {
+        let store = MediaStore::new("amethys-data");
+        assert!(store.library_asset("../escape", MediaKind::Cover, "png").is_err());
+        assert!(store.library_asset("game/42", MediaKind::Cover, "png").is_err());
+        assert!(store.library_asset("game-42", MediaKind::Cover, "png").is_ok());
     }
 
     #[test]

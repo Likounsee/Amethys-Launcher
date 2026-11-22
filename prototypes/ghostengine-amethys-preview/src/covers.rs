@@ -36,19 +36,54 @@ impl CoverStore {
 
     /// Decodes every supported image in `dir`; missing folders simply give an empty store.
     pub fn load(dir: &Path) -> Self {
+        Self::load_with_library(dir, None)
+    }
+
+    /// Loads catalogue artwork and optional per-game local cover files.
+    pub fn load_with_library(catalogue_dir: &Path, library_dir: Option<&Path>) -> Self {
         let mut store = Self::empty();
-        let Ok(entries) = std::fs::read_dir(dir) else {
-            return store;
-        };
         let start = Instant::now();
+        store.load_directory(catalogue_dir, false);
+        if let Some(library_dir) = library_dir {
+            store.load_directory(library_dir, true);
+        }
+        store.decode_ms = start.elapsed().as_secs_f64() * 1000.0;
+        store
+    }
+
+    fn load_directory(&mut self, dir: &Path, library_assets: bool) {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
         for entry in entries.flatten() {
+            let path = entry.path();
+            if library_assets {
+                if !entry.file_type().map(|kind| kind.is_dir()).unwrap_or(false) {
+                    continue;
+                }
+                let game_id = entry.file_name().to_string_lossy().into_owned();
+                let Some(asset) = ["png", "jpg", "jpeg", "bmp"]
+                    .iter()
+                    .map(|extension| path.join(format!("cover.{extension}")))
+                    .find(|candidate| candidate.is_file())
+                else {
+                    continue;
+                };
+                self.load_image(&asset, game_id);
+            } else {
+                let name = path.file_stem().and_then(|stem| stem.to_str()).unwrap_or_default().to_owned();
+                self.load_image(&path, name);
+            }
+        }
+    }
+
+    fn load_image(&mut self, path: &Path, name: String) {
             let path = entry.path();
             let ext = path.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).unwrap_or_default();
             if !matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "bmp") {
                 continue;
             }
-            let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_string();
-            let decoded = std::fs::read(&path)
+            let decoded = std::fs::read(path)
                 .map_err(|e| e.to_string())
                 .and_then(|bytes| decode_texture(&bytes).map_err(|e| format!("{e:?}")));
             match decoded.and_then(|t| MipmapChain::new(&t).map(|m| (t, m)).map_err(|e| format!("{e:?}"))) {
