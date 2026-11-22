@@ -32,6 +32,15 @@ struct Bench {
 pub const WIN_W: u32 = 1600;
 pub const WIN_H: u32 = 900;
 
+/// Produces a stable path key for comparing discovered and registered installs.
+fn normalized_install_path(path: &std::path::Path) -> String {
+    let normalized = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+    normalized.to_string_lossy()
+        .replace('\\\\', "/")
+        .trim_end_matches('/')
+        .to_ascii_lowercase()
+}
+
 pub struct Output {
     pub keep_running: bool,
 }
@@ -614,11 +623,37 @@ impl App {
             Some(Ok(mut detected)) => {
                 self.scan_receiver = None;
                 self.scan_in_progress = false;
-                detected.retain(|candidate| !self.games.iter().any(|game| {
-                    game.platform.eq_ignore_ascii_case(candidate.platform)
-                        && (candidate.platform_id.as_ref().is_some_and(|id| game.platform_id.as_ref() == Some(id))
-                            || std::path::Path::new(&game.install_path) == candidate.install_path.as_path())
-                }));
+                // Seed identity sets from the saved library, then deduplicate the
+                // discovery result itself. Paths are canonicalized when possible so
+                // aliases such as "..", symlinks and Windows case differences do
+                // not create duplicate import suggestions.
+                let mut known_platform_ids = std::collections::HashSet::new();
+                let mut known_install_paths = std::collections::HashSet::new();
+                for game in &self.games {
+                    let platform = game.platform.to_ascii_lowercase();
+                    if let Some(id) = game.platform_id.as_deref() {
+                        known_platform_ids.insert((platform.clone(), id.to_ascii_lowercase()));
+                    }
+                    known_install_paths.insert(normalized_install_path(&game.install_path));
+                }
+                detected.retain(|candidate| {
+                    let platform = candidate.platform.to_ascii_lowercase();
+                    let platform_id = candidate.platform_id.as_deref()
+                        .map(str::to_ascii_lowercase);
+                    let install_path = normalized_install_path(&candidate.install_path);
+                    let known_id = platform_id.as_ref().is_some_and(|id| {
+                        known_platform_ids.contains(&(platform.clone(), id.clone()))
+                    });
+                    let known_path = known_install_paths.contains(&install_path);
+                    if known_id || known_path {
+                        return false;
+                    }
+                    if let Some(id) = platform_id {
+                        known_platform_ids.insert((platform, id));
+                    }
+                    known_install_paths.insert(install_path);
+                    true
+                });
                 let count = detected.len();
                 self.detected_games = detected;
                 self.notice = Some(format!("{count} installation(s) détectée(s) à importer."));
@@ -640,10 +675,15 @@ impl App {
         }
         self.last_frame = Some(start);
         if input.escape_down {
-            if self.search_focused || self.editing_executable {
+            if self.pending_remove.is_some() {
+                self.pending_remove = None;
+                self.render(false);
+            } else if self.search_focused || self.editing_executable {
                 self.search_focused = false;
                 self.editing_executable = false;
                 self.render(false);
+            } else if self.stats_open {
+                self.stats_open = false;
             } else {
                 return Output { keep_running: false };
             }

@@ -28,7 +28,9 @@ Cette feuille de route décrit les critères de sortie de la version 0.2. Elle d
 - [ ] Navigation clavier complète et focus visuel cohérent.
 - Afficher les erreurs de chemin et les exécutables non configurés sans bloquer l'accès aux détails.
 - [x] Confirmation avant retrait et explication que les fichiers ne sont pas supprimés.
-- [ ] Améliorer la détection/import : progression, annulation, déduplication et rapport des résultats.
+- [x] Dédupliquer les résultats de détection contre la bibliothèque existante et entre eux (identité plateforme + chemin canonique).
+- [ ] Ajouter une progression détaillée et une annulation réelle du scan (nécessite une API de découverte coopérative).
+- [ ] Rapport détaillé des imports réussis/échoués et gestion des erreurs par entrée.
 - Ne pas afficher de temps de jeu ni de dernière session tant que Core ne les fournit pas.
 
 ### P1 — Cycle de vie des jeux
