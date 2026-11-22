@@ -844,6 +844,8 @@ pub fn settings_local(
     core_error: Option<&str>,
     game_count: usize,
     media_root: Option<&std::path::Path>,
+    scan_in_progress: bool,
+    scan_progress: Option<&amethys_discovery::DiscoveryProgress>,
 ) -> i32 {
     p.text(MX, 25, 42, "Paramètres", 40.0, W::Disp, TXT);
     p.text(MX, 72, 20, "Configuration locale d'Amethys", 13.0, W::Reg, MUT);
@@ -896,7 +898,29 @@ pub fn settings_local(
         MUT,
         3,
     );
-    info_y + 132
+    let actions_y = info_y + 156;
+    p.rrect(MX, actions_y, MW, 112, 16, PANEL);
+    p.rrect_line(MX, actions_y, MW, 112, 16, LINE);
+    p.text(MX + 20, actions_y + 12, 22, "Actions rapides", 17.0, W::Semi, TXT);
+
+    let refresh_x = MX + 20;
+    let refresh_y = actions_y + 54;
+    button(p, refresh_x, refresh_y, Some(220), "Actualiser la bibliothèque", false);
+    p.hit(refresh_x, refresh_y, 220, 44, 10, Action::RefreshLibrary, false);
+
+    let scan_x = refresh_x + 236;
+    if scan_in_progress {
+        let progress = scan_progress
+            .map(|value| format!("{} / {} · {}", value.completed, value.total, value.source))
+            .unwrap_or_else(|| "Analyse en préparation…".to_owned());
+        p.text(scan_x, actions_y + 34, 18, &progress, 11.0, W::Med, VIO);
+        button(p, scan_x, refresh_y, Some(220), "Annuler la détection", false);
+        p.hit(scan_x, refresh_y, 220, 44, 10, Action::CancelScan, false);
+    } else {
+        button(p, scan_x, refresh_y, Some(220), "Détecter les jeux installés", true);
+        p.hit(scan_x, refresh_y, 220, 44, 10, Action::ScanGames, false);
+    }
+    actions_y + 128
 }
 
 /// Game details populated only from the selected real Amethys library entry.
