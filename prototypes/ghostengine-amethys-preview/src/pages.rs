@@ -721,7 +721,7 @@ pub fn library_live(
         let columns = 4_i32;
         let gap = 18_i32;
         let card_w = (MW - gap * (columns - 1)) / columns;
-        let card_h = 228_i32;
+        let card_h = 276_i32;
         for (visible_index, (index, game)) in visible.iter().copied().enumerate() {
             let col = visible_index as i32 % columns;
             let row = visible_index as i32 / columns;
@@ -732,12 +732,12 @@ pub fn library_live(
             // Artwork-first library card, matching the visual language of the
             // original concept while keeping every label backed by Core data.
             p.rrect(x, cy, card_w, card_h, 14, PANEL);
-            if !p.draw_cover_for_game(&game.id, &game.name, x, cy, card_w, 104) {
+            if !p.draw_cover_for_game(&game.id, &game.name, x, cy, card_w, 150) {
                 let (top, bottom) = cover(&game.name);
-                p.gradient(x, cy, card_w, 104, 160.0, &[(0.0, hex(top)), (1.0, hex(bottom))]);
+                p.gradient(x, cy, card_w, 150, 160.0, &[(0.0, hex(top)), (1.0, hex(bottom))]);
             }
-            p.round_corners(x, cy, card_w, 104, 14, PANEL);
-            p.rrect_line(x, cy, card_w, 104, 14, ghostengine::Color::rgba(255, 255, 255, 22));
+            p.round_corners(x, cy, card_w, 150, 14, PANEL);
+            p.rrect_line(x, cy, card_w, 150, 14, ghostengine::Color::rgba(255, 255, 255, 22));
             chip(p, x + 12, cy + 12, &game.platform);
             let (status, color, status_bg) = if !exists {
                 ("Dossier introuvable", AMBER, AMBER_DARK)
@@ -749,20 +749,20 @@ pub fn library_live(
                 ("À configurer", AMBER, AMBER_DARK)
             };
             badge_right(p, x + card_w - 12, cy + 12, status, status_bg, color);
-            cover_title(p, x + 2, cy, card_w - 4, 104, &game.name, 19.0);
-            p.fill(x + 1, cy + 104, card_w - 2, card_h - 105, PANEL);
-            p.paragraph(x + 14, cy + 112, card_w - 28, 16, &game.install_path, 10.0, W::Reg, MUT, 2);
-            p.hit(x, cy, card_w, 104, 14, Action::SelectGame(index), false);
+            cover_title(p, x + 2, cy, card_w - 4, 150, &game.name, 19.0);
+            p.fill(x + 1, cy + 150, card_w - 2, card_h - 151, PANEL);
+            p.paragraph(x + 14, cy + 158, card_w - 28, 16, &game.install_path, 10.0, W::Reg, MUT, 2);
+            p.hit(x, cy, card_w, 150, 14, Action::SelectGame(index), false);
             let remove_x = x + card_w - 174;
-            p.rrect(remove_x, cy + 180, 72, 30, 8, ACT);
-            p.rrect_line(remove_x, cy + 180, 72, 30, 8, LINE);
-            p.text(remove_x + 12, cy + 180, 30, "Retirer", 12.0, W::Med, SOFT);
-            p.hit(remove_x, cy + 180, 72, 30, 8, Action::RemoveGame(index), false);
+            p.rrect(remove_x, cy + 226, 72, 30, 8, ACT);
+            p.rrect_line(remove_x, cy + 226, 72, 30, 8, LINE);
+            p.text(remove_x + 12, cy + 226, 30, "Retirer", 12.0, W::Med, SOFT);
+            p.hit(remove_x, cy + 226, 72, 30, 8, Action::RemoveGame(index), false);
             if launchable {
                 let launch_x = x + card_w - 94;
-                p.rrect(launch_x, cy + 180, 80, 30, 8, VIO);
-                p.text(launch_x + 14, cy + 180, 30, "Lancer", 12.0, W::Semi, VIO_DARK);
-                p.hit(launch_x, cy + 180, 80, 30, 8, Action::LaunchGame(index), false);
+                p.rrect(launch_x, cy + 226, 80, 30, 8, VIO);
+                p.text(launch_x + 14, cy + 226, 30, "Lancer", 12.0, W::Semi, VIO_DARK);
+                p.hit(launch_x, cy + 226, 80, 30, 8, Action::LaunchGame(index), false);
             }
             p.rrect_line(x, cy, card_w, card_h, 14, LINE);
         }
