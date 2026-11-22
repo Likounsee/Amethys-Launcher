@@ -698,7 +698,9 @@ impl Database {
                 },
             )
             .optional()
-            .map_err(|error| storage_error(format!("Could not read catalogue game metadata: {error}")))
+            .map_err(|error| {
+                storage_error(format!("Could not read catalogue game metadata: {error}"))
+            })
     }
 
     /// Adds or updates one provider ID. A provider ID can identify only one Amethys game.
@@ -858,7 +860,11 @@ impl Database {
                 },
             )
             .optional()
-            .map_err(|error| storage_error(format!("Could not find catalogue game by external ID: {error}")))
+            .map_err(|error| {
+                storage_error(format!(
+                    "Could not find catalogue game by external ID: {error}"
+                ))
+            })
     }
 
     /// Links an installation to an existing canonical game without matching by title.
