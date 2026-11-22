@@ -42,7 +42,7 @@ fn list_games_with_timeouts(
                 transport::connect(directory.join("amethys.sock")),
             )
             .await
-            .map_err(|_| "Délai dépassé lors de la connexion à Amethys Core (5 s).".to_owned())?
+            .map_err(|_| format!("Délai dépassé lors de la connexion à Amethys Core ({:.1} s).", connect_timeout.as_secs_f32()))?
             .map_err(|error| error.to_string())?
         };
 
