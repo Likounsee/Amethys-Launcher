@@ -15,24 +15,33 @@ pub fn list_games() -> Result<Vec<IpcGameEntry>, String> {
 
     runtime.block_on(async {
         #[cfg(windows)]
-        let mut stream = transport::connect(r"\\.\pipe\amethys-core")
-            .await
-            .map_err(|error| error.to_string())?;
+        let mut stream = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            transport::connect(r"\\.\pipe\amethys-core"),
+        )
+        .await
+        .map_err(|_| "Délai dépassé lors de la connexion à Amethys Core (5 s).".to_owned())?
+        .map_err(|error| error.to_string())?;
 
         #[cfg(unix)]
         let mut stream = {
             let directory = amethys_config::data_directory()
                 .map_err(|error| format!("Dossier de données Amethys indisponible : {error}"))?;
-            transport::connect(directory.join("amethys.sock"))
-                .await
-                .map_err(|error| error.to_string())?
+            tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                transport::connect(directory.join("amethys.sock")),
+            )
+            .await
+            .map_err(|_| "Délai dépassé lors de la connexion à Amethys Core (5 s).".to_owned())?
+            .map_err(|error| error.to_string())?
         };
 
-        let response = send_request(
-            &mut stream,
-            IpcRequest::new(IpcCommand::ListGames),
+        let response = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            send_request(&mut stream, IpcRequest::new(IpcCommand::ListGames)),
         )
         .await
+        .map_err(|_| "Amethys Core n'a pas répondu dans les 15 secondes.".to_owned())?
         .map_err(|error| error.to_string())?;
 
         match response.result {
@@ -108,24 +117,36 @@ pub fn remove_game(id: &str) -> Result<bool, String> {
 
     runtime.block_on(async {
         #[cfg(windows)]
-        let mut stream = transport::connect(r"\\.\pipe\amethys-core")
-            .await
-            .map_err(|error| error.to_string())?;
+        let mut stream = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            transport::connect(r"\\.\pipe\amethys-core"),
+        )
+        .await
+        .map_err(|_| "Délai dépassé lors de la connexion à Amethys Core (5 s).".to_owned())?
+        .map_err(|error| error.to_string())?;
 
         #[cfg(unix)]
         let mut stream = {
             let directory = amethys_config::data_directory()
                 .map_err(|error| format!("Dossier de données Amethys indisponible : {error}"))?;
-            transport::connect(directory.join("amethys.sock"))
-                .await
-                .map_err(|error| error.to_string())?
+            tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                transport::connect(directory.join("amethys.sock")),
+            )
+            .await
+            .map_err(|_| "Délai dépassé lors de la connexion à Amethys Core (5 s).".to_owned())?
+            .map_err(|error| error.to_string())?
         };
 
-        let response = send_request(
-            &mut stream,
-            IpcRequest::new(IpcCommand::RemoveGame { id: id.to_owned() }),
+        let response = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            send_request(
+                &mut stream,
+                IpcRequest::new(IpcCommand::RemoveGame { id: id.to_owned() }),
+            ),
         )
         .await
+        .map_err(|_| "Amethys Core n'a pas répondu dans les 15 secondes.".to_owned())?
         .map_err(|error| error.to_string())?;
 
         match response.result {
@@ -178,5 +199,64 @@ pub fn list_games_or_start_agent() -> Result<Vec<IpcGameEntry>, String> {
                 "Amethys Core n'a pas répondu après son démarrage. Première erreur IPC : {initial_error}"
             ))
         }
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn fixture() -> (std::path::PathBuf, IpcGameEntry) {
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let root = std::env::temp_dir().join(format!("amethys-launch-check-{}-{nonce}", std::process::id()));
+        std::fs::create_dir_all(root.join("bin")).unwrap();
+        std::fs::write(root.join("bin/game.exe"), b"test executable").unwrap();
+        let game = IpcGameEntry {
+            id: "test-game".to_owned(),
+            name: "Test Game".to_owned(),
+            platform: "Tests".to_owned(),
+            platform_id: None,
+            install_path: root.to_string_lossy().into_owned(),
+            executable: Some("bin/game.exe".to_owned()),
+        };
+        (root, game)
+    }
+
+    #[test]
+    fn resolves_executable_inside_install_root() {
+        let (root, game) = fixture();
+        let resolved = resolve_launch_executable(&game).unwrap();
+        assert_eq!(resolved.0, root.canonicalize().unwrap());
+        assert!(resolved.1.ends_with("bin/game.exe"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn rejects_parent_directory_traversal() {
+        let (root, mut game) = fixture();
+        game.executable = Some("../outside.exe".to_owned());
+        assert!(resolve_launch_executable(&game).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn rejects_absolute_executable_outside_install_root() {
+        let (root, mut game) = fixture();
+        let outside = root.parent().unwrap().join("outside-amethys-test.exe");
+        std::fs::write(&outside, b"outside").unwrap();
+        game.executable = Some(outside.to_string_lossy().into_owned());
+        assert!(resolve_launch_executable(&game).is_err());
+        std::fs::remove_file(outside).unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn rejects_missing_executable() {
+        let (root, mut game) = fixture();
+        game.executable = Some("bin/missing.exe".to_owned());
+        assert!(resolve_launch_executable(&game).is_err());
+        std::fs::remove_dir_all(root).unwrap();
     }
 }
