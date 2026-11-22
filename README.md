@@ -8,15 +8,34 @@
 
 A free, community-driven, cross-platform game library and launcher client.
 
-Amethys Launcher aims to bring game libraries, installations and platform integrations together without replacing official stores, accounts, licenses, DRM or platform policies. Updates and save synchronization are future goals, not 0.1 features.
+Amethys Launcher aims to bring game libraries, installations and platform integrations together without replacing official stores, accounts, licenses, DRM or platform policies.
 
-## Project status
+## Project status — first public version 0.1.0
 
-The project is preparing its **0.1 release**. The Rust core, local SQLite library, IPC service and CLI are implemented. Windows and Linux game discovery, explicit import, library management, read-only verification and configured-executable launch are in place. Current work is focused on code hardening, automated Windows/Linux regression tests, documentation and release packaging. Real-install checks are recorded separately for each launcher; physical testing of every launcher or operating system is not a 0.1 blocker. Cases that have only fixture/CI coverage or have not been tested must remain clearly labelled as such. The graphical interface and online store/catalogue come later.
+**Amethys Launcher 0.1.0 is the very first public version of the project. It is an experimental technical prototype released for testing, feedback and early evaluation only.**
+
+**The project is not finished and is not yet a complete, reliable or production-ready launcher. It is not intended for everyday use or to manage a user's full game library.** The current release is a small first milestone: it makes a limited part of the technical foundation available so that the basic architecture and workflows can be tried on Windows and Linux.
+
+This first version mainly provides:
+- a Rust-based background agent and command-line client (there is no graphical interface);
+- local communication between the agent and CLI;
+- a local SQLite database and configuration;
+- initial, read-only detection of game installations from selected launchers;
+- explicit import and basic local library operations;
+- read-only path/executable checks and launching of an explicitly configured executable;
+- portable Windows and Linux test packages.
+
+These features are partial and have important limitations. Detection coverage varies by launcher, and a detected installation is not a guarantee that a game will launch correctly. Automated builds and tests confirm only the cases covered by CI and fixtures; they do not establish broad compatibility or production readiness. See [launcher discovery coverage](doc/discovery/LAUNCHER-COVERAGE.md) for the exact evidence and pending tests.
+
+The 0.1.0 release does **not** include a graphical interface, a store/catalogue, game downloading or installation, account management, cloud saves, backups, automatic updates, or a finished end-user experience. The portable archives are test binaries, not installers. Use them only if you are comfortable testing early software and reporting issues. Keep official launchers as the source of truth for installation, updates, authentication and licenses.
+
+### What comes next
+
+Development is continuing beyond this first milestone. Planned work includes consolidating and hardening the core, expanding real-world testing and launcher compatibility, improving reliability and diagnostics, and progressively designing the future user experience and larger features such as a graphical interface and store/catalogue. These are future development directions, not features promised by 0.1.0; priorities and scope may evolve as the project is tested.
 
 ## Principles
 
-- Windows and Linux are the supported targets for version 0.1. macOS development is paused until a Mac test machine is available.
+- Windows and Linux are the initial supported test targets. macOS is deferred until a Mac test machine is available.
 - The core remains independent from any graphical interface.
 - Official platform APIs and permitted mechanisms only; no DRM, licensing, authentication or anti-cheat circumvention.
 - SQLite is the initial local database.
@@ -38,7 +57,7 @@ The project is preparing its **0.1 release**. The Rust core, local SQLite librar
 9. Explicit import, local library management and read-only path verification.
 10. Cross-platform CI and release archive generation.
 
-The desktop GUI, Amethys online store/catalogue, downloads, save synchronization and account system are intentionally out of scope for this foundation stage.
+The desktop GUI, Amethys online store/catalogue, downloads, save synchronization and account system are intentionally outside the first 0.1.0 milestone.
 
 ## Build and test
 
