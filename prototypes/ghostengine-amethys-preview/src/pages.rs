@@ -873,12 +873,20 @@ pub fn game_detail_live(
     };
 
     let y = 96;
-    p.rrect(MX, y, MW, 410, 18, PANEL);
-    p.rrect_line(MX, y, MW, 410, 18, LINE);
+    const SUMMARY_HEIGHT: i32 = 480;
+    p.rrect(MX, y, MW, SUMMARY_HEIGHT, 18, PANEL);
+    p.rrect_line(MX, y, MW, SUMMARY_HEIGHT, 18, LINE);
     let artwork_id = game.catalogue_game_id.as_deref().unwrap_or(&game.id);
     if !p.draw_cover_for_game(artwork_id, &game.id, &game.name, MX + MW - 330, y + 20, 290, 250) {
         let (top, bottom) = cover(&game.name);
-        p.gradient(MX + MW - 330, y + 20, 290, 250, 160.0, &[(0.0, hex(top)), (1.0, hex(bottom))]);
+        p.gradient(
+            MX + MW - 330,
+            y + 20,
+            290,
+            250,
+            160.0,
+            &[(0.0, hex(top)), (1.0, hex(bottom))],
+        );
     }
     p.round_corners(MX + MW - 330, y + 20, 290, 250, 14, PANEL);
     p.text(MX + 28, y + 24, 38, &game.name, 30.0, W::Disp, TXT);
@@ -913,51 +921,125 @@ pub fn game_detail_live(
     }
 
     if let Some(message) = notice {
-        let color = if message.starts_with("Échec") || message.starts_with("Impossible") { AMBER } else { GREEN };
-        p.paragraph(MX + 28, y + 356, MW - 56, 18, message, 12.0, W::Med, color, 2);
+        let color = if message.starts_with("Échec") || message.starts_with("Impossible") {
+            AMBER
+        } else {
+            GREEN
+        };
+        p.paragraph(MX + 28, y + 394, MW - 56, 18, message, 12.0, W::Med, color, 2);
     }
 
     let configure_x = MX + MW - 300;
-    p.rrect(configure_x, y + 366, 116, 30, 8, PANEL);
-    p.rrect_line(configure_x, y + 366, 116, 30, 8, LINE);
-    p.text(configure_x + 12, y + 366, 30, "Configurer", 12.0, W::Med, SOFT);
-    p.hit(configure_x, y + 366, 116, 30, 8, Action::EditExecutable, false);
+    p.rrect(configure_x, y + 430, 116, 30, 8, PANEL);
+    p.rrect_line(configure_x, y + 430, 116, 30, 8, LINE);
+    p.text(configure_x + 12, y + 430, 30, "Configurer", 12.0, W::Med, SOFT);
+    p.hit(configure_x, y + 430, 116, 30, 8, Action::EditExecutable, false);
 
     let remove_x = MX + MW - 176;
-    p.rrect(remove_x, y + 366, 72, 30, 8, ACT);
-    p.rrect_line(remove_x, y + 366, 72, 30, 8, LINE);
-    p.text(remove_x + 12, y + 366, 30, "Retirer", 12.0, W::Med, SOFT);
-    p.hit(remove_x, y + 366, 72, 30, 8, Action::RemoveGame(index), false);
+    p.rrect(remove_x, y + 430, 72, 30, 8, ACT);
+    p.rrect_line(remove_x, y + 430, 72, 30, 8, LINE);
+    p.text(remove_x + 12, y + 430, 30, "Retirer", 12.0, W::Med, SOFT);
+    p.hit(remove_x, y + 430, 72, 30, 8, Action::RemoveGame(index), false);
 
     if directory_exists && executable_exists {
         let launch_x = MX + MW - 94;
-        p.rrect(launch_x, y + 366, 80, 30, 8, VIO);
-        p.text(launch_x + 14, y + 366, 30, "Lancer", 12.0, W::Semi, VIO_DARK);
-        p.hit(launch_x, y + 366, 80, 30, 8, Action::LaunchGame(index), false);
+        p.rrect(launch_x, y + 430, 80, 30, 8, VIO);
+        p.text(launch_x + 14, y + 430, 30, "Lancer", 12.0, W::Semi, VIO_DARK);
+        p.hit(launch_x, y + 430, 80, 30, 8, Action::LaunchGame(index), false);
     }
-    let metadata_bottom = if let Some(metadata) = game.catalogue_metadata.as_ref() {
-        let metadata_y = y + 430;
-        p.rrect(MX, metadata_y, MW, 194, 16, PANEL);
-        p.rrect_line(MX, metadata_y, MW, 194, 16, LINE);
-        p.text(MX + 22, metadata_y + 10, 24, "À propos", 17.0, W::Semi, TXT);
+
+    let metadata_y = y + SUMMARY_HEIGHT + 16;
+    let mut metadata_height = 132;
+    p.rrect(MX, metadata_y, MW, metadata_height, 16, PANEL);
+    p.rrect_line(MX, metadata_y, MW, metadata_height, 16, LINE);
+    p.text(MX + 22, metadata_y + 10, 24, "À propos", 17.0, W::Semi, TXT);
+
+    if let Some(metadata) = game.catalogue_metadata.as_ref() {
         let developer = metadata.developer.as_deref().unwrap_or("Non renseigné");
         let publisher = metadata.publisher.as_deref().unwrap_or("Non renseigné");
         let release_date = metadata.release_date.as_deref().unwrap_or("Non renseignée");
-        p.text(MX + 22, metadata_y + 38, 18, &format!("Développeur : {developer}"), 12.0, W::Med, SOFT);
-        p.text(MX + 22, metadata_y + 58, 18, &format!("Éditeur : {publisher}"), 12.0, W::Med, SOFT);
-        p.text(MX + 22, metadata_y + 78, 18, &format!("Sortie : {release_date}"), 12.0, W::Med, SOFT);
-        if !metadata.genres.is_empty() {
-            let genres = metadata.genres.join(" · ");
-            p.paragraph(MX + 22, metadata_y + 98, MW - 44, 18, &format!("Genres : {genres}"), 12.0, W::Reg, MUT, 2);
-        }
-        if let Some(description) = metadata.description.as_deref().filter(|value| !value.trim().is_empty()) {
-            p.paragraph(MX + 22, metadata_y + 126, MW - 44, 18, description, 12.0, W::Reg, MUT, 3);
-        }
-        metadata_y + 206
-    } else {
-        y + 450
-    };
+        p.paragraph(
+            MX + 22,
+            metadata_y + 40,
+            MW - 44,
+            18,
+            &format!("Développeur : {developer}  ·  Éditeur : {publisher}  ·  Sortie : {release_date}"),
+            12.0,
+            W::Med,
+            SOFT,
+            2,
+        );
 
+        let mut content_y = metadata_y + 66;
+        if !metadata.genres.is_empty() {
+            let genres = format!("Genres : {}", metadata.genres.join(" · "));
+            let genre_lines = p.wrap(&genres, 12.0, W::Reg, MW - 44).len().clamp(1, 3);
+            let genre_height = p.paragraph(
+                MX + 22,
+                content_y,
+                MW - 44,
+                18,
+                &genres,
+                12.0,
+                W::Reg,
+                MUT,
+                3,
+            );
+            content_y += genre_height + 8;
+            metadata_height += (genre_lines as i32 - 1) * 18;
+        }
+
+        if let Some(description) = metadata
+            .description
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+        {
+            let description_lines = p.wrap(description, 12.0, W::Reg, MW - 44).len();
+            let visible_lines = description_lines.min(14);
+            let description_height = p.paragraph(
+                MX + 22,
+                content_y,
+                MW - 44,
+                18,
+                description,
+                12.0,
+                W::Reg,
+                MUT,
+                visible_lines,
+            );
+            content_y += description_height;
+            metadata_height = (content_y - metadata_y + 18).max(metadata_height);
+            if description_lines > visible_lines {
+                p.text(
+                    MX + 22,
+                    content_y + 2,
+                    16,
+                    "Description raccourcie dans cet aperçu.",
+                    11.0,
+                    W::Reg,
+                    MUT,
+                );
+                metadata_height += 18;
+            }
+        }
+    } else {
+        p.paragraph(
+            MX + 22,
+            metadata_y + 44,
+            MW - 44,
+            18,
+            "Aucune métadonnée catalogue n'est encore associée à ce jeu. Les informations apparaîtront ici lorsqu'elles seront disponibles.",
+            12.0,
+            W::Reg,
+            MUT,
+            3,
+        );
+    }
+    p.rrect(MX, metadata_y, MW, metadata_height, 16, PANEL);
+    p.rrect_line(MX, metadata_y, MW, metadata_height, 16, LINE);
+    p.text(MX + 22, metadata_y + 10, 24, "À propos", 17.0, W::Semi, TXT);
+
+    let metadata_bottom = metadata_y + metadata_height;
     if editing_executable {
         let editor_y = metadata_bottom + 12;
         p.rrect(MX, editor_y, MW, 142, 16, PANEL);
@@ -982,9 +1064,15 @@ pub fn game_detail_live(
         } else {
             executable_draft
         };
-        p.text(input_x + 12, input_y, 34, display_path, 12.0, W::Reg, if executable_draft.is_empty() { MUT } else { TXT });
-        p.hit(input_x, input_y, input_w, 34, 8, Action::EditExecutable, false);
-
+        p.text(
+            input_x + 12,
+            input_y,
+            34,
+            display_path,
+            12.0,
+            W::Reg,
+            if executable_draft.is_empty() { MUT } else { TXT },
+        );
         let save_x = MX + MW - 22 - 120;
         button(p, save_x, editor_y + 94, Some(120), "Enregistrer", true);
         p.hit(save_x, editor_y + 94, 120, 44, 10, Action::SaveExecutable, false);
@@ -996,7 +1084,6 @@ pub fn game_detail_live(
         metadata_bottom + 12
     }
 }
-
 
 #[cfg(test)]
 mod live_library_tests {
