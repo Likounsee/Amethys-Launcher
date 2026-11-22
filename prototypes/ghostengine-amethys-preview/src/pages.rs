@@ -582,6 +582,9 @@ pub fn library_live(
 ) -> i32 {
     p.text(MX, 25, 42, "Bibliothèque", 40.0, W::Disp, TXT);
     p.text(MX, 74, 22, &format!("{} jeu(x) enregistré(s) dans votre bibliothèque locale", games.len()), 14.0, W::Reg, MUT);
+    let refresh_x = MX + MW - 156;
+    button(p, refresh_x, 24, Some(156), "Actualiser", false);
+    p.hit(refresh_x, 24, 156, 44, 12, Action::RefreshLibrary, false);
 
     if let Some(error) = core_error {
         p.rrect(MX, 122, MW, 112, 14, PANEL);
