@@ -129,7 +129,7 @@ impl App {
                 self.render(false);
             }
             Action::RefreshLibrary => {
-                match crate::core_client::list_games() {
+                match crate::core_client::list_games_or_start_agent() {
                     Ok(games) => { self.games = games; self.core_error = None; self.notice = Some("Bibliothèque actualisée.".to_owned()); }
                     Err(error) => { self.core_error = Some(error); self.notice = None; }
                 }
