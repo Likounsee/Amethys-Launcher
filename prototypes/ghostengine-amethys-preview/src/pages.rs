@@ -612,6 +612,7 @@ pub fn library_live(
     detected: &[amethys_discovery::DetectedGame],
     scan_in_progress: bool,
     selected_filter: usize,
+    sort_mode: usize,
     search_query: &str,
     search_focused: bool,
     core_error: Option<&str>,
@@ -625,10 +626,18 @@ pub fn library_live(
     let active_filter = if selected_filter <= platforms.len() { selected_filter } else { 0 };
     let selected_platform = active_filter.checked_sub(1)
         .and_then(|index| platforms.get(index)).map(String::as_str);
-    let visible = games.iter().enumerate()
+    let mut visible = games.iter().enumerate()
         .filter(|(_, game)| selected_platform.is_none_or(|platform| game.platform.trim().eq_ignore_ascii_case(platform)))
         .filter(|(_, game)| library_matches_query(game, search_query))
         .collect::<Vec<_>>();
+    visible.sort_by(|(_, left), (_, right)| {
+        let ordering = match sort_mode % 3 {
+            0 => left.name.to_lowercase().cmp(&right.name.to_lowercase()),
+            1 => left.platform.to_lowercase().cmp(&right.platform.to_lowercase()),
+            _ => crate::core_client::can_launch(right).cmp(&crate::core_client::can_launch(left)),
+        };
+        ordering.then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+    });
 
     p.circle(search_x + 23, 46, 7, MUT);
     p.circle(search_x + 23, 46, 5, PANEL);
@@ -662,6 +671,11 @@ pub fn library_live(
         let _ = pill(p, filter_x, filter_y, platform, active_filter == index + 1, Some(Action::LibFilter(index + 1)));
         filter_x += width + 8;
     }
+    let sort_labels = ["Nom", "Plateforme", "État"];
+    let sort_label = sort_labels[sort_mode % sort_labels.len()];
+    let sort_x = MX + MW - 184;
+    p.text_right(MX + MW - 42, filter_y + 4, 28, &format!("Trier : {sort_label}  ↻"), 12.0, W::Med, SOFT);
+    p.hit(sort_x, filter_y, 184, 34, 8, Action::CycleLibrarySort, false);
     let content_y = filter_y + 50;
     if let Some(error) = core_error {
         p.rrect(MX, content_y, MW, 100, 14, PANEL);

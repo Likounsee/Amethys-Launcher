@@ -41,6 +41,7 @@ pub struct App {
     covers: &'static CoverStore,
     pub page: Page,
     pub st: State,
+    library_sort: usize,
     pub games: Vec<IpcGameEntry>,
     pub detected_games: Vec<amethys_discovery::DetectedGame>,
     scan_receiver: Option<std::sync::mpsc::Receiver<Vec<amethys_discovery::DetectedGame>>>,
@@ -75,6 +76,7 @@ impl App {
             covers,
             page: Page::Library,
             st: State::default(),
+            library_sort: 0,
             games,
             detected_games: Vec::new(),
             scan_receiver: None,
@@ -122,6 +124,7 @@ impl App {
                 &self.detected_games,
                 self.scan_in_progress,
                 self.st.lib_filter,
+                self.library_sort,
                 &self.search_query,
                 self.search_focused,
                 self.core_error.as_deref(),
@@ -202,6 +205,10 @@ impl App {
             }
             Action::LibFilter(i) => {
                 self.st.lib_filter = i;
+                self.render(false);
+            }
+            Action::CycleLibrarySort => {
+                self.library_sort = (self.library_sort + 1) % 3;
                 self.render(false);
             }
             Action::FocusLibrarySearch => {

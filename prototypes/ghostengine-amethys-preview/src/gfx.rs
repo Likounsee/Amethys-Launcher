@@ -40,6 +40,7 @@ pub enum Action {
     Go(Page),
     StoreFilter(usize),
     LibFilter(usize),
+    CycleLibrarySort,
     RefreshLibrary,
     ScanGames,
     ImportDetectedGame(usize),
