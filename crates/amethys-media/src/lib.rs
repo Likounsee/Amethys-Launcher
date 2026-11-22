@@ -56,7 +56,7 @@ impl ProviderKey {
 pub enum MediaPathError {
     #[error("provider key or game ID is invalid")]
     InvalidProvider,
-    #[error("media extension must be png, jpg, jpeg, webp or avif")]
+    #[error("media extension must be png, jpg, jpeg or bmp")]
     InvalidExtension,
     #[error("media directory could not be prepared: {0}")]
     Io(#[from] io::Error),
@@ -171,8 +171,7 @@ fn valid_extension(extension: &str) -> Result<&str, MediaPathError> {
         "png" => Ok("png"),
         "jpg" => Ok("jpg"),
         "jpeg" => Ok("jpeg"),
-        "webp" => Ok("webp"),
-        "avif" => Ok("avif"),
+        "bmp" => Ok("bmp"),
         _ => Err(MediaPathError::InvalidExtension),
     }
 }

@@ -40,9 +40,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let fonts_path = fonts_dir.to_string_lossy().into_owned();
     let fonts: &'static Fonts = Box::leak(Box::new(Fonts::load(&fonts_path)?));
-    let media_library_dir = amethys_config::data_directory()
+    let media_store = amethys_config::data_directory()
         .ok()
-        .map(|directory| directory.join("media").join("library"));
+        .map(amethys_media::MediaStore::new);
+    if let Some(store) = &media_store {
+        if let Err(error) = store.prepare() {
+            eprintln!("Could not prepare Amethys media directories: {error}");
+        }
+    }
+    let media_library_dir = media_store.map(|store| store.library_root());
     let covers: &'static CoverStore = Box::leak(Box::new(CoverStore::load_with_library(
         &assets_dir.join("covers"),
         media_library_dir.as_deref(),

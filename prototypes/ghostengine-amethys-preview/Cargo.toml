@@ -29,6 +29,7 @@ ghostengine = { path = "../../vendor/ghostengine", features = ["image-decoding"]
 amethys-config = { path = "../../crates/amethys-config" }
 amethys-ipc = { path = "../../crates/amethys-ipc" }
 amethys-discovery = { path = "../../crates/amethys-discovery" }
+amethys-media = { path = "../../crates/amethys-media" }
 tokio = { version = "1", features = ["io-util", "net", "rt", "time"] }
 png = "0.17"
 
