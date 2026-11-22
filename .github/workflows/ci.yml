@@ -293,6 +293,26 @@ jobs:
           fi
           archive-check/amethysctl status
 
+  desktop-linux-unit-tests:
+    name: Desktop library tests (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Amethys Launcher
+        uses: actions/checkout@v4
+        with:
+          path: Amethys-Launcher
+      - name: Checkout experimental GhostEngine
+        uses: actions/checkout@v4
+        with:
+          repository: Likounsee/GhostEngine
+          ref: GhostEngine
+          path: GhostEngine
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Run desktop library and filesystem-safety tests
+        working-directory: Amethys-Launcher
+        run: cargo test --no-default-features --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml --lib
+
   desktop-integration:
     name: GhostEngine desktop integration
     runs-on: windows-latest
