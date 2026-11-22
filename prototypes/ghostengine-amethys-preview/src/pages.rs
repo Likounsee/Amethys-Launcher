@@ -574,53 +574,102 @@ pub fn settings(p: &mut Painter, vh: i32, _st: &State) -> i32 {
 
 
 /// Real library page backed by entries returned by the Amethys Core IPC service.
+/// Real library page backed by entries returned by the Amethys Core IPC service.
 pub fn library_live(
     p: &mut Painter,
     _vh: i32,
     games: &[amethys_ipc::IpcGameEntry],
+    selected_filter: usize,
     core_error: Option<&str>,
     notice: Option<&str>,
 ) -> i32 {
     p.text(MX, 25, 42, "Bibliothèque", 40.0, W::Disp, TXT);
-    p.text(MX, 74, 22, &format!("{} jeu(x) enregistré(s) dans votre bibliothèque locale", games.len()), 14.0, W::Reg, MUT);
+    let mut platforms = games
+        .iter()
+        .map(|game| game.platform.trim())
+        .filter(|platform| !platform.is_empty())
+        .map(str::to_owned)
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    platforms.sort_by_key(|platform| platform.to_lowercase());
+
+    let active_filter = if selected_filter <= platforms.len() { selected_filter } else { 0 };
+    let selected_platform = active_filter.checked_sub(1).and_then(|index| platforms.get(index)).map(String::as_str);
+    let visible = games
+        .iter()
+        .enumerate()
+        .filter(|(_, game)| selected_platform.is_none_or(|platform| game.platform.trim() == platform))
+        .collect::<Vec<_>>();
+
+    p.text(
+        MX,
+        74,
+        22,
+        &format!("{} jeu(x) affiché(s) · {} au total", visible.len(), games.len()),
+        14.0,
+        W::Reg,
+        MUT,
+    );
     let refresh_x = MX + MW - 156;
     button(p, refresh_x, 24, Some(156), "Actualiser", false);
     p.hit(refresh_x, 24, 156, 44, 12, Action::RefreshLibrary, false);
 
+    // Filters are generated only from platform names actually returned by Core.
+    let mut filter_x = MX;
+    let mut filter_y = 108;
+    let all_width = p.width("Tous", 13.0, W::Semi).round() as i32 + 32;
+    let _ = pill(p, filter_x, filter_y, "Tous", active_filter == 0, Some(Action::LibFilter(0)));
+    filter_x += all_width + 8;
+    for (index, platform) in platforms.iter().enumerate() {
+        let width = p.width(platform, 13.0, if active_filter == index + 1 { W::Semi } else { W::Med }).round() as i32 + 32;
+        if filter_x + width > MX + MW {
+            filter_x = MX;
+            filter_y += 42;
+        }
+        let _ = pill(p, filter_x, filter_y, platform, active_filter == index + 1, Some(Action::LibFilter(index + 1)));
+        filter_x += width + 8;
+    }
+    let content_y = filter_y + 48;
+
     if let Some(error) = core_error {
-        p.rrect(MX, 122, MW, 112, 14, PANEL);
-        p.rrect_line(MX, 122, MW, 112, 14, LINE);
-        p.text(MX + 22, 140, 24, "Connexion à Amethys Core impossible", 18.0, W::Semi, AMBER);
-        p.paragraph(MX + 22, 174, MW - 44, 18, error, 13.0, W::Reg, MUT, 3);
-        p.text(MX + 22, 282, 24, "Démarrez amethys-agent puis relancez le launcher.", 15.0, W::Med, TXT);
-        return 340;
+        p.rrect(MX, content_y, MW, 112, 14, PANEL);
+        p.rrect_line(MX, content_y, MW, 112, 14, LINE);
+        p.text(MX + 22, content_y + 18, 24, "Connexion à Amethys Core impossible", 18.0, W::Semi, AMBER);
+        p.paragraph(MX + 22, content_y + 52, MW - 44, 18, error, 13.0, W::Reg, MUT, 3);
+        p.text(MX + 22, content_y + 158, 24, "Démarrez amethys-agent puis relancez le launcher.", 15.0, W::Med, TXT);
+        return content_y + 210;
     }
 
-    if games.is_empty() {
-        p.rrect(MX, 122, MW, 150, 14, PANEL);
-        p.rrect_line(MX, 122, MW, 150, 14, LINE);
-        p.text(MX + 22, 146, 26, "Votre bibliothèque est vide", 20.0, W::Semi, TXT);
-        p.paragraph(MX + 22, 184, MW - 44, 20,
-            "Aucun jeu n'est encore enregistré dans la base locale Amethys. Importez des jeux avec les outils Amethys existants ; ils apparaîtront ici automatiquement au prochain lancement.",
-            14.0, W::Reg, MUT, 4);
-        return 320;
+    if visible.is_empty() {
+        p.rrect(MX, content_y, MW, 150, 14, PANEL);
+        p.rrect_line(MX, content_y, MW, 150, 14, LINE);
+        let title = if games.is_empty() { "Votre bibliothèque est vide" } else { "Aucun jeu pour ce filtre" };
+        p.text(MX + 22, content_y + 24, 26, title, 20.0, W::Semi, TXT);
+        let description = if games.is_empty() {
+            "Aucun jeu n'est encore enregistré dans la base locale Amethys. Importez des jeux avec les outils Amethys existants ; ils apparaîtront ici automatiquement au prochain lancement."
+        } else {
+            "Aucun jeu enregistré ne correspond à cette plateforme. Choisissez « Tous » pour afficher l'ensemble de votre bibliothèque."
+        };
+        p.paragraph(MX + 22, content_y + 62, MW - 44, 20, description, 14.0, W::Reg, MUT, 4);
+        return content_y + 190;
     }
 
     if let Some(message) = notice {
         let color = if message.starts_with("Échec") || message.starts_with("Impossible") { AMBER } else { GREEN };
-        p.paragraph(MX, 96, MW, 18, message, 12.0, W::Med, color, 2);
+        p.paragraph(MX, content_y, MW, 18, message, 12.0, W::Med, color, 2);
     }
 
-    let content_y = if notice.is_some() { 144 } else { 122 };
+    let cards_y = content_y + if notice.is_some() { 34 } else { 12 };
     let columns = 4_i32;
     let gap = 18_i32;
     let card_w = (MW - gap * (columns - 1)) / columns;
     let card_h = 190_i32;
-    for (index, game) in games.iter().enumerate() {
+    for (index, game) in visible.iter().copied() {
         let col = index as i32 % columns;
-        let row = index as i32 / columns;
+        let row = visible.iter().position(|(candidate, _)| *candidate == index).unwrap_or(0) as i32 / columns;
         let x = MX + col * (card_w + gap);
-        let y = content_y + row * (card_h + gap);
+        let y = cards_y + row * (card_h + gap);
         let exists = std::path::Path::new(&game.install_path).is_dir();
         let launchable = crate::core_client::can_launch(game);
         p.rrect(x, y, card_w, card_h, 14, PANEL);
@@ -645,8 +694,8 @@ pub fn library_live(
         p.hit(x, y, card_w, card_h, 14, Action::SelectGame(index), false);
     }
 
-    let rows = (games.len() as i32 + columns - 1) / columns;
-    content_y + rows * (card_h + gap) + 24
+    let rows = (visible.len() as i32 + columns - 1) / columns;
+    cards_y + rows * (card_h + gap) + 24
 }
 
 /// The catalogue has no connected provider yet; do not invent games or prices.
