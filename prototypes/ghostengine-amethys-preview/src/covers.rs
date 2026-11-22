@@ -89,6 +89,18 @@ impl CoverStore {
         }
     }
 
+    /// Validates an image before it is copied into the user's media directory.
+    pub fn validate_image(&self, path: &Path) -> Result<(), String> {
+        let ext = path.extension().and_then(|value| value.to_str()).unwrap_or_default();
+        if !matches!(ext.to_ascii_lowercase().as_str(), "png" | "jpg" | "jpeg" | "bmp") {
+            return Err("format non pris en charge (PNG, JPEG ou BMP uniquement)".to_owned());
+        }
+        let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
+        let texture = decode_texture(&bytes).map_err(|error| format!("image illisible : {error:?}"))?;
+        MipmapChain::new(&texture).map_err(|error| format!("image invalide : {error:?}"))?;
+        Ok(())
+    }
+
     /// Loads or replaces a custom cover after it has been imported into local media.
     /// The texture and mipmap chain are refreshed immediately, without restarting the UI.
     pub fn load_library_cover(&mut self, game_id: &str, path: &Path) -> Result<(), String> {

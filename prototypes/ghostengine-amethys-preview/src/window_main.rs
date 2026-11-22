@@ -40,21 +40,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let fonts_path = fonts_dir.to_string_lossy().into_owned();
     let fonts: &'static Fonts = Box::leak(Box::new(Fonts::load(&fonts_path)?));
-    let media_store = amethys_config::data_directory()
+    let media_store: Option<&'static amethys_media::MediaStore> = amethys_config::data_directory()
         .ok()
-        .map(amethys_media::MediaStore::new);
-    if let Some(store) = &media_store {
+        .map(|root| Box::leak(Box::new(amethys_media::MediaStore::new(root))) as &'static amethys_media::MediaStore);
+    if let Some(store) = media_store {
         if let Err(error) = store.prepare() {
             eprintln!("Could not prepare Amethys media directories: {error}");
         }
     }
     let media_library_dir = media_store.map(|store| store.library_root());
-    let covers: &'static CoverStore = Box::leak(Box::new(CoverStore::load_with_library(
+    let covers: &'static mut CoverStore = Box::leak(Box::new(CoverStore::load_with_library(
         &assets_dir.join("covers"),
         media_library_dir.as_deref(),
     )));
     let library = core_client::list_games_or_start_agent();
-    let mut app = App::new(fonts, covers, library);
+    let mut app = App::new(fonts, covers, media_store, library);
 
     if let Some(dir) = snapshot {
         let dir = PathBuf::from(dir);

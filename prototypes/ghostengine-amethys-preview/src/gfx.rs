@@ -47,6 +47,7 @@ pub enum Action {
     ImportDetectedGame(usize),
     FocusLibrarySearch,
     EditExecutable,
+    ChangeGameCover,
     SaveExecutable,
     CancelExecutableEdit,
     LaunchGame(usize),

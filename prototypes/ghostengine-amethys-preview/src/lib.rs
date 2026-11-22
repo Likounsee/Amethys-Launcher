@@ -2,6 +2,7 @@
 pub mod covers;
 pub mod core_client;
 pub mod data;
+pub mod file_dialog;
 pub mod gfx;
 pub mod pages;
 

@@ -52,7 +52,8 @@ pub struct Output {
 
 pub struct App {
     fonts: &'static Fonts,
-    covers: &'static CoverStore,
+    covers: &'static mut CoverStore,
+    media_store: Option<&'static amethys_media::MediaStore>,
     pub page: Page,
     pub st: State,
     library_sort: usize,
@@ -85,12 +86,13 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(fonts: &'static Fonts, covers: &'static CoverStore, library: Result<Vec<IpcGameEntry>, String>) -> Self {
+    pub fn new(fonts: &'static Fonts, covers: &'static mut CoverStore, media_store: Option<&'static amethys_media::MediaStore>, library: Result<Vec<IpcGameEntry>, String>) -> Self {
         let blank = || Framebuffer::new(WIN_W, WIN_H, BG).expect("framebuffer");
         let (games, core_error) = match library { Ok(games) => (games, None), Err(error) => (Vec::new(), Some(error)) };
         let mut app = Self {
             fonts,
             covers,
+            media_store,
             page: Page::Library,
             st: State::default(),
             library_sort: 0,
@@ -237,6 +239,40 @@ impl App {
             }
             Action::FocusLibrarySearch => {
                 self.search_focused = true;
+                self.render(false);
+            }
+            Action::ChangeGameCover => {
+                let selected = self.selected_game.and_then(|index| {
+                    self.games.get(index).map(|game| (
+                        game.catalogue_game_id.as_deref().unwrap_or(&game.id).to_owned(),
+                        game.name.clone(),
+                    ))
+                });
+                match selected {
+                    Some((game_id, game_name)) => match crate::file_dialog::pick_image() {
+                        Ok(Some(source)) => {
+                            let result = self.covers.validate_image(&source).and_then(|()| {
+                                let store = self.media_store.ok_or_else(|| {
+                                    "Le dossier de données local d'Amethys n'est pas disponible.".to_owned()
+                                })?;
+                                let imported = store.import_library_asset(
+                                    &game_id,
+                                    amethys_media::MediaKind::Cover,
+                                    &source,
+                                ).map_err(|error| error.to_string())?;
+                                self.covers.load_library_cover(&game_id, &imported)?;
+                                Ok(())
+                            });
+                            self.notice = Some(match result {
+                                Ok(()) => format!("Jaquette personnalisée enregistrée pour {game_name}."),
+                                Err(error) => format!("Impossible d'importer la jaquette : {error}"),
+                            });
+                        }
+                        Ok(None) => {}
+                        Err(error) => self.notice = Some(format!("Sélecteur d'image indisponible : {error}")),
+                    },
+                    None => self.notice = Some("Aucun jeu n'est sélectionné.".to_owned()),
+                }
                 self.render(false);
             }
             Action::EditExecutable => {
