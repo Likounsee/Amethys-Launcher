@@ -73,14 +73,13 @@ where
             let database = database.lock().await;
             match command {
                 IpcCommand::ListGames => {
-                    database
-                        .list_games()
-                        .map(|entries| IpcResponsePayload::Games {
-                            games: entries
-                                .into_iter()
-                                .map(|game| ipc_game_entry(&database, game))
-                                .collect::<Result<Vec<_>, _>>()?,
-                        })
+                    database.list_games().and_then(|entries| {
+                        entries
+                            .into_iter()
+                            .map(|game| ipc_game_entry(&database, game))
+                            .collect::<Result<Vec<_>, _>>()
+                            .map(|games| IpcResponsePayload::Games { games })
+                    })
                 }
                 IpcCommand::AddGame {
                     name,
@@ -435,6 +434,7 @@ mod tests {
         };
         assert_eq!(added_game.name, "Dota 2");
         assert_eq!(added_game.platform_id.as_deref(), Some("570"));
+        assert_eq!(added_game.catalogue_game_id.as_deref(), Some("3000"));
 
         let listed = round_trip(&database, &state, IpcCommand::ListGames).await;
         let games = match listed.result.expect("game library is listed") {
