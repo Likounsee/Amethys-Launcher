@@ -63,7 +63,7 @@ impl App {
         let mut app = Self {
             fonts,
             covers,
-            page: Page::Store,
+            page: Page::Library,
             st: State::default(),
             games,
             core_error,
@@ -124,6 +124,13 @@ impl App {
             }
             Action::LibFilter(i) => {
                 self.st.lib_filter = i;
+                self.render(false);
+            }
+            Action::RefreshLibrary => {
+                match crate::core_client::list_games() {
+                    Ok(games) => { self.games = games; self.core_error = None; }
+                    Err(error) => self.core_error = Some(error),
+                }
                 self.render(false);
             }
         }
