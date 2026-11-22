@@ -211,31 +211,11 @@ impl MediaStore {
     }
 }
 
-#[cfg(not(windows))]
+// std::fs::rename replaces an existing destination atomically on supported
+// filesystems. The temporary file is created beside the destination, so the
+// operation stays on the same volume on Windows as well as Unix.
 fn replace_file(source: &Path, destination: &Path) -> Result<(), MediaPathError> {
     fs::rename(source, destination)?;
-    Ok(())
-}
-
-#[cfg(windows)]
-fn replace_file(source: &Path, destination: &Path) -> Result<(), MediaPathError> {
-    use std::os::windows::ffi::OsStrExt;
-    #[link(name = "kernel32")]
-    extern "system" {
-        fn MoveFileExW(existing: *const u16, replacement: *const u16, flags: u32) -> i32;
-    }
-    let source: Vec<u16> = source.as_os_str().encode_wide().chain(Some(0)).collect();
-    let destination: Vec<u16> = destination
-        .as_os_str()
-        .encode_wide()
-        .chain(Some(0))
-        .collect();
-    // MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH keeps the old image intact
-    // until the fully copied temporary file is ready to replace it.
-    let moved = unsafe { MoveFileExW(source.as_ptr(), destination.as_ptr(), 0x1 | 0x8) };
-    if moved == 0 {
-        return Err(MediaPathError::Io(std::io::Error::last_os_error()));
-    }
     Ok(())
 }
 
