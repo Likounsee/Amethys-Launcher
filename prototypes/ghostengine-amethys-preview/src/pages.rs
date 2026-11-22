@@ -629,6 +629,11 @@ pub fn library_live(
         let (status, color) = if !exists { ("Chemin introuvable", AMBER) } else if game.executable.is_some() { ("Exécutable configuré", GREEN) } else { ("Exécutable à configurer", AMBER) };
         p.text(x + 14, y + 76, 18, status, 12.0, W::Med, color);
         p.paragraph(x + 14, y + 100, card_w - 28, 16, &game.install_path, 10.0, W::Reg, MUT, 2);
+        let remove_x = x + card_w - 174;
+        p.rrect(remove_x, y + 146, 72, 30, 8, ACT);
+        p.rrect_line(remove_x, y + 146, 72, 30, 8, LINE);
+        p.text(remove_x + 12, y + 146, 30, "Retirer", 12.0, W::Med, SOFT);
+        p.hit(remove_x, y + 146, 72, 30, 8, Action::RemoveGame(index), false);
         if game.executable.is_some() && exists {
             let launch_x = x + card_w - 94;
             p.rrect(launch_x, y + 146, 80, 30, 8, VIO);
