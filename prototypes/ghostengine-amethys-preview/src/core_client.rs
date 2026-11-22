@@ -158,6 +158,58 @@ pub fn remove_game(id: &str) -> Result<bool, String> {
 }
 
 
+/// Saves the executable path for an existing library entry through Core IPC.
+pub fn set_game_executable(id: &str, executable: &str) -> Result<IpcGameEntry, String> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|error| format!("Impossible de démarrer le client IPC : {error}"))?;
+
+    runtime.block_on(async {
+        #[cfg(windows)]
+        let mut stream = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            transport::connect(r"\\.\pipe\amethys-core"),
+        )
+        .await
+        .map_err(|_| "Délai dépassé lors de la connexion à Amethys Core (5 s).".to_owned())?
+        .map_err(|error| error.to_string())?;
+
+        #[cfg(unix)]
+        let mut stream = {
+            let directory = amethys_config::data_directory()
+                .map_err(|error| format!("Dossier de données Amethys indisponible : {error}"))?;
+            tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                transport::connect(directory.join("amethys.sock")),
+            )
+            .await
+            .map_err(|_| "Délai dépassé lors de la connexion à Amethys Core (5 s).".to_owned())?
+            .map_err(|error| error.to_string())?
+        };
+
+        let response = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            send_request(
+                &mut stream,
+                IpcRequest::new(IpcCommand::SetGameExecutable {
+                    id: id.to_owned(),
+                    executable: executable.to_owned(),
+                }),
+            ),
+        )
+        .await
+        .map_err(|_| "Amethys Core n'a pas répondu dans les 15 secondes.".to_owned())?
+        .map_err(|error| error.to_string())?;
+
+        match response.result {
+            Ok(IpcResponsePayload::GameAdded { game }) => Ok(game),
+            Ok(other) => Err(format!("Réponse IPC inattendue : {other:?}")),
+            Err(error) => Err(format!("{} : {}", error.code, error.message)),
+        }
+    })
+}
+
 /// Connects to the running agent or starts the bundled agent beside the desktop executable.
 pub fn list_games_or_start_agent() -> Result<Vec<IpcGameEntry>, String> {
     match list_games() {
