@@ -1,11 +1,9 @@
 //! Amethys Launcher desktop application using the temporary GhostEngine window backend.
 //!
-//!   cargo run --release                       (opens the window)
-//!   cargo run --release -- --snapshot OUT_DIR  (scripted session, no display)
-//!
-//! Wheel = scroll, hover highlights clickable areas, click navigates (sidebar, cards,
-//! filters, "Fiche"), the search bar is GhostEngine's text input. Esc quits.
-//! `--snapshot` replays a scripted session headlessly and saves PNG frames (no display needed).
+//! Run with: cargo run --release --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml --bin amethys-launcher
+//! Wheel = scroll; the sidebar switches pages. The Library page loads real Core entries,
+//! refreshes the library, safely launches configured executables and removes local entries.
+//! Esc quits. --snapshot creates diagnostic PNG captures without opening a window.
 
 use amethyst_preview::app::{App, WIN_H, WIN_W};
 use amethyst_preview::covers::CoverStore;
