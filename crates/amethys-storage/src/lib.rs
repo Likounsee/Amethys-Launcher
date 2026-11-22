@@ -314,7 +314,8 @@ impl Database {
                      catalogue_game_id TEXT NOT NULL
                  );
                  INSERT INTO _amethys_catalogue_migration (installation_id, catalogue_game_id)
-                     SELECT id, 'game-' || lower(hex(randomblob(16))) FROM games;
+                     SELECT id, CAST(2999 + ROW_NUMBER() OVER (ORDER BY added_at, id) AS TEXT)
+                     FROM games;
                  INSERT INTO catalogue_games (id, name)
                      SELECT migration.catalogue_game_id, games.name
                      FROM games
@@ -458,11 +459,20 @@ impl Database {
         }
 
         let id = uuid::Uuid::new_v4().to_string();
-        let catalogue_game_id = format!("game-{}", uuid::Uuid::new_v4());
-        self.connection
-            .execute(
-                "INSERT INTO catalogue_games (id, name) VALUES (?1, ?2)",
-                params![catalogue_game_id, name],
+        // Allocate a compact, stable Amethys catalogue ID. RETURNING keeps
+        // allocation and insertion in one SQLite statement.
+        let catalogue_game_id: String = self
+            .connection
+            .query_row(
+                "INSERT INTO catalogue_games (id, name)
+                 VALUES (
+                     (SELECT CAST(COALESCE(MAX(CAST(id AS INTEGER)), 2999) + 1 AS TEXT)
+                      FROM catalogue_games),
+                     ?1
+                 )
+                 RETURNING id",
+                [name],
+                |row| row.get(0),
             )
             .map_err(|error| storage_error(format!("Could not create catalogue game: {error}")))?;
         self.connection
@@ -1174,6 +1184,24 @@ mod tests {
                 .len(),
             2
         );
+    }
+
+    #[test]
+    fn new_catalogue_game_ids_are_numeric_and_start_at_three_thousand() {
+        let database = Database::open(":memory:").expect("database opens");
+        let first = database
+            .add_game("First", "Steam", "/games/first", None)
+            .expect("first installation added");
+        let second = database
+            .add_game("Second", "Epic", "/games/second", None)
+            .expect("second installation added");
+        let first_id = database.get_catalogue_game_id(&first.id).unwrap().unwrap();
+        let second_id = database.get_catalogue_game_id(&second.id).unwrap().unwrap();
+
+        assert_eq!(first_id, "3000");
+        assert_eq!(second_id, "3001");
+        assert!(first_id.parse::<u64>().is_ok());
+        assert!(second_id.parse::<u64>().is_ok());
     }
 
     #[test]
