@@ -71,6 +71,16 @@ pub enum IpcResponsePayload {
     GameRemoved { removed: bool },
 }
 
+/// Canonical metadata shared by all local installations of one Amethys game.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct IpcGameMetadata {
+    pub genres: Vec<String>,
+    pub developer: Option<String>,
+    pub publisher: Option<String>,
+    pub release_date: Option<String>,
+    pub description: Option<String>,
+}
+
 /// A game summary transferred from the core to a local client.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct IpcGameEntry {
@@ -82,6 +92,9 @@ pub struct IpcGameEntry {
     /// Stable Amethys catalogue identity shared by linked installations.
     #[serde(default)]
     pub catalogue_game_id: Option<String>,
+    /// Catalogue metadata is optional for older databases and incomplete entries.
+    #[serde(default)]
+    pub catalogue_metadata: Option<IpcGameMetadata>,
     pub install_path: String,
     pub executable: Option<String>,
 }

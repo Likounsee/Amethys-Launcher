@@ -191,8 +191,22 @@ fn ipc_game_entry(
     database: &Database,
     game: amethys_storage::GameEntry,
 ) -> Result<IpcGameEntry, amethys_errors::AmethysError> {
+    let catalogue_game_id = database.get_catalogue_game_id(&game.id)?;
+    let catalogue_metadata = catalogue_game_id
+        .as_deref()
+        .map(|catalogue_id| database.get_catalogue_game_metadata(catalogue_id))
+        .transpose()?
+        .flatten()
+        .map(|metadata| amethys_ipc::IpcGameMetadata {
+            genres: metadata.genres,
+            developer: metadata.developer,
+            publisher: metadata.publisher,
+            release_date: metadata.release_date,
+            description: metadata.description,
+        });
     Ok(IpcGameEntry {
-        catalogue_game_id: database.get_catalogue_game_id(&game.id)?,
+        catalogue_game_id,
+        catalogue_metadata,
         id: game.id,
         name: game.name,
         platform: game.platform,

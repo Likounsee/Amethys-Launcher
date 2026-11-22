@@ -908,8 +908,31 @@ pub fn game_detail_live(
         p.text(launch_x + 14, y + 366, 30, "Lancer", 12.0, W::Semi, VIO_DARK);
         p.hit(launch_x, y + 366, 80, 30, 8, Action::LaunchGame(index), false);
     }
+    let metadata_bottom = if let Some(metadata) = game.catalogue_metadata.as_ref() {
+        let metadata_y = y + 430;
+        p.rrect(MX, metadata_y, MW, 194, 16, PANEL);
+        p.rrect_line(MX, metadata_y, MW, 194, 16, LINE);
+        p.text(MX + 22, metadata_y + 10, 24, "À propos", 17.0, W::Semi, TXT);
+        let developer = metadata.developer.as_deref().unwrap_or("Non renseigné");
+        let publisher = metadata.publisher.as_deref().unwrap_or("Non renseigné");
+        let release_date = metadata.release_date.as_deref().unwrap_or("Non renseignée");
+        p.text(MX + 22, metadata_y + 38, 18, &format!("Développeur : {developer}"), 12.0, W::Med, SOFT);
+        p.text(MX + 22, metadata_y + 58, 18, &format!("Éditeur : {publisher}"), 12.0, W::Med, SOFT);
+        p.text(MX + 22, metadata_y + 78, 18, &format!("Sortie : {release_date}"), 12.0, W::Med, SOFT);
+        if !metadata.genres.is_empty() {
+            let genres = metadata.genres.join(" · ");
+            p.paragraph(MX + 22, metadata_y + 98, MW - 44, 18, &format!("Genres : {genres}"), 12.0, W::Reg, MUT, 2);
+        }
+        if let Some(description) = metadata.description.as_deref().filter(|value| !value.trim().is_empty()) {
+            p.paragraph(MX + 22, metadata_y + 126, MW - 44, 18, description, 12.0, W::Reg, MUT, 3);
+        }
+        metadata_y + 206
+    } else {
+        y + 450
+    };
+
     if editing_executable {
-        let editor_y = y + 422;
+        let editor_y = metadata_bottom + 12;
         p.rrect(MX, editor_y, MW, 142, 16, PANEL);
         p.rrect_line(MX, editor_y, MW, 142, 16, LINE);
         p.text(MX + 22, editor_y + 10, 22, "Configurer l'exécutable", 17.0, W::Semi, TXT);
@@ -943,7 +966,7 @@ pub fn game_detail_live(
         p.hit(cancel_x, editor_y + 94, 104, 44, 10, Action::CancelExecutableEdit, false);
         editor_y + 160
     } else {
-        y + 450
+        metadata_bottom + 12
     }
 }
 
@@ -959,6 +982,7 @@ mod live_library_tests {
             platform: platform.to_owned(),
             platform_id: None,
             catalogue_game_id: Some("3000".to_owned()),
+            catalogue_metadata: None,
             install_path: ".".to_owned(),
             executable: None,
         }

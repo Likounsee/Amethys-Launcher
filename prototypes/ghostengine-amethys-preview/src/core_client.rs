@@ -348,6 +348,7 @@ mod tests {
             platform: "Tests".to_owned(),
             platform_id: None,
             catalogue_game_id: Some("3000".to_owned()),
+            catalogue_metadata: None,
             install_path: root.to_string_lossy().into_owned(),
             executable: Some("bin/game.exe".to_owned()),
         };
