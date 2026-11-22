@@ -163,11 +163,11 @@ where
                             .transpose()?
                             .map(|game| IpcResponsePayload::GameAdded { game })
                             .ok_or_else(|| {
-                            amethys_errors::AmethysError::new(
-                                amethys_errors::ErrorCode::StorageQuery,
-                                "Game not found.",
-                            )
-                        })
+                                amethys_errors::AmethysError::new(
+                                    amethys_errors::ErrorCode::StorageQuery,
+                                    "Game not found.",
+                                )
+                            })
                     }),
                 IpcCommand::RemoveGame { id } => database
                     .remove_game(&id)
