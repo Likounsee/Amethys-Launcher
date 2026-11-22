@@ -275,6 +275,28 @@ impl App {
                 }
                 self.render(false);
             }
+            Action::ResetGameCover => {
+                let selected = self.selected_game.and_then(|index| {
+                    self.games.get(index).map(|game| (
+                        game.catalogue_game_id.as_deref().unwrap_or(&game.id).to_owned(),
+                        game.name.clone(),
+                    ))
+                });
+                let result = selected.ok_or_else(|| "Aucun jeu n'est sélectionné.".to_owned())
+                    .and_then(|(game_id, game_name)| {
+                        let store = self.media_store.ok_or_else(|| {
+                            "Le dossier de données local d'Amethys n'est pas disponible.".to_owned()
+                        })?;
+                        self.covers.reset_library_cover(&game_id, &store.library_root())
+                            .map(|removed| (game_name, removed))
+                    });
+                self.notice = Some(match result {
+                    Ok((name, true)) => format!("Jaquette personnalisée supprimée pour {name}. L'image par défaut est rétablie."),
+                    Ok((name, false)) => format!("{name} utilise déjà son image par défaut."),
+                    Err(error) => format!("Impossible de rétablir l'image par défaut : {error}"),
+                });
+                self.render(false);
+            }
             Action::EditExecutable => {
                 self.editing_executable = true;
                 self.search_focused = false;
