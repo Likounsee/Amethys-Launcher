@@ -41,11 +41,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let fonts_path = fonts_dir.to_string_lossy().into_owned();
     let fonts: &'static Fonts = Box::leak(Box::new(Fonts::load(&fonts_path)?));
     let covers: &'static CoverStore = Box::leak(Box::new(CoverStore::load(&assets_dir.join("covers"))));
-    println!("{} jaquettes décodées en {:.0} ms ({} échecs)", covers.files, covers.decode_ms, covers.failed.len());
     let library = core_client::list_games_or_start_agent();
     match &library {
-        Ok(games) => println!("{} jeu(x) chargé(s) depuis Amethys Core", games.len()),
-        Err(error) => eprintln!("Amethys Core indisponible : {error}"),
     }
     let mut app = App::new(fonts, covers, library);
 
@@ -78,7 +75,6 @@ fn replay(app: &mut App, dir: PathBuf) -> Result<(), Box<dyn std::error::Error>>
     let mut shot = |app: &mut App, name: &str, input: InputState| -> Result<(), Box<dyn std::error::Error>> {
         app.frame(&mut fb, &input);
         save_png(&fb, WIN_H, &dir.join(format!("{name}.png")))?;
-        println!("{name}: page={:?} scroll={}/{} store_filter={} lib_filter={}", app.page, app.scroll.offset(), app.scroll.max_offset(), app.st.store_filter, app.st.lib_filter);
         Ok(())
     };
     shot(app, "w0-boutique", at(800, 300))?;
