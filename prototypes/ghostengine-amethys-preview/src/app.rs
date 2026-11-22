@@ -6,7 +6,7 @@
 use crate::covers::CoverStore;
 use amethys_ipc::IpcGameEntry;
 use crate::gfx::{self, Action, Fonts, Hit, Page, Painter, State, BG, W};
-use crate::pages::{self, Active, PageFn, MW, MX, SIDE_W};
+use crate::pages::{self, Active, PageFn, SIDE_W};
 use ghostengine::window::InputState;
 use std::{collections::VecDeque, time::Instant};
 use ghostengine::{
@@ -99,7 +99,7 @@ impl App {
         let mut p = Painter::new(WIN_W, MAX_PAGE_H, self.fonts).with_covers(self.covers);
         pages::sidebar(&mut p, active, vh);
         let h = (if self.page == Page::Library {
-            pages::library_live(&mut p, vh, &self.games, self.core_error.as_deref(), self.notice.as_deref())
+            pages::library_live(&mut p, vh, &self.games, self.st.lib_filter, self.core_error.as_deref(), self.notice.as_deref())
         } else if self.page == Page::Product {
             pages::game_detail_live(&mut p, self.games.get(self.selected_game.unwrap_or(usize::MAX)), self.selected_game.unwrap_or(usize::MAX), self.notice.as_deref())
         } else if self.page == Page::Store {
