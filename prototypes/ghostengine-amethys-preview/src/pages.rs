@@ -609,6 +609,7 @@ pub fn library_live(
     p: &mut Painter,
     _vh: i32,
     games: &[amethys_ipc::IpcGameEntry],
+    detected: &[amethys_discovery::DetectedGame],
     selected_filter: usize,
     search_query: &str,
     search_focused: bool,
@@ -618,35 +619,16 @@ pub fn library_live(
     p.text(MX, 25, 42, "Bibliothèque", 40.0, W::Disp, TXT);
     let search_x = MX + MW - 500;
     p.rrect(search_x, 24, 330, 44, 12, PANEL);
-    p.rrect_line(
-        search_x,
-        24,
-        330,
-        44,
-        12,
-        if search_focused { VIO } else { LINE },
-    );
+    p.rrect_line(search_x, 24, 330, 44, 12, if search_focused { VIO } else { LINE });
     let platforms = library_platforms(games);
-
     let active_filter = if selected_filter <= platforms.len() { selected_filter } else { 0 };
-    let selected_platform = active_filter.checked_sub(1).and_then(|index| platforms.get(index)).map(String::as_str);
-    let visible = games
-        .iter()
-        .enumerate()
+    let selected_platform = active_filter.checked_sub(1)
+        .and_then(|index| platforms.get(index)).map(String::as_str);
+    let visible = games.iter().enumerate()
         .filter(|(_, game)| selected_platform.is_none_or(|platform| game.platform.trim().eq_ignore_ascii_case(platform)))
         .filter(|(_, game)| library_matches_query(game, search_query))
         .collect::<Vec<_>>();
 
-    p.text(
-        MX,
-        74,
-        22,
-        &format!("{} jeu(x) affiché(s) · {} au total", visible.len(), games.len()),
-        14.0,
-        W::Reg,
-        MUT,
-    );
-    let refresh_x = MX + MW - 156;
     p.circle(search_x + 23, 46, 7, MUT);
     p.circle(search_x + 23, 46, 5, PANEL);
     p.rrect(search_x + 28, 51, 10, 3, 1, MUT);
@@ -654,12 +636,17 @@ pub fn library_live(
     let search_label = if display_query.is_empty() { "Rechercher un jeu…" } else { display_query.as_str() };
     p.text(search_x + 44, 24, 44, search_label, 13.0, W::Reg, if search_query.is_empty() { MUT } else { TXT });
     p.hit(search_x, 24, 330, 44, 12, Action::FocusLibrarySearch, false);
+    let refresh_x = MX + MW - 156;
     button(p, refresh_x, 24, Some(156), "Actualiser", false);
     p.hit(refresh_x, 24, 156, 44, 12, Action::RefreshLibrary, false);
 
-    // Filters are generated only from platform names actually returned by Core.
+    p.text(MX, 76, 22, &format!("{} jeu(x) affiché(s) · {} au total", visible.len(), games.len()), 14.0, W::Reg, MUT);
+    let scan_x = MX + MW - 180;
+    button(p, scan_x, 68, Some(180), "Détecter les jeux", true);
+    p.hit(scan_x, 68, 180, 44, 12, Action::ScanGames, false);
+
     let mut filter_x = MX;
-    let mut filter_y = 108;
+    let filter_y = 128;
     let all_width = p.width("Tous", 13.0, W::Semi).round() as i32 + 32;
     let _ = pill(p, filter_x, filter_y, "Tous", active_filter == 0, Some(Action::LibFilter(0)));
     filter_x += all_width + 8;
@@ -667,87 +654,101 @@ pub fn library_live(
         let width = p.width(platform, 13.0, if active_filter == index + 1 { W::Semi } else { W::Med }).round() as i32 + 32;
         if filter_x + width > MX + MW {
             filter_x = MX;
-            filter_y += 42;
         }
         let _ = pill(p, filter_x, filter_y, platform, active_filter == index + 1, Some(Action::LibFilter(index + 1)));
         filter_x += width + 8;
     }
-    let content_y = filter_y + 48;
-
+    let content_y = filter_y + 50;
     if let Some(error) = core_error {
-        p.rrect(MX, content_y, MW, 112, 14, PANEL);
-        p.rrect_line(MX, content_y, MW, 112, 14, LINE);
-        p.text(MX + 22, content_y + 18, 24, "Connexion à Amethys Core impossible", 18.0, W::Semi, AMBER);
-        p.paragraph(MX + 22, content_y + 52, MW - 44, 18, error, 13.0, W::Reg, MUT, 3);
-        p.text(MX + 22, content_y + 158, 24, "Démarrez amethys-agent puis relancez le launcher.", 15.0, W::Med, TXT);
-        return content_y + 210;
+        p.rrect(MX, content_y, MW, 100, 14, PANEL);
+        p.rrect_line(MX, content_y, MW, 100, 14, LINE);
+        p.text(MX + 22, content_y + 14, 24, "Connexion à Amethys Core impossible", 18.0, W::Semi, AMBER);
+        p.paragraph(MX + 22, content_y + 46, MW - 44, 18, error, 13.0, W::Reg, MUT, 2);
     }
 
+    let mut y = content_y + if core_error.is_some() { 116 } else { 0 };
     if visible.is_empty() {
-        p.rrect(MX, content_y, MW, 150, 14, PANEL);
-        p.rrect_line(MX, content_y, MW, 150, 14, LINE);
-        let title = if games.is_empty() {
-            "Votre bibliothèque est vide"
-        } else if !search_query.trim().is_empty() {
-            "Aucun résultat"
-        } else {
-            "Aucun jeu pour ce filtre"
-        };
-        p.text(MX + 22, content_y + 24, 26, title, 20.0, W::Semi, TXT);
+        p.rrect(MX, y, MW, 116, 14, PANEL);
+        p.rrect_line(MX, y, MW, 116, 14, LINE);
+        let title = if games.is_empty() { "Votre bibliothèque est vide" }
+            else if !search_query.trim().is_empty() { "Aucun résultat" }
+            else { "Aucun jeu pour ce filtre" };
+        p.text(MX + 22, y + 16, 26, title, 20.0, W::Semi, TXT);
         let description = if games.is_empty() {
-            "Aucun jeu n'est encore enregistré dans la base locale Amethys. Importez des jeux avec les outils Amethys existants ; ils apparaîtront ici automatiquement au prochain lancement."
+            "Lancez la détection pour rechercher les jeux installés sur vos plateformes prises en charge."
         } else if !search_query.trim().is_empty() {
-            "Aucun jeu ne correspond à votre recherche. Essayez un autre nom, une plateforme ou un chemin d'installation."
+            "Aucun jeu ne correspond à votre recherche. Essayez un autre nom ou une autre plateforme."
         } else {
-            "Aucun jeu enregistré ne correspond à cette plateforme. Choisissez « Tous » pour afficher l'ensemble de votre bibliothèque."
+            "Aucun jeu enregistré ne correspond à cette plateforme. Choisissez « Tous » pour tout afficher."
         };
-        p.paragraph(MX + 22, content_y + 62, MW - 44, 20, description, 14.0, W::Reg, MUT, 4);
-        return content_y + 190;
-    }
-
-    if let Some(message) = notice {
-        let color = if message.starts_with("Échec") || message.starts_with("Impossible") { AMBER } else { GREEN };
-        p.paragraph(MX, content_y, MW, 18, message, 12.0, W::Med, color, 2);
-    }
-
-    let cards_y = content_y + if notice.is_some() { 34 } else { 12 };
-    let columns = 4_i32;
-    let gap = 18_i32;
-    let card_w = (MW - gap * (columns - 1)) / columns;
-    let card_h = 190_i32;
-    for (visible_index, (index, game)) in visible.iter().copied().enumerate() {
-        let col = visible_index as i32 % columns;
-        let row = visible_index as i32 / columns;
-        let x = MX + col * (card_w + gap);
-        let y = cards_y + row * (card_h + gap);
-        let exists = std::path::Path::new(&game.install_path).is_dir();
-        let launchable = crate::core_client::can_launch(game);
-        p.rrect(x, y, card_w, card_h, 14, PANEL);
-        p.rrect_line(x, y, card_w, card_h, 14, LINE);
-        chip(p, x + 14, y + 14, &game.platform);
-        let title_y = y + 48;
-        p.paragraph(x + 14, title_y, card_w - 28, 20, &game.name, 17.0, W::Semi, TXT, 1);
-        let (status, color) = if !exists { ("Chemin introuvable", AMBER) } else if launchable { ("Prêt à lancer", GREEN) } else if game.executable.is_some() { ("Exécutable invalide", AMBER) } else { ("Exécutable à configurer", AMBER) };
-        p.text(x + 14, y + 76, 18, status, 12.0, W::Med, color);
-        p.paragraph(x + 14, y + 100, card_w - 28, 16, &game.install_path, 10.0, W::Reg, MUT, 2);
-        // Register the card first: UiInteraction resolves overlapping regions from topmost to bottommost.
-        // The action buttons are added afterwards so they win over the card's open-details action.
-        p.hit(x, y, card_w, card_h, 14, Action::SelectGame(index), false);
-        let remove_x = x + card_w - 174;
-        p.rrect(remove_x, y + 146, 72, 30, 8, ACT);
-        p.rrect_line(remove_x, y + 146, 72, 30, 8, LINE);
-        p.text(remove_x + 12, y + 146, 30, "Retirer", 12.0, W::Med, SOFT);
-        p.hit(remove_x, y + 146, 72, 30, 8, Action::RemoveGame(index), false);
-        if launchable {
-            let launch_x = x + card_w - 94;
-            p.rrect(launch_x, y + 146, 80, 30, 8, VIO);
-            p.text(launch_x + 14, y + 146, 30, "Lancer", 12.0, W::Semi, VIO_DARK);
-            p.hit(launch_x, y + 146, 80, 30, 8, Action::LaunchGame(index), false);
+        p.paragraph(MX + 22, y + 52, MW - 44, 18, description, 13.0, W::Reg, MUT, 3);
+        y += 136;
+    } else {
+        if let Some(message) = notice {
+            let color = if message.starts_with("Échec") || message.starts_with("Impossible") || message.starts_with("Import impossible") { AMBER } else { GREEN };
+            p.paragraph(MX, y, MW, 18, message, 12.0, W::Med, color, 2);
+            y += 30;
         }
+        let columns = 4_i32;
+        let gap = 18_i32;
+        let card_w = (MW - gap * (columns - 1)) / columns;
+        let card_h = 190_i32;
+        for (visible_index, (index, game)) in visible.iter().copied().enumerate() {
+            let col = visible_index as i32 % columns;
+            let row = visible_index as i32 / columns;
+            let x = MX + col * (card_w + gap);
+            let cy = y + row * (card_h + gap);
+            let exists = std::path::Path::new(&game.install_path).is_dir();
+            let launchable = crate::core_client::can_launch(game);
+            p.rrect(x, cy, card_w, card_h, 14, PANEL);
+            p.rrect_line(x, cy, card_w, card_h, 14, LINE);
+            chip(p, x + 14, cy + 14, &game.platform);
+            p.paragraph(x + 14, cy + 48, card_w - 28, 20, &game.name, 17.0, W::Semi, TXT, 1);
+            let (status, color) = if !exists { ("Chemin introuvable", AMBER) } else if launchable { ("Prêt à lancer", GREEN) } else if game.executable.is_some() { ("Exécutable invalide", AMBER) } else { ("Exécutable à configurer", AMBER) };
+            p.text(x + 14, cy + 76, 18, status, 12.0, W::Med, color);
+            p.paragraph(x + 14, cy + 100, card_w - 28, 16, &game.install_path, 10.0, W::Reg, MUT, 2);
+            p.hit(x, cy, card_w, card_h, 14, Action::SelectGame(index), false);
+            let remove_x = x + card_w - 174;
+            p.rrect(remove_x, cy + 146, 72, 30, 8, ACT);
+            p.rrect_line(remove_x, cy + 146, 72, 30, 8, LINE);
+            p.text(remove_x + 12, cy + 146, 30, "Retirer", 12.0, W::Med, SOFT);
+            p.hit(remove_x, cy + 146, 72, 30, 8, Action::RemoveGame(index), false);
+            if launchable {
+                let launch_x = x + card_w - 94;
+                p.rrect(launch_x, cy + 146, 80, 30, 8, VIO);
+                p.text(launch_x + 14, cy + 146, 30, "Lancer", 12.0, W::Semi, VIO_DARK);
+                p.hit(launch_x, cy + 146, 80, 30, 8, Action::LaunchGame(index), false);
+            }
+        }
+        let rows = (visible.len() as i32 + columns - 1) / columns;
+        y += rows * (card_h + gap) + 24;
     }
 
-    let rows = (visible.len() as i32 + columns - 1) / columns;
-    cards_y + rows * (card_h + gap) + 24
+    if !detected.is_empty() {
+        p.text(MX, y + 8, 28, "Installations détectées", 22.0, W::Disp, TXT);
+        p.text_right(MX + MW, y + 8, 28, &format!("{} à importer", detected.len()), 13.0, W::Reg, MUT);
+        y += 48;
+        for (index, game) in detected.iter().take(24).enumerate() {
+            p.rrect(MX, y, MW, 72, 12, PANEL);
+            p.rrect_line(MX, y, MW, 72, 12, LINE);
+            p.text(MX + 16, y + 8, 22, &game.name, 15.0, W::Semi, TXT);
+            p.text(MX + 16, y + 34, 18, game.platform, 12.0, W::Med, VIO);
+            p.paragraph(MX + 160, y + 32, MW - 320, 18, &game.install_path.to_string_lossy(), 11.0, W::Reg, MUT, 1);
+            let import_x = MX + MW - 132;
+            button(p, import_x, y + 14, Some(116), "Importer", true);
+            p.hit(import_x, y + 14, 116, 44, 12, Action::ImportDetectedGame(index), false);
+            y += 82;
+        }
+        if detected.len() > 24 {
+            p.text(MX, y + 2, 20, &format!("24 premières installations affichées sur {}. Importez-les pour faire apparaître les suivantes.", detected.len()), 12.0, W::Reg, MUT);
+            y += 26;
+        }
+    } else if notice.is_some_and(|message| message.contains("détectée(s) à importer")) {
+        p.rrect(MX, y + 8, MW, 76, 12, PANEL);
+        p.text(MX + 18, y + 8, 76, "Aucune nouvelle installation à importer.", 14.0, W::Med, GREEN);
+        y += 96;
+    }
+    y + 24
 }
 
 /// The catalogue has no connected provider yet; do not invent games or prices.
