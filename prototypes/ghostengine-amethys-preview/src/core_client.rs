@@ -224,7 +224,7 @@ pub fn add_detected_game(
         .map_err(|error| error.to_string())?;
 
         match response.result {
-            Ok(IpcResponsePayload::GameAdded { game }) => Ok(game),
+            Ok(IpcResponsePayload::GameAdded { game }) => Ok(*game),
             Ok(other) => Err(format!("Réponse IPC inattendue : {other:?}")),
             Err(error) => Err(format!("{} : {}", error.code, error.message)),
         }
@@ -276,7 +276,7 @@ pub fn set_game_executable(id: &str, executable: &str) -> Result<IpcGameEntry, S
         .map_err(|error| error.to_string())?;
 
         match response.result {
-            Ok(IpcResponsePayload::GameAdded { game }) => Ok(game),
+            Ok(IpcResponsePayload::GameAdded { game }) => Ok(*game),
             Ok(other) => Err(format!("Réponse IPC inattendue : {other:?}")),
             Err(error) => Err(format!("{} : {}", error.code, error.message)),
         }

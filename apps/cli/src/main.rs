@@ -324,7 +324,7 @@ async fn import_one_detected_game(
     match response.result {
         Ok(IpcResponsePayload::GameAdded { game }) => {
             println!("{} a été ajouté à la bibliothèque Amethys.", game.name);
-            saved_games.push(game);
+            saved_games.push(*game);
             Ok(true)
         }
         Err(remote_error) => Err(format!(

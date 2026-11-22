@@ -67,7 +67,7 @@ pub enum IpcResponsePayload {
     Pong,
     CoreStatus { state: IpcCoreStatus },
     Games { games: Vec<IpcGameEntry> },
-    GameAdded { game: IpcGameEntry },
+    GameAdded { game: Box<IpcGameEntry> },
     GameRemoved { removed: bool },
 }
 
@@ -353,6 +353,7 @@ mod tests {
             platform: "Steam".to_owned(),
             platform_id: Some("570".to_owned()),
             catalogue_game_id: Some("3000".to_owned()),
+            catalogue_metadata: None,
             install_path: "/games/example".to_owned(),
             executable: Some("game.exe".to_owned()),
         }];

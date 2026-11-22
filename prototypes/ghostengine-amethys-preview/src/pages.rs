@@ -952,7 +952,6 @@ pub fn game_detail_live(
     let mut metadata_height = 112;
     let mut genres_text = None;
     let mut genres_lines = 0usize;
-    let mut description_text = None;
     let mut description_lines = 0usize;
 
     if let Some(metadata) = game.catalogue_metadata.as_ref() {

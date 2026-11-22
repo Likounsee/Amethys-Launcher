@@ -88,7 +88,7 @@ where
                     .add_game(&name, &platform, &install_path, executable.as_deref())
                     .and_then(|game| {
                         ipc_game_entry(&database, game)
-                            .map(|game| IpcResponsePayload::GameAdded { game })
+                            .map(|game| IpcResponsePayload::GameAdded { game: Box::new(game) })
                     }),
                 IpcCommand::AddDetectedGame {
                     name,
@@ -159,7 +159,7 @@ where
                             platform_id.as_deref(),
                         )?;
                         ipc_game_entry(&database, game)
-                            .map(|game| IpcResponsePayload::GameAdded { game })
+                            .map(|game| IpcResponsePayload::GameAdded { game: Box::new(game) })
                     })
                 }
                 IpcCommand::SetGameExecutable { id, executable } => database
@@ -167,7 +167,7 @@ where
                     .and_then(|game| {
                         game.map(|game| ipc_game_entry(&database, game))
                             .transpose()?
-                            .map(|game| IpcResponsePayload::GameAdded { game })
+                            .map(|game| IpcResponsePayload::GameAdded { game: Box::new(game) })
                             .ok_or_else(|| {
                                 amethys_errors::AmethysError::new(
                                     amethys_errors::ErrorCode::StorageQuery,
