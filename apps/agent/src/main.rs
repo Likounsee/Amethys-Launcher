@@ -87,10 +87,9 @@ where
                 } => database
                     .add_game(&name, &platform, &install_path, executable.as_deref())
                     .and_then(|game| {
-                        ipc_game_entry(&database, game)
-                            .map(|game| IpcResponsePayload::GameAdded {
-                                game: Box::new(game),
-                            })
+                        ipc_game_entry(&database, game).map(|game| IpcResponsePayload::GameAdded {
+                            game: Box::new(game),
+                        })
                     }),
                 IpcCommand::AddDetectedGame {
                     name,
@@ -160,10 +159,9 @@ where
                             &platform,
                             platform_id.as_deref(),
                         )?;
-                        ipc_game_entry(&database, game)
-                            .map(|game| IpcResponsePayload::GameAdded {
-                                game: Box::new(game),
-                            })
+                        ipc_game_entry(&database, game).map(|game| IpcResponsePayload::GameAdded {
+                            game: Box::new(game),
+                        })
                     })
                 }
                 IpcCommand::SetGameExecutable { id, executable } => database
