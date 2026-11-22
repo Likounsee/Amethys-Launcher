@@ -1,32 +1,19 @@
 # Builds and releases
 
-## Supported 0.1 release targets
+## Amethys 0.1.0 — first public test milestone
 
-The release workflow builds the CLI and core agent as native Rust executables:
+The first public version, `v0.1.0`, has been built and published for Windows and Linux. It is an **experimental prototype intended for testing and feedback only**. It is not a finished launcher, not production-ready and not recommended for everyday use.
+
+The release workflow successfully built both targets, ran the release tests, packaged the binaries and generated and verified SHA-256 checksums. This confirms the automated release pipeline; it does not establish broad compatibility with every launcher, game, machine or installation.
+
+## Supported 0.1.0 test packages
 
 | Operating system | Target | Archive |
 | --- | --- | --- |
 | Windows 64-bit | `x86_64-pc-windows-msvc` | ZIP |
 | Linux x86_64 (GNU) | `x86_64-unknown-linux-gnu` | TAR.GZ |
 
-Each archive contains `amethys-agent` (or `.exe`), `amethysctl` (or `.exe`), the project `README.md`, the `LICENSE`, and this release/first-run guide as `RELEASES.md`. The archives are portable binaries, not an installer or operating-system service package. The agent must be running before the CLI can communicate with it. Automatic startup, service registration, desktop shortcuts, update delivery and uninstallers are not part of this initial release package.
-
-## Creating a 0.1 pre-release
-
-The first public candidate should use a semantic pre-release tag such as `v0.1.0-pre.1`. The suffix identifies a pre-release while the base version must match the workspace version in `Cargo.toml`.
-
-Only after the maintainer approves the candidate, create and push its tag:
-
-```sh
-git tag v0.1.0-pre.1
-git push origin v0.1.0-pre.1
-```
-
-The release workflow builds both targets, archives the two executables for each target, calculates SHA-256 checksums, and creates a **draft pre-release** on GitHub. It remains a draft and is not visible as a published download until the maintainer reviews and manually publishes it. The workflow never creates a tag; the maintainer must explicitly decide when to trigger it.
-
-The workflow can also be started manually for an existing tag through the GitHub Actions interface. Before building, it verifies that the tag exists and that its base version matches the workspace version in `Cargo.toml`. A suffix such as `-pre.1`, `-rc.1` or `-beta.1` is accepted and causes GitHub to mark the draft as a pre-release. A stable tag such as `v0.1.0` creates a normal draft release.
-
-Before upload, each platform job extracts its own archive and checks the packaged `amethysctl --version` and `amethysctl --help` commands. It then starts the `amethys-agent` binary from that extracted archive, waits for the IPC endpoint, and verifies `amethysctl ping` and `amethysctl status` against that packaged agent. The smoke test uses a temporary `AMETHYS_DATA_DIR` and cleans up the process and data afterward. The publish job requires exactly one Windows ZIP and one Linux TAR.GZ, generates `SHA256SUMS`, and verifies the checksums before creating the draft release.
+Each archive contains `amethys-agent` (or `.exe`), `amethysctl` (or `.exe`), the project `README.md`, the `LICENSE`, and this guide as `RELEASES.md`. The archives are portable test binaries, not an installer or operating-system service package. The agent must be running before the CLI can communicate with it. Automatic startup, service registration, desktop shortcuts, update delivery and uninstallers are not included.
 
 ## First-run notes
 
@@ -46,21 +33,13 @@ Before upload, each platform job extracts its own archive and checks the package
 
 The agent currently runs in the foreground. Closing its terminal stops it. The CLI commands must be run from the extracted directory (or with the full executable path). Do not expose the IPC endpoint over a network.
 
-## Validation before publication
+## Known scope and limitations
 
-A release candidate is not ready merely because compilation succeeded. Before publishing a draft, check:
+Version 0.1.0 is a very small first milestone. It provides a Rust agent, a CLI, local IPC, SQLite-backed storage, initial read-only launcher discovery, explicit import and basic local library operations. These foundations are incomplete and should be treated as experimental.
 
-- the CI workflow is green on Windows and Linux;
-- each archive contains both expected executables and is extracted and checked by its platform CI job;
-- `amethysctl --version` and `amethysctl --help` work from the packaged archive;
-- the agent starts and responds to `ping` and `status` in automated smoke tests;
-- scan, import, list, search and read-only verify are covered by automated tests and behave as documented;
-- SHA-256 checksums are generated and verified by the release workflow;
-- the release is still a draft, has the intended pre-release flag and has not been published without maintainer approval.
+There is no graphical interface, store/catalogue, game download or installation, account system, cloud save synchronization, backup feature, automatic updater, service installer or polished end-user experience. Discovery is metadata-based and does not guarantee that a game is launchable. The project is still being developed; do not present this release as a complete or production-ready product.
 
-The repository includes a [0.1 pre-release checklist](../releases/0.1.0-pre-release-checklist.md) and [draft release notes](../releases/0.1.0-pre-release-notes.md).
-
-### Test evidence and physical validation
+## Validation and test evidence
 
 Keep three evidence levels distinct in release notes and bug reports:
 
@@ -68,17 +47,16 @@ Keep three evidence levels distinct in release notes and bug reports:
 2. **Real-install validated:** a reproducible scan or operation was checked against an actual game installation and launcher on a real machine. Record only the platforms and cases that were genuinely exercised.
 3. **Not yet tested:** no suitable physical machine, launcher account or installed game was available. State this plainly; do not imply that the case passed.
 
-Physical testing on every operating system and every launcher is **not a blocker for Amethys 0.1**. Windows and Linux remain the supported release targets because their automated CI jobs build and test both targets. Real-install validation is recorded per adapter in [launcher discovery coverage](../discovery/LAUNCHER-COVERAGE.md); untested adapters must remain labelled as pending rather than being presented as verified. macOS is outside the 0.1 support target and is deferred until a suitable Mac test machine is available.
+The release pipeline completed successfully for both Windows and Linux: build and release tests passed, platform archives were generated, and SHA-256 checksums were generated and verified. These automated results do not replace real-world testing. Real-install validation is recorded per adapter in [launcher discovery coverage](../discovery/LAUNCHER-COVERAGE.md); untested adapters must remain labelled as pending. macOS is outside the 0.1.0 target and is deferred until a suitable Mac test machine is available.
 
-Community reports can improve real-install coverage after or around the initial release. Ask testers to follow the discovery document's checklist and redact personal paths. Never request credentials, tokens, or private launcher databases. Missing access to a physical test machine or a particular game is a documented limitation, not a reason to hold up otherwise passing 0.1 work.
+## Future development
 
-Windows named-pipe access uses an explicit DACL granting access to the
-current process user and LocalSystem, while omitting Everyone and anonymous
-users. Remote clients are rejected and client opens use identification-level
-QoS. The Windows CI suite checks the named-pipe peer SID/PID and runs an
-agent/CLI IPC smoke test. Unix sockets use mode `0600` and are cleaned up
-using socket inode checks.
+Development continues after this first test milestone. Planned directions include stabilizing the core, expanding automated and real-machine testing, improving launcher compatibility and diagnostics, and progressively designing a more complete user experience. A graphical interface and larger features such as a store/catalogue, downloads, accounts, backups and save synchronization are future possibilities, not part of 0.1.0. Their scope and timing are not guaranteed and may change as the project evolves.
 
-These controls restrict the IPC endpoint to the current user context; they do
-not protect against malicious code already running as that user or a
-compromised account. Review the [IPC security notes](IPC.md) before publishing.
+## Security and privacy
+
+Amethys does not bypass DRM, licensing, authentication, anti-cheat or platform restrictions. Discovery reads launcher metadata and does not modify game installations or launcher databases. IPC is local-only and must not be exposed over a network.
+
+Windows named-pipe access uses an explicit DACL granting access to the current process user and LocalSystem, while omitting Everyone and anonymous users. Remote clients are rejected and client opens use identification-level QoS. The Windows CI suite checks the named-pipe peer SID/PID and runs an agent/CLI IPC smoke test. Unix sockets use mode `0600` and are cleaned up using socket inode checks.
+
+These controls restrict the IPC endpoint to the current user context; they do not protect against malicious code already running as that user or a compromised account. Review the [IPC security notes](IPC.md) before testing.
