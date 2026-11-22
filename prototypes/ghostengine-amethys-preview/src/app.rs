@@ -5,6 +5,7 @@
 //! blitted every frame; hover and the scrollbar are drawn on top.
 
 use crate::covers::CoverStore;
+use amethys_ipc::IpcGameEntry;
 use crate::gfx::{self, Action, Fonts, Hit, Page, Painter, State, BG, W};
 use crate::pages::{self, Active, PageFn, MW, MX, SIDE_W};
 use ghostengine::window::InputState;
@@ -44,6 +45,8 @@ pub struct App {
     covers: &'static CoverStore,
     pub page: Page,
     pub st: State,
+    pub games: Vec<IpcGameEntry>,
+    pub core_error: Option<String>,
     /// Whole page pre-rendered once (sidebar occupies the first WIN_H rows).
     content: Framebuffer,
     hits: Vec<Hit>,
@@ -89,13 +92,16 @@ fn dark_theme() -> UiTheme {
 }
 
 impl App {
-    pub fn new(fonts: &'static Fonts, covers: &'static CoverStore) -> Self {
+    pub fn new(fonts: &'static Fonts, covers: &'static CoverStore, library: Result<Vec<IpcGameEntry>, String>) -> Self {
         let blank = || Framebuffer::new(WIN_W, WIN_H, BG).expect("framebuffer");
+        let (games, core_error) = match library { Ok(games) => (games, None), Err(error) => (Vec::new(), Some(error)) };
         let mut app = Self {
             fonts,
             covers,
             page: Page::Store,
             st: State::default(),
+            games,
+            core_error,
             content: blank(),
             hits: Vec::new(),
             scroll: ScrollViewport::new(Rect::new(SIDE_W as u32, 0, WIN_W - SIDE_W as u32, WIN_H), LayoutDirection::Vertical, WIN_H),
@@ -126,7 +132,15 @@ impl App {
         let vh = WIN_H as i32;
         let mut p = Painter::new(WIN_W, MAX_PAGE_H, self.fonts).with_covers(self.covers);
         pages::sidebar(&mut p, active, vh);
-        let h = page(&mut p, vh, &self.st).clamp(vh, MAX_PAGE_H as i32);
+        let h = if self.page == Page::Library {
+            pages::library_live(&mut p, vh, &self.games, self.core_error.as_deref())
+        } else if self.page == Page::Store || self.page == Page::Product {
+            pages::catalogue_unavailable(&mut p, vh)
+        } else if self.page == Page::Settings {
+            pages::settings_local(&mut p, vh, self.core_error.as_deref())
+        } else {
+            page(&mut p, vh, &self.st)
+        }.clamp(vh, MAX_PAGE_H as i32);
         self.hits = std::mem::take(&mut p.hits);
         self.content = p.fb;
         let old = self.scroll.offset();
