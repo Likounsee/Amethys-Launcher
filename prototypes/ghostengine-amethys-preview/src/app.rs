@@ -165,7 +165,13 @@ impl App {
         } else if self.page == Page::Store {
             pages::catalogue_unavailable(&mut p, vh)
         } else if self.page == Page::Settings {
-            pages::settings_local(&mut p, vh, self.core_error.as_deref())
+            pages::settings_local(
+                &mut p,
+                vh,
+                self.core_error.as_deref(),
+                self.games.len(),
+                self.media_store.map(|store| store.root()),
+            )
         } else {
             page(&mut p, vh, &self.st)
         }).clamp(vh, MAX_PAGE_H as i32);
