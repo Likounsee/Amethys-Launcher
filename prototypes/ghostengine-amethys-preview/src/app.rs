@@ -40,10 +40,22 @@ pub const WIN_H: u32 = 900;
 /// Produces a stable path key for comparing discovered and registered installs.
 fn normalized_install_path(path: &std::path::Path) -> String {
     let normalized = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    normalized.to_string_lossy()
-        .replace(char::from(92), "/")
-        .trim_end_matches('/')
-        .to_ascii_lowercase()
+    let value = normalized.to_string_lossy().into_owned();
+
+    // Windows paths are case-insensitive and accept both separator styles.
+    // Unix paths are case-sensitive, and a backslash is a valid filename
+    // character: normalizing either on Unix can merge distinct installations.
+    #[cfg(windows)]
+    {
+        value
+            .replace(char::from(92), "/")
+            .trim_end_matches('/')
+            .to_ascii_lowercase()
+    }
+    #[cfg(not(windows))]
+    {
+        value
+    }
 }
 
 pub struct Output {
@@ -862,4 +874,35 @@ impl App {
         Output { keep_running: true }
     }
 
+}
+
+
+#[cfg(test)]
+mod install_path_tests {
+    use super::normalized_install_path;
+    use std::path::Path;
+
+    #[cfg(unix)]
+    #[test]
+    fn unix_install_paths_preserve_case_and_backslashes() {
+        assert_ne!(
+            normalized_install_path(Path::new("/tmp/amethys-Game")),
+            normalized_install_path(Path::new("/tmp/amethys-game")),
+            "case-distinct Unix directories must remain distinct",
+        );
+        assert_ne!(
+            normalized_install_path(Path::new("/tmp/amethys-Game\\Data")),
+            normalized_install_path(Path::new("/tmp/amethys-Game/Data")),
+            "a Unix backslash is a filename character, not a path separator",
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_install_paths_ignore_case_and_separator_style() {
+        assert_eq!(
+            normalized_install_path(Path::new(r"C:\Games\Amethys")),
+            normalized_install_path(Path::new(r"c:/games/amethys/")),
+        );
+    }
 }
