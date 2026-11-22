@@ -34,6 +34,21 @@ La priorité de la 0.2 est une interface de bureau complète, cohérente et soig
 
 **Hors périmètre 0.2 :** catalogue commercial connecté, prix, promotions, achats, licences, téléchargement et installation depuis une boutique. Les écrans futurs peuvent être présentés comme indisponibles, jamais avec des données commerciales fictives.
 
+## Architecture future — boutique personnalisée sans serveur obligatoire
+
+La boutique personnalisée est prévue pour la version 0.3 et ne doit pas imposer un serveur payant à l'utilisateur ni au mainteneur pour les fonctions de base.
+
+- Catalogue commun : publier des fichiers de catalogue versionnés et des métadonnées statiques sur GitHub (Pages ou Releases), sous réserve des quotas et conditions du service.
+- Personnalisation : calculer localement les recommandations et le classement à partir du catalogue public, des jeux installés, de la bibliothèque, de la liste de souhaits et des préférences de l'utilisateur.
+- Vie privée : conserver localement les préférences et signaux personnels ; ne pas les envoyer à un serveur pour construire la page d'accueil.
+- Médias : mettre en cache localement les ressources publiques du catalogue, avec chargement progressif des fiches.
+- Fonctionnement hors ligne : garder accessibles la bibliothèque, les métadonnées déjà mises en cache et les préférences sans connexion.
+- Services distants éventuels : comptes Amethys, synchronisation multi-appareils et fonctions communautaires restent optionnels et ne seront étudiés que si un hébergement gratuit et durable ou un financement est trouvé.
+- Limites : GitHub peut distribuer des fichiers publics statiques, mais ne remplace pas une base de données privée, un système de comptes sécurisé ni les API officielles des boutiques.
+- Achats, licences et installation via les plateformes officielles : hors périmètre de la 0.2, à étudier pour la 0.3 avec les API et mécanismes autorisés par chaque fournisseur.
+
+Aucun abonnement serveur ne doit être une dépendance pour utiliser la bibliothèque locale d'Amethys.
+
 ## Version 0.3 — boutique et services en ligne
 
 - Intégrer des fournisseurs réels au moyen d'adaptateurs documentés et autorisés.

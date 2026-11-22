@@ -1911,11 +1911,13 @@ pub struct DiscoveryOutcome {
 /// progress after each provider metadata source. The cancellation flag is
 /// checked before starting every source, never in the middle of a provider's
 /// filesystem/database operation.
+type DiscoveryStage = (String, Box<dyn FnOnce() -> Vec<DetectedGame>>);
+
 pub fn discover_all_games_with_progress(
     cancel: &std::sync::atomic::AtomicBool,
     mut on_progress: impl FnMut(DiscoveryProgress),
 ) -> DiscoveryOutcome {
-    let mut stages: Vec<(String, Box<dyn FnOnce() -> Vec<DetectedGame>>)> = Vec::new();
+    let mut stages: Vec<DiscoveryStage> = Vec::new();
     stages.push(("Steam".to_owned(), Box::new(discover_steam_games)));
 
     for root in epic_manifest_roots() {
