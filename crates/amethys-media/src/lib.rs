@@ -203,11 +203,19 @@ fn replace_file(source: &Path, destination: &Path) -> Result<(), MediaPathError>
 
 #[cfg(windows)]
 fn replace_file(source: &Path, destination: &Path) -> Result<(), MediaPathError> {
-    // std::fs::rename does not replace an existing destination on Windows.
-    if destination.exists() {
-        fs::remove_file(destination)?;
+    use std::os::windows::ffi::OsStrExt;
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn MoveFileExW(existing: *const u16, replacement: *const u16, flags: u32) -> i32;
     }
-    fs::rename(source, destination)?;
+    let source: Vec<u16> = source.as_os_str().encode_wide().chain(Some(0)).collect();
+    let destination: Vec<u16> = destination.as_os_str().encode_wide().chain(Some(0)).collect();
+    // MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH keeps the old image intact
+    // until the fully copied temporary file is ready to replace it.
+    let moved = unsafe { MoveFileExW(source.as_ptr(), destination.as_ptr(), 0x1 | 0x8) };
+    if moved == 0 {
+        return Err(MediaPathError::Io(std::io::Error::last_os_error()));
+    }
     Ok(())
 }
 

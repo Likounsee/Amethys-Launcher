@@ -120,8 +120,9 @@ impl CoverStore {
         let texture = decode_texture(&bytes).map_err(|error| format!("{error:?}"))?;
         let mips = MipmapChain::new(&texture).map_err(|error| format!("{error:?}"))?;
         let _ = self.cache.insert(texture);
-        self.mips.insert(name.to_owned(), mips);
-        self.files += 1;
+        if self.mips.insert(name.to_owned(), mips).is_none() {
+            self.files += 1;
+        }
         Ok(())
     }
 
