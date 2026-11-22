@@ -320,8 +320,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Windows desktop packaging failed." }
           $app = Join-Path $PWD "dist/Amethys/amethys-launcher.exe"
           $snapshot = Join-Path $env:RUNNER_TEMP "amethys-desktop-smoke"
-          & $app --snapshot $snapshot
-          if ($LASTEXITCODE -ne 0) { throw "Packaged desktop application smoke test failed." }
-          if (-not (Test-Path (Join-Path $snapshot "w0-boutique.png"))) {
+          $env:AMETHYS_DATA_DIR = Join-Path $env:RUNNER_TEMP ("amethys-desktop-data-" + [guid]::NewGuid())
+          New-Item -ItemType Directory -Force $snapshot | Out-Null
+          $arguments = '--snapshot "' + $snapshot + '"'
+          $desktop = Start-Process -FilePath $app -ArgumentList $arguments -Wait -PassThru
+          if ($desktop.ExitCode -ne 0) { throw "Packaged desktop application smoke test failed with exit code $($desktop.ExitCode)." }
+          $firstShot = Join-Path $snapshot "w0-boutique.png"
+          if (-not (Test-Path $firstShot -PathType Leaf)) {
+            $diagnostic = Join-Path $snapshot "snapshot-error.txt"
+            if (Test-Path $diagnostic) { Get-Content $diagnostic | Write-Error }
             throw "Packaged desktop application did not produce its headless smoke-test image."
           }
