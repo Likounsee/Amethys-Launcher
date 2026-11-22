@@ -641,6 +641,7 @@ pub fn library_live(
             p.text(launch_x + 14, y + 146, 30, "Lancer", 12.0, W::Semi, VIO_DARK);
             p.hit(launch_x, y + 146, 80, 30, 8, Action::LaunchGame(index), false);
         }
+        p.hit(x, y, card_w, card_h, 14, Action::SelectGame(index), false);
     }
 
     let rows = (games.len() as i32 + columns - 1) / columns;
@@ -674,4 +675,71 @@ pub fn settings_local(p: &mut Painter, _vh: i32, core_error: Option<&str>) -> i3
     }
     p.text(MX, y + 176, 22, "Les réglages des boutiques, téléchargements et comptes seront ajoutés avec leurs services réels.", 13.0, W::Reg, MUT);
     360
+}
+
+
+/// Game details populated only from the selected real Amethys library entry.
+pub fn game_detail_live(
+    p: &mut Painter,
+    game: Option<&amethys_ipc::IpcGameEntry>,
+    index: usize,
+    notice: Option<&str>,
+) -> i32 {
+    let back_width = button(p, MX, 24, None, "Retour à la bibliothèque", false);
+    p.hit(MX, 24, back_width, 44, 12, Action::Go(Page::Library), false);
+
+    let Some(game) = game else {
+        p.text(MX, 104, 28, "Aucun jeu sélectionné", 22.0, W::Semi, TXT);
+        return 180;
+    };
+
+    let y = 96;
+    p.rrect(MX, y, MW, 410, 18, PANEL);
+    p.rrect_line(MX, y, MW, 410, 18, LINE);
+    p.text(MX + 28, y + 24, 38, &game.name, 30.0, W::Disp, TXT);
+    chip(p, MX + 28, y + 78, &game.platform);
+
+    let install_root = std::path::Path::new(&game.install_path);
+    let directory_exists = install_root.is_dir();
+    let executable = game.executable.as_deref().unwrap_or("Non configuré");
+    let executable_exists = game.executable.as_deref().is_some_and(|value| {
+        let path = std::path::Path::new(value);
+        let candidate = if path.is_absolute() { path.to_path_buf() } else { install_root.join(path) };
+        candidate.is_file()
+    });
+
+    let rows = [
+        ("Identifiant Amethys", game.id.as_str()),
+        ("Identifiant plateforme", game.platform_id.as_deref().unwrap_or("Non fourni")),
+        ("Dossier d'installation", game.install_path.as_str()),
+        ("Exécutable configuré", executable),
+        ("État du dossier", if directory_exists { "Présent" } else { "Introuvable" }),
+        ("État de l'exécutable", if executable_exists { "Fichier présent" } else if game.executable.is_some() { "Introuvable ou invalide" } else { "À configurer" }),
+    ];
+    let mut row_y = y + 126;
+    for (label, value) in rows {
+        p.fill(MX + 28, row_y, MW - 56, 1, LINE);
+        p.text(MX + 28, row_y + 6, 18, label, 12.0, W::Reg, MUT);
+        p.paragraph(MX + 260, row_y + 6, MW - 288, 18, value, 12.0, W::Med, TXT, 2);
+        row_y += 40;
+    }
+
+    if let Some(message) = notice {
+        let color = if message.starts_with("Échec") || message.starts_with("Impossible") { AMBER } else { GREEN };
+        p.paragraph(MX + 28, y + 356, MW - 56, 18, message, 12.0, W::Med, color, 2);
+    }
+
+    let remove_x = MX + MW - 176;
+    p.rrect(remove_x, y + 366, 72, 30, 8, ACT);
+    p.rrect_line(remove_x, y + 366, 72, 30, 8, LINE);
+    p.text(remove_x + 12, y + 366, 30, "Retirer", 12.0, W::Med, SOFT);
+    p.hit(remove_x, y + 366, 72, 30, 8, Action::RemoveGame(index), false);
+
+    if directory_exists && executable_exists {
+        let launch_x = MX + MW - 94;
+        p.rrect(launch_x, y + 366, 80, 30, 8, VIO);
+        p.text(launch_x + 14, y + 366, 30, "Lancer", 12.0, W::Semi, VIO_DARK);
+        p.hit(launch_x, y + 366, 80, 30, 8, Action::LaunchGame(index), false);
+    }
+    y + 450
 }
