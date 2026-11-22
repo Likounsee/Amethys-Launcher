@@ -220,7 +220,11 @@ fn replace_file(source: &Path, destination: &Path) -> Result<(), MediaPathError>
         fn MoveFileExW(existing: *const u16, replacement: *const u16, flags: u32) -> i32;
     }
     let source: Vec<u16> = source.as_os_str().encode_wide().chain(Some(0)).collect();
-    let destination: Vec<u16> = destination.as_os_str().encode_wide().chain(Some(0)).collect();
+    let destination: Vec<u16> = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect();
     // MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH keeps the old image intact
     // until the fully copied temporary file is ready to replace it.
     let moved = unsafe { MoveFileExW(source.as_ptr(), destination.as_ptr(), 0x1 | 0x8) };
@@ -354,7 +358,10 @@ mod tests {
             fs,
             time::{SystemTime, UNIX_EPOCH},
         };
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let root = std::env::temp_dir().join(format!(
             "amethys-media-replace-{}-{unique}",
             std::process::id()
@@ -366,9 +373,13 @@ mod tests {
         fs::write(&new_source, b"new").unwrap();
         let store = MediaStore::new(root.join("data"));
 
-        let old_path = store.import_library_asset("3000", MediaKind::Cover, &old_source).unwrap();
+        let old_path = store
+            .import_library_asset("3000", MediaKind::Cover, &old_source)
+            .unwrap();
         assert!(old_path.is_file());
-        let new_path = store.import_library_asset("3000", MediaKind::Cover, &new_source).unwrap();
+        let new_path = store
+            .import_library_asset("3000", MediaKind::Cover, &new_source)
+            .unwrap();
 
         assert_eq!(fs::read(&new_path).unwrap(), b"new");
         assert!(!old_path.exists());
