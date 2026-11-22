@@ -211,11 +211,36 @@ impl MediaStore {
     }
 }
 
-// std::fs::rename replaces an existing destination atomically on supported
-// filesystems. The temporary file is created beside the destination, so the
-// operation stays on the same volume on Windows as well as Unix.
+#[cfg(not(windows))]
 fn replace_file(source: &Path, destination: &Path) -> Result<(), MediaPathError> {
+    // The temporary file is created beside the destination, so rename stays
+    // on the same volume and atomically replaces the previous file.
     fs::rename(source, destination)?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn replace_file(source: &Path, destination: &Path) -> Result<(), MediaPathError> {
+    // std::fs::rename cannot replace an existing file on Windows. Move the
+    // old asset aside only after the new copy is complete, then restore it if
+    // installing the replacement fails.
+    let backup = source.with_extension("previous");
+    let had_destination = match fs::rename(destination, &backup) {
+        Ok(()) => true,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(error) => return Err(error.into()),
+    };
+
+    if let Err(error) = fs::rename(source, destination) {
+        if had_destination {
+            fs::rename(&backup, destination)?;
+        }
+        return Err(error.into());
+    }
+
+    if had_destination {
+        let _ = fs::remove_file(backup);
+    }
     Ok(())
 }
 
@@ -333,6 +358,41 @@ mod tests {
             .unwrap();
         assert_eq!(imported, root.join("data/media/library/3000/cover.png"));
         assert_eq!(fs::read(&imported).unwrap(), b"image bytes");
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn importing_same_cover_format_replaces_existing_file() {
+        use std::{
+            fs,
+            time::{SystemTime, UNIX_EPOCH},
+        };
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "amethys-media-same-format-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let first_source = root.join("first.png");
+        let second_source = root.join("second.png");
+        fs::write(&first_source, b"old cover").unwrap();
+        fs::write(&second_source, b"new cover").unwrap();
+        let store = MediaStore::new(root.join("data"));
+
+        let destination = store
+            .import_library_asset("3000", MediaKind::Cover, &first_source)
+            .unwrap();
+        assert_eq!(fs::read(&destination).unwrap(), b"old cover");
+
+        let replaced = store
+            .import_library_asset("3000", MediaKind::Cover, &second_source)
+            .unwrap();
+        assert_eq!(replaced, destination);
+        assert_eq!(fs::read(&replaced).unwrap(), b"new cover");
 
         fs::remove_dir_all(root).unwrap();
     }
