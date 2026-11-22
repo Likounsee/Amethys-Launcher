@@ -171,6 +171,8 @@ impl App {
                 self.core_error.as_deref(),
                 self.games.len(),
                 self.media_store.map(|store| store.root()),
+                self.scan_in_progress,
+                self.scan_progress.as_ref(),
             )
         } else {
             page(&mut p, vh, &self.st)
