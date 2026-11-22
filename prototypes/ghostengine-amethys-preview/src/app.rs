@@ -701,6 +701,11 @@ impl App {
         }
         let had_text_focus = self.search_focused || self.editing_executable;
         self.handle_search_input(input);
+        // Tab leaves the search field instead of trapping keyboard navigation.
+        if input.tab_pressed && self.search_focused {
+            self.search_focused = false;
+            self.render(false);
+        }
         if !had_text_focus && !self.search_focused && !self.editing_executable && input.tab_pressed {
             let (_, enabled) = self.screen_bounds();
             let count = enabled.iter().filter(|is_enabled| **is_enabled).count();
@@ -727,7 +732,10 @@ impl App {
         if !had_text_focus && !self.search_focused && !self.editing_executable
             && input.enter_pressed
         {
-            if let Some(index) = self.keyboard_focus.filter(|index| self.hits.get(*index).is_some()) {
+            let (_, enabled) = self.screen_bounds();
+            if let Some(index) = self.keyboard_focus
+                .filter(|index| enabled.get(*index).copied().unwrap_or(false))
+            {
                 let action = self.hits[index].action;
                 self.apply(action);
             }
