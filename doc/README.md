@@ -12,6 +12,10 @@ project overview and [LICENSE](../LICENSE) for usage and ownership terms.
   detection methods, identifier rules and current limitations.
 - [Builds and releases](technical/RELEASES.md) — release targets, archive
   contents, first-run procedure and publication checklist.
+- [0.1 pre-release checklist](releases/0.1.0-pre-release-checklist.md) — final
+  maintainer checks before publishing the candidate.
+- [0.1 draft release notes](releases/0.1.0-pre-release-notes.md) — candidate
+  scope, included functionality and known limitations.
 
 ## Community
 
