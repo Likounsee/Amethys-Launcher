@@ -96,7 +96,7 @@ impl App {
         let vh = WIN_H as i32;
         let mut p = Painter::new(WIN_W, MAX_PAGE_H, self.fonts).with_covers(self.covers);
         pages::sidebar(&mut p, active, vh);
-        let h = if self.page == Page::Library {
+        let h = (if self.page == Page::Library {
             pages::library_live(&mut p, vh, &self.games, self.core_error.as_deref(), self.notice.as_deref())
         } else if self.page == Page::Store || self.page == Page::Product {
             pages::catalogue_unavailable(&mut p, vh)
@@ -104,7 +104,7 @@ impl App {
             pages::settings_local(&mut p, vh, self.core_error.as_deref())
         } else {
             page(&mut p, vh, &self.st)
-        }.clamp(vh, MAX_PAGE_H as i32);
+        }).clamp(vh, MAX_PAGE_H as i32);
         self.hits = std::mem::take(&mut p.hits);
         self.content = p.fb;
         let old = self.scroll.offset();
