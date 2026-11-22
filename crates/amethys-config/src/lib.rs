@@ -4,7 +4,10 @@ use std::{
     io,
     path::{Path, PathBuf},
 };
-use tokio::{fs, io::{AsyncReadExt, AsyncWriteExt}};
+use tokio::{
+    fs,
+    io::{AsyncReadExt, AsyncWriteExt},
+};
 
 /// Resolves the shared per-user data directory used by both the agent and CLI.
 ///
