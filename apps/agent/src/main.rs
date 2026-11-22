@@ -152,6 +152,12 @@ where
                         }
                     };
                     game.and_then(|game| {
+                        attach_detected_provider_identity(
+                            &database,
+                            &game,
+                            &platform,
+                            platform_id.as_deref(),
+                        )?;
                         ipc_game_entry(&database, game)
                             .map(|game| IpcResponsePayload::GameAdded { game })
                     })
@@ -184,6 +190,60 @@ where
         ),
     };
     write_message(stream, &response).await?;
+    Ok(())
+}
+
+/// Maps discovery platform names to stable catalogue provider keys.
+/// Heroic is intentionally excluded: its app names can refer to several stores.
+fn catalogue_provider_key(platform: &str) -> Option<&'static str> {
+    match platform.trim().to_ascii_lowercase().as_str() {
+        "steam" => Some("steam"),
+        "epic games" => Some("epic"),
+        "gog" => Some("gog"),
+        "amazon games" => Some("amazon-games"),
+        "ea app" => Some("ea"),
+        "ubisoft connect" => Some("ubisoft"),
+        "battle.net" => Some("battlenet"),
+        "riot games" => Some("riot"),
+        _ => None,
+    }
+}
+
+/// Attaches discovered provider identities to canonical catalogue records.
+/// Matching is based only on exact provider IDs, never on game titles.
+fn attach_detected_provider_identity(
+    database: &Database,
+    game: &amethys_storage::GameEntry,
+    platform: &str,
+    platform_id: Option<&str>,
+) -> Result<(), amethys_errors::AmethysError> {
+    let (Some(provider), Some(external_id)) =
+        (catalogue_provider_key(platform), platform_id.map(str::trim))
+    else {
+        return Ok(());
+    };
+    if external_id.is_empty() {
+        return Ok(());
+    }
+
+    if let Some(catalogue_game) =
+        database.get_catalogue_game_by_external_id(provider, external_id)?
+    {
+        let current_catalogue_id = database.get_catalogue_game_id(&game.id)?;
+        if current_catalogue_id.as_deref() == Some(catalogue_game.id.as_str()) {
+            return Ok(());
+        }
+
+        // Never overwrite metadata or other provider identities that a user
+        // may already have attached to this installation's catalogue record.
+        let has_metadata = database.get_game_metadata(&game.id)?.is_some();
+        let has_external_ids = !database.list_external_game_ids(&game.id)?.is_empty();
+        if !has_metadata && !has_external_ids {
+            database.set_game_catalogue_id(&game.id, &catalogue_game.id)?;
+        }
+    } else {
+        database.set_external_game_id(&game.id, provider, external_id)?;
+    }
     Ok(())
 }
 
@@ -344,6 +404,49 @@ mod tests {
     use amethys_storage::Database;
     use std::sync::{Arc, atomic::AtomicU8};
     use tokio::{io::duplex, sync::Mutex};
+
+    #[test]
+    fn detected_provider_ids_link_installations_to_existing_catalogue_games() {
+        let database = Database::open(":memory:").expect("database opens");
+        let steam = database
+            .add_game_with_platform_id("Example", "Steam", Some("570"), "/games/steam", None)
+            .expect("Steam installation added");
+        database
+            .set_external_game_id(&steam.id, "steam", "570")
+            .expect("Steam identity saved");
+        database
+            .set_external_game_id(&steam.id, "epic", "example-epic")
+            .expect("Epic identity saved");
+
+        let epic = database
+            .add_game_with_platform_id(
+                "Example",
+                "Epic Games",
+                Some("example-epic"),
+                "/games/epic",
+                None,
+            )
+            .expect("Epic installation added");
+        super::attach_detected_provider_identity(
+            &database,
+            &epic,
+            "Epic Games",
+            Some("example-epic"),
+        )
+        .expect("catalogue identity attached");
+
+        assert_eq!(
+            database.get_catalogue_game_id(&epic.id).expect("Epic catalogue ID"),
+            database.get_catalogue_game_id(&steam.id).expect("Steam catalogue ID")
+        );
+    }
+
+    #[test]
+    fn unknown_discovery_sources_are_not_guessed_as_storefronts() {
+        assert_eq!(super::catalogue_provider_key("Heroic"), None);
+        assert_eq!(super::catalogue_provider_key("Steam"), Some("steam"));
+        assert_eq!(super::catalogue_provider_key("Epic Games"), Some("epic"));
+    }
 
     #[test]
     fn library_mutations_are_only_allowed_while_core_is_running() {
