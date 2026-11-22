@@ -112,8 +112,16 @@ impl CoverStore {
         self.mips.get(&slug(title))
     }
 
-    pub fn get_for_game(&self, game_id: &str, title: &str) -> Option<&MipmapChain> {
-        self.mips.get(game_id).or_else(|| self.get(title))
+    pub fn get_for_game(
+        &self,
+        catalogue_game_id: &str,
+        installation_id: &str,
+        title: &str,
+    ) -> Option<&MipmapChain> {
+        self.mips
+            .get(catalogue_game_id)
+            .or_else(|| self.mips.get(installation_id))
+            .or_else(|| self.get(title))
     }
 
     pub fn stats(&self) -> TextureCacheStats {

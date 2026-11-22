@@ -158,19 +158,20 @@ impl<'a> Painter<'a> {
 
     pub fn draw_cover_for_game(
         &mut self,
-        game_id: &str,
+        catalogue_game_id: &str,
+        installation_id: &str,
         title: &str,
         x: i32,
         y: i32,
         w: i32,
         h: i32,
     ) -> bool {
-        self.draw_cover_asset(Some(game_id), title, x, y, w, h)
+        self.draw_cover_asset(Some((catalogue_game_id, installation_id)), title, x, y, w, h)
     }
 
     fn draw_cover_asset(
         &mut self,
-        game_id: Option<&str>,
+        game_ids: Option<(&str, &str)>,
         title: &str,
         x: i32,
         y: i32,
@@ -178,7 +179,14 @@ impl<'a> Painter<'a> {
         h: i32,
     ) -> bool {
         let Some(store) = self.covers else { return false };
-        let Some(mips) = game_id.and_then(|id| store.get_for_game(id, title)).or_else(|| store.get(title)) else { return false };
+        let Some(mips) = game_ids
+            .and_then(|(catalogue_id, installation_id)| {
+                store.get_for_game(catalogue_id, installation_id, title)
+            })
+            .or_else(|| store.get(title))
+        else {
+            return false;
+        };
         let base = &mips.levels()[0];
         let (bw, bh) = (base.width() as i64, base.height() as i64);
         let dest = rect(x, y, w, h);

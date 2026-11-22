@@ -733,7 +733,7 @@ pub fn library_live(
             // original concept while keeping every label backed by Core data.
             p.rrect(x, cy, card_w, card_h, 14, PANEL);
             let artwork_id = game.catalogue_game_id.as_deref().unwrap_or(&game.id);
-            if !p.draw_cover_for_game(artwork_id, &game.name, x, cy, card_w, 150) {
+            if !p.draw_cover_for_game(artwork_id, &game.id, &game.name, x, cy, card_w, 150) {
                 let (top, bottom) = cover(&game.name);
                 p.gradient(x, cy, card_w, 150, 160.0, &[(0.0, hex(top)), (1.0, hex(bottom))]);
             }
@@ -849,7 +849,7 @@ pub fn game_detail_live(
     p.rrect(MX, y, MW, 410, 18, PANEL);
     p.rrect_line(MX, y, MW, 410, 18, LINE);
     let artwork_id = game.catalogue_game_id.as_deref().unwrap_or(&game.id);
-    if !p.draw_cover_for_game(artwork_id, &game.name, MX + MW - 330, y + 20, 290, 250) {
+    if !p.draw_cover_for_game(artwork_id, &game.id, &game.name, MX + MW - 330, y + 20, 290, 250) {
         let (top, bottom) = cover(&game.name);
         p.gradient(MX + MW - 330, y + 20, 290, 250, 160.0, &[(0.0, hex(top)), (1.0, hex(bottom))]);
     }
