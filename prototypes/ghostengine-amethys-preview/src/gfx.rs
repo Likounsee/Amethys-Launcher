@@ -43,6 +43,7 @@ pub enum Action {
     RefreshLibrary,
     LaunchGame(usize),
     RemoveGame(usize),
+    SelectGame(usize),
 }
 
 /// A clickable region recorded while a page is drawn (page coordinates).
