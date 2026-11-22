@@ -42,14 +42,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         return replay(&mut app, PathBuf::from(dir));
     }
 
-    NativeWindowSurface::run("Amethyst Launcher — GhostEngine test", WIN_W, WIN_H, move |fb, input, clipboard| {
-        let out = app.frame(fb, &input);
-        if let Some(action) = out.clipboard {
-            if let Ok(Some(text)) = clipboard.resolve(&action) {
-                app.paste(text);
-            }
-        }
-        out.keep_running
+    NativeWindowSurface::run("Amethys Launcher", WIN_W, WIN_H, move |fb, input, _clipboard| {
+        app.frame(fb, &input).keep_running
     })?;
     Ok(())
 }
