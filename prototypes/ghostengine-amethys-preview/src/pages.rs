@@ -929,7 +929,7 @@ pub fn game_detail_live(
         p.paragraph(MX + 28, y + 394, MW - 56, 18, message, 12.0, W::Med, color, 2);
     }
 
-    let cover_x = MX + MW - 430;
+    let cover_x = MX + MW - 560;
     p.rrect(cover_x, y + 430, 120, 30, 8, ACT);
     p.rrect_line(cover_x, y + 430, 120, 30, 8, LINE);
     p.text(cover_x + 10, y + 430, 30, "Changer la jaquette", 11.0, W::Med, SOFT);
@@ -1108,7 +1108,7 @@ pub fn game_detail_live(
         p.hit(cancel_x, editor_y + 94, 104, 44, 10, Action::CancelExecutableEdit, false);
         editor_y + 160
     } else {
-        metadata_bottom + 48
+        metadata_bottom + 12
     }
 }
 
