@@ -43,6 +43,8 @@ pub struct App {
     pub st: State,
     pub games: Vec<IpcGameEntry>,
     pub detected_games: Vec<amethys_discovery::DetectedGame>,
+    scan_receiver: Option<std::sync::mpsc::Receiver<Vec<amethys_discovery::DetectedGame>>>,
+    scan_in_progress: bool,
     pub core_error: Option<String>,
     pub notice: Option<String>,
     pub selected_game: Option<usize>,
@@ -74,6 +76,8 @@ impl App {
             st: State::default(),
             games,
             detected_games: Vec::new(),
+            scan_receiver: None,
+            scan_in_progress: false,
             core_error,
             notice: None,
             selected_game: None,
@@ -114,6 +118,7 @@ impl App {
                 vh,
                 &self.games,
                 &self.detected_games,
+                self.scan_in_progress,
                 self.st.lib_filter,
                 &self.search_query,
                 self.search_focused,
@@ -218,23 +223,18 @@ impl App {
                 self.render(false);
             }
             Action::ScanGames => {
-                self.notice = Some("Recherche des installations locales en cours…".to_owned());
-                self.detected_games.clear();
-                self.render(false);
-                self.detected_games = amethys_discovery::discover_all_games();
-                let imported = self.games.iter().map(|game| {
-                    (game.platform.to_ascii_lowercase(), game.platform_id.clone(), game.install_path.clone())
-                }).collect::<Vec<_>>();
-                self.detected_games.retain(|candidate| {
-                    !imported.iter().any(|(platform, platform_id, install_path)| {
-                        platform.eq_ignore_ascii_case(candidate.platform)
-                            && (candidate.platform_id.as_ref().is_some_and(|id| platform_id.as_ref() == Some(id))
-                                || std::path::Path::new(install_path) == candidate.install_path.as_path())
-                    })
-                });
-                let count = self.detected_games.len();
-                self.notice = Some(format!("{count} installation(s) détectée(s) à importer."));
-                self.render(false);
+                if !self.scan_in_progress {
+                    let (sender, receiver) = std::sync::mpsc::channel();
+                    std::thread::spawn(move || {
+                        let detected = amethys_discovery::discover_all_games();
+                        let _ = sender.send(detected);
+                    });
+                    self.scan_receiver = Some(receiver);
+                    self.scan_in_progress = true;
+                    self.detected_games.clear();
+                    self.notice = Some("Recherche des installations locales en cours…".to_owned());
+                    self.render(false);
+                }
             }
             Action::ImportDetectedGame(index) => {
                 let result = self.detected_games.get(index)
@@ -564,6 +564,29 @@ impl App {
 
     pub fn frame(&mut self, fb: &mut Framebuffer, input: &InputState) -> Output {
         let start = Instant::now();
+        let scan_result = self.scan_receiver.as_ref().map(|receiver| receiver.try_recv());
+        match scan_result {
+            Some(Ok(mut detected)) => {
+                self.scan_receiver = None;
+                self.scan_in_progress = false;
+                detected.retain(|candidate| !self.games.iter().any(|game| {
+                    game.platform.eq_ignore_ascii_case(candidate.platform)
+                        && (candidate.platform_id.as_ref().is_some_and(|id| game.platform_id.as_ref() == Some(id))
+                            || std::path::Path::new(&game.install_path) == candidate.install_path.as_path())
+                }));
+                let count = detected.len();
+                self.detected_games = detected;
+                self.notice = Some(format!("{count} installation(s) détectée(s) à importer."));
+                self.render(false);
+            }
+            Some(Err(std::sync::mpsc::TryRecvError::Disconnected)) => {
+                self.scan_receiver = None;
+                self.scan_in_progress = false;
+                self.notice = Some("La détection des jeux s'est interrompue de manière inattendue.".to_owned());
+                self.render(false);
+            }
+            Some(Err(std::sync::mpsc::TryRecvError::Empty)) | None => {}
+        }
         if let Some(last) = self.last_frame {
             self.frame_ms.push_back(start.duration_since(last).as_secs_f64() * 1000.0);
             if self.frame_ms.len() > 60 {
