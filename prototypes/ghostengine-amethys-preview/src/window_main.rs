@@ -28,8 +28,19 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .next()
         .unwrap_or_else(|| format!("{ASSETS}/fonts"));
     // The window closure must be 'static: leak the fonts for the process lifetime.
-    let fonts: &'static Fonts = Box::leak(Box::new(Fonts::load(&font_dir)?));
-    let covers: &'static CoverStore = Box::leak(Box::new(CoverStore::load(&PathBuf::from(ASSETS).join("covers"))));
+    let assets_dir = std::env::current_exe()
+        .ok()
+        .and_then(|path| path.parent().map(|parent| parent.join("assets")))
+        .filter(|path| path.is_dir())
+        .unwrap_or_else(|| PathBuf::from(ASSETS));
+    let fonts_dir = if font_dir != format!("{ASSETS}/fonts") {
+        PathBuf::from(font_dir)
+    } else {
+        assets_dir.join("fonts")
+    };
+    let fonts_path = fonts_dir.to_string_lossy().into_owned();
+    let fonts: &'static Fonts = Box::leak(Box::new(Fonts::load(&fonts_path)?));
+    let covers: &'static CoverStore = Box::leak(Box::new(CoverStore::load(&assets_dir.join("covers"))));
     println!("{} jaquettes décodées en {:.0} ms ({} échecs)", covers.files, covers.decode_ms, covers.failed.len());
     let library = core_client::list_games_or_start_agent();
     match &library {
