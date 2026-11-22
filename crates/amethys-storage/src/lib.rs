@@ -465,7 +465,8 @@ impl Database {
             .execute_batch("BEGIN IMMEDIATE")
             .map_err(|error| storage_error(format!("Could not begin game insertion: {error}")))?;
         let insertion = (|| {
-            let catalogue_game_id: String = self.connection
+            let catalogue_game_id: String = self
+                .connection
                 .query_row(
                     "SELECT CAST(COALESCE(MAX(CAST(id AS INTEGER)), 2999) + 1 AS TEXT)
                      FROM catalogue_games
@@ -473,13 +474,17 @@ impl Database {
                     [],
                     |row| row.get(0),
                 )
-                .map_err(|error| storage_error(format!("Could not allocate catalogue game ID: {error}")))?;
+                .map_err(|error| {
+                    storage_error(format!("Could not allocate catalogue game ID: {error}"))
+                })?;
             self.connection
                 .execute(
                     "INSERT INTO catalogue_games (id, name) VALUES (?1, ?2)",
                     params![catalogue_game_id, name],
                 )
-                .map_err(|error| storage_error(format!("Could not create catalogue game: {error}")))?;
+                .map_err(|error| {
+                    storage_error(format!("Could not create catalogue game: {error}"))
+                })?;
             self.connection
                 .execute(
                     "INSERT INTO games (
@@ -499,7 +504,7 @@ impl Database {
             Ok::<String, AmethysError>(catalogue_game_id)
         })();
         match insertion {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(error) => {
                 let _ = self.connection.execute_batch("ROLLBACK");
                 return Err(error);
@@ -507,7 +512,9 @@ impl Database {
         };
         if let Err(error) = self.connection.execute_batch("COMMIT") {
             let _ = self.connection.execute_batch("ROLLBACK");
-            return Err(storage_error(format!("Could not commit game insertion: {error}")));
+            return Err(storage_error(format!(
+                "Could not commit game insertion: {error}"
+            )));
         }
         self.get_game(&id)?
             .ok_or_else(|| storage_error("Added game could not be read back."))
@@ -1203,11 +1210,17 @@ mod tests {
             .expect("second game added");
 
         assert_eq!(
-            database.get_catalogue_game_id(&first.id).expect("first ID lookup").as_deref(),
+            database
+                .get_catalogue_game_id(&first.id)
+                .expect("first ID lookup")
+                .as_deref(),
             Some("3000")
         );
         assert_eq!(
-            database.get_catalogue_game_id(&second.id).expect("second ID lookup").as_deref(),
+            database
+                .get_catalogue_game_id(&second.id)
+                .expect("second ID lookup")
+                .as_deref(),
             Some("3001")
         );
     }

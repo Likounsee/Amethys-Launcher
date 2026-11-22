@@ -157,7 +157,9 @@ impl MediaStore {
         let destination = self.library_asset(game_id, kind, extension)?;
         self.prepare_asset_path(&destination)?;
 
-        let parent = destination.parent().ok_or(MediaPathError::InvalidProvider)?;
+        let parent = destination
+            .parent()
+            .ok_or(MediaPathError::InvalidProvider)?;
         let temporary = parent.join(format!(
             ".{}.import-{}-{}.{}",
             kind.file_stem(),
@@ -301,15 +303,26 @@ mod tests {
 
     #[test]
     fn importing_library_asset_copies_supported_image_to_game_directory() {
-        use std::{fs, time::{SystemTime, UNIX_EPOCH}};
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        let root = std::env::temp_dir().join(format!("amethys-media-import-{}-{unique}", std::process::id()));
+        use std::{
+            fs,
+            time::{SystemTime, UNIX_EPOCH},
+        };
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "amethys-media-import-{}-{unique}",
+            std::process::id()
+        ));
         let source = root.join("picked-cover.PNG");
         let store = MediaStore::new(root.join("data"));
         fs::create_dir_all(&root).unwrap();
         fs::write(&source, b"image bytes").unwrap();
 
-        let imported = store.import_library_asset("3000", MediaKind::Cover, &source).unwrap();
+        let imported = store
+            .import_library_asset("3000", MediaKind::Cover, &source)
+            .unwrap();
         assert_eq!(imported, root.join("data/media/library/3000/cover.png"));
         assert_eq!(fs::read(&imported).unwrap(), b"image bytes");
 
@@ -318,9 +331,18 @@ mod tests {
 
     #[test]
     fn importing_library_asset_rejects_unsupported_extensions_and_missing_sources() {
-        use std::{fs, time::{SystemTime, UNIX_EPOCH}};
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        let root = std::env::temp_dir().join(format!("amethys-media-invalid-{}-{unique}", std::process::id()));
+        use std::{
+            fs,
+            time::{SystemTime, UNIX_EPOCH},
+        };
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "amethys-media-invalid-{}-{unique}",
+            std::process::id()
+        ));
         fs::create_dir_all(&root).unwrap();
         let store = MediaStore::new(root.join("data"));
         let unsupported = root.join("cover.exe");
