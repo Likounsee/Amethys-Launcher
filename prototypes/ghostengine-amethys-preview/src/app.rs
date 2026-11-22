@@ -1,6 +1,5 @@
 //! Interactive Amethyst Launcher test app built on GhostEngine's own UI pieces:
 //! `ScrollViewport` (scrolling), `UiInteraction` (hover / press / click dispatch),
-//! `ComponentTree` + `UiComponent::text_input` (real text field, IME and clipboard)
 //! and the native window surface. Pages are pre-rendered with `pages::*` and
 //! blitted every frame; hover and the scrollbar are drawn on top.
 
@@ -11,9 +10,8 @@ use crate::pages::{self, Active, PageFn, MW, MX, SIDE_W};
 use ghostengine::window::InputState;
 use std::{collections::VecDeque, time::Instant};
 use ghostengine::{
-    draw_rounded_rect_aa, fill_rounded_rect_aa, ClipboardAction, Color, ComponentId, ComponentTree,
-    Framebuffer, Insets, LayoutDirection, LayoutItem, Rect, ScrollViewport, StackLayout,
-    UiComponent, UiInteraction, UiTheme,
+    draw_rounded_rect_aa, fill_rounded_rect_aa, Color, Framebuffer, LayoutDirection, Rect,
+    ScrollViewport, UiInteraction,
 };
 
 const PANEL_W: i32 = 520;
@@ -36,8 +34,6 @@ pub const WIN_H: u32 = 900;
 
 pub struct Output {
     pub keep_running: bool,
-    /// Set when the focused text field asks the host for the system clipboard.
-    pub clipboard: Option<ClipboardAction>,
 }
 
 pub struct App {
@@ -52,43 +48,12 @@ pub struct App {
     hits: Vec<Hit>,
     pub scroll: ScrollViewport,
     inter: UiInteraction,
-    trees: [ComponentTree; 2],
-    search_rect: Option<(usize, Rect)>,
-    theme: UiTheme,
     pub stats_open: bool,
     frame_ms: VecDeque<f64>,
     work_ms: f64,
     page_ms: f64,
     last_frame: Option<Instant>,
     bench: Option<Bench>,
-}
-
-fn search_tree(placeholder: &str) -> ComponentTree {
-    let field = UiComponent::text_input(ComponentId(1), placeholder, "").with_layout_item(LayoutItem::flexible());
-    let panel = UiComponent::panel(
-        ComponentId(0),
-        StackLayout::new(LayoutDirection::Vertical).with_padding(Insets::all(0)).with_gap(0),
-    )
-    .with_layout_item(LayoutItem::flexible())
-    .with_children(vec![field]);
-    ComponentTree::new(vec![panel])
-}
-
-fn dark_theme() -> UiTheme {
-    use crate::gfx::*;
-    UiTheme {
-        panel: PANEL,
-        panel_border: LINE,
-        text: TXT,
-        muted_text: MUT,
-        accent: VIO,
-        accent_hover: VIO,
-        accent_pressed: ACT_TXT,
-        disabled: MUT,
-        control: PANEL,
-        control_border: LINE,
-        track: ACT,
-    }
 }
 
 impl App {
@@ -106,9 +71,6 @@ impl App {
             hits: Vec::new(),
             scroll: ScrollViewport::new(Rect::new(SIDE_W as u32, 0, WIN_W - SIDE_W as u32, WIN_H), LayoutDirection::Vertical, WIN_H),
             inter: UiInteraction::new(),
-            trees: [search_tree("Rechercher un jeu, un studio, un genre"), search_tree("Filtrer ma bibliothèque")],
-            search_rect: None,
-            theme: dark_theme(),
             stats_open: false,
             frame_ms: VecDeque::new(),
             work_ms: 0.0,
@@ -216,7 +178,7 @@ impl App {
 
     /// Pages, hover, scrollbar and search field. `mask` hides the pointer from the page
     /// (used while the pointer is over the stats overlay).
-    fn draw_scene(&mut self, fb: &mut Framebuffer, real: &InputState, mask: bool) -> Option<ClipboardAction> {
+    fn draw_scene(&mut self, fb: &mut Framebuffer, real: &InputState, mask: bool) {
         let blank = InputState::default();
         let input = if mask { &blank } else { real };
         let main = Rect::new(SIDE_W as u32, 0, WIN_W - SIDE_W as u32, WIN_H);
@@ -252,25 +214,6 @@ impl App {
             let y = 4 + (self.scroll.offset() as f32 / self.scroll.max_offset() as f32 * travel as f32) as u32;
             fill_rounded_rect_aa(fb, Rect::new(WIN_W - 10, y, 6, thumb), 3, Color::rgba(185, 162, 255, 120));
         }
-
-        // real engine text field for the search bar (scrolls away with the page)
-        let mut clipboard = None;
-        self.search_rect = None;
-        // Search is intentionally hidden until it is wired to real catalogue/library queries.
-        let slot: Option<(usize, i32)> = None;
-        if let Some((idx, x)) = slot {
-            let off = self.scroll.offset();
-            if off <= 24 {
-                let b = Rect::new(x as u32, 24 - off, 520, 44);
-                let ev = self.trees[idx].handle_window_input(b, input);
-                self.trees[idx].render(fb, b, &self.fonts.reg, 14.0, &self.theme);
-                clipboard = ev.clipboard_action;
-                self.search_rect = Some((idx, b));
-            }
-        }
-        clipboard
-    }
-
 
     // ------------------------------------------------------------ stats overlay
     fn chip_rect(&self) -> Rect {
@@ -412,7 +355,7 @@ impl App {
         }
         self.last_frame = Some(start);
         if input.escape_down {
-            return Output { keep_running: false, clipboard: None };
+            return Output { keep_running: false };
         }
         let ptr = input.mouse_position;
         let over_chip = ptr.is_some_and(|p| self.chip_rect().contains(p));
@@ -425,7 +368,7 @@ impl App {
                 bench_now = true;
             }
         }
-        let clipboard = self.draw_scene(fb, input, over_chip || over_panel);
+        self.draw_scene(fb, input, over_chip || over_panel);
         if bench_now {
             self.run_bench(fb);
             self.draw_scene(fb, &InputState::default(), false);
@@ -434,14 +377,7 @@ impl App {
         if !bench_now {
             self.work_ms = start.elapsed().as_secs_f64() * 1000.0;
         }
-        Output { keep_running: true, clipboard }
+        Output { keep_running: true }
     }
 
-    /// Delivers system clipboard text to the focused search field.
-    pub fn paste(&mut self, text: String) {
-        if let Some((idx, b)) = self.search_rect {
-            let input = InputState { paste_pressed: true, clipboard_text: Some(text), ..Default::default() };
-            self.trees[idx].handle_window_input(b, &input);
-        }
-    }
 }
