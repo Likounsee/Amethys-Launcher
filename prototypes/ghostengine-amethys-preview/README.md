@@ -43,5 +43,5 @@ The prices, recommendations, library entries, playtime and store information are
 - The window/input integration currently relies on GhostEngine's `native-window` feature and its Winit/softbuffer/arboard dependencies.
 - The renderer is CPU-based. No GPU backend is included or required.
 - The current GhostEngine API is a single crate and is not yet the final cross-platform modular API.
-- The prototype has not been validated here by building/running it on Windows, Linux and macOS.
+- The prototype has not been validated here by building/running it on Windows, Linux and macOS. The copied `engine-build-fixes.patch` is historical context from the original test folder; do not apply it blindly to a newer GhostEngine checkout.
 
