@@ -38,17 +38,19 @@ If the agent is not running or the IPC connection fails, the UI reports the conn
 - Game names, source platform, IDs and install paths come from the real local SQLite-backed library.
 - Installation-directory presence is checked against the actual filesystem.
 - The Refresh button re-queries the real library over IPC.
+- The search field filters real saved metadata (name, platform, platform ID, install path and executable); platform filters are generated from the platforms actually present in Core.
+- The game details page can update the executable path through the Core `SetGameExecutable` IPC command; launch remains disabled until the configured path resolves to a file inside the registered game directory.
 - Configured executables can be launched from the UI after canonical-path validation confines them to the registered game directory.
 - Library entries can be removed through the Core-owned SQLite service; this removes only the Amethys entry, never the game files.
 - Core connection state is shown in Settings.
 - The Store page explicitly reports that no catalogue provider is connected yet. It does not show sample games, prices, discounts or fake purchase links.
-- Inactive navigation entries, fake recently played games and the mock search field have been removed/hidden.
+- Inactive navigation entries and fake recently played games have been removed/hidden.
 
 ## Not implemented yet
 
 Game launching is currently performed by the desktop client after it retrieves the saved executable metadata; it is not yet a Core IPC command. The current Core protocol does not expose playtime tracking, download/install management, store catalogue queries, wishlists, platform account linking or settings mutation. Those features need real services before they can be exposed as functional controls.
 
-The library is loaded at startup and can be refreshed manually. Real search, add/import flows inside the GUI, playtime tracking and live synchronization remain to be implemented. Executables can currently be configured through the existing Amethys CLI.
+The library is loaded at startup and can be refreshed manually. Add/import flows inside the GUI, playtime tracking and live synchronization remain to be implemented. Games can still be imported through the existing Amethys CLI.
 
 ## Temporary GhostEngine boundary
 
@@ -64,6 +66,7 @@ From the Amethys-Launcher repository root:
 cargo fmt --all -- --check
 cargo test --workspace --all-targets
 cargo check --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml
+cargo test --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml --lib
 cargo run --release --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml
 ```
 
