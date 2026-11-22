@@ -14,7 +14,8 @@ La priorité de la 0.2 est une interface de bureau complète, cohérente et soig
 - [ ] Compléter les états vides, chargements, erreurs, confirmations et notifications.
 - [ ] Rendre la mise en page adaptative aux dimensions réelles de la fenêtre.
 - [ ] Terminer la navigation clavier et le focus accessible des champs et dialogues.
-- [ ] Concevoir des paramètres cohérents, en distinguant les réglages réellement enregistrés des fonctions à venir.\n- [x] Retirer les prix, promotions et recommandations fictifs de l'écran Boutique 0.2 ; afficher clairement son statut indisponible jusqu'à la 0.3.
+- [ ] Concevoir des paramètres cohérents, en distinguant les réglages réellement enregistrés des fonctions à venir.
+- [x] Retirer les prix, promotions et recommandations fictifs de l'écran Boutique 0.2 ; afficher clairement son statut indisponible jusqu'à la 0.3.
 
 ### Bibliothèque et métadonnées
 - [x] Conserver un UUID local stable pour chaque installation/import de jeu, indépendant de l'identifiant du fournisseur.
