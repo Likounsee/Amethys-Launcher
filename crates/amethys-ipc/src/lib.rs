@@ -392,6 +392,22 @@ mod tests {
             serde_json::from_str(json).expect("legacy game payload deserializes");
         assert_eq!(game.platform_id, None);
         assert_eq!(game.catalogue_game_id, None);
+        assert_eq!(game.catalogue_metadata, None);
+    }
+
+    #[test]
+    fn catalogue_metadata_round_trips_over_ipc() {
+        let metadata = super::IpcGameMetadata {
+            genres: vec!["Action".to_owned(), "Adventure".to_owned()],
+            developer: Some("Studio".to_owned()),
+            publisher: Some("Publisher".to_owned()),
+            release_date: Some("2026-11-22".to_owned()),
+            description: Some("A canonical game description.".to_owned()),
+        };
+        let encoded = serde_json::to_vec(&metadata).expect("metadata serializes");
+        let decoded: super::IpcGameMetadata =
+            serde_json::from_slice(&encoded).expect("metadata deserializes");
+        assert_eq!(decoded, metadata);
     }
 
     #[test]
