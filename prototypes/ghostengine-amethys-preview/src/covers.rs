@@ -107,6 +107,37 @@ impl CoverStore {
         self.load_decoded_image(path, game_id)
     }
 
+    /// Removes a user cover and restores the bundled/generated placeholder.
+    /// Only the four known cover filenames inside this game's media directory are touched.
+    pub fn reset_library_cover(&mut self, game_id: &str, library_dir: &Path) -> Result<bool, String> {
+        if game_id.is_empty()
+            || game_id.len() > 128
+            || !game_id.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        {
+            return Err("identifiant de jeu invalide".to_owned());
+        }
+
+        let game_dir = library_dir.join(game_id);
+        let mut removed = false;
+        for extension in ["png", "jpg", "jpeg", "bmp"] {
+            let path = game_dir.join(format!("cover.{extension}"));
+            match std::fs::remove_file(&path) {
+                Ok(()) => removed = true,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(format!("{} : {error}", path.display())),
+            }
+        }
+
+        if removed {
+            self.mips.remove(game_id);
+            self.files = self.files.saturating_sub(1);
+            if std::fs::read_dir(&game_dir).map(|mut entries| entries.next().is_none()).unwrap_or(false) {
+                let _ = std::fs::remove_dir(&game_dir);
+            }
+        }
+        Ok(removed)
+    }
+
     fn load_decoded_image(&mut self, path: &Path, name: &str) -> Result<(), String> {
         let ext = path
             .extension()
