@@ -314,7 +314,7 @@ impl Database {
                      catalogue_game_id TEXT NOT NULL
                  );
                  INSERT INTO _amethys_catalogue_migration (installation_id, catalogue_game_id)
-                     SELECT id, 'game-' || lower(hex(randomblob(16))) FROM games;
+                     SELECT id, CAST(2999 + ROW_NUMBER() OVER (ORDER BY id) AS TEXT) FROM games;
                  INSERT INTO catalogue_games (id, name)
                      SELECT migration.catalogue_game_id, games.name
                      FROM games
@@ -498,8 +498,8 @@ impl Database {
                 .map_err(|error| storage_error(format!("Could not add game: {error}")))?;
             Ok::<String, AmethysError>(catalogue_game_id)
         })();
-        let catalogue_game_id = match insertion {
-            Ok(catalogue_game_id) => catalogue_game_id,
+        match insertion {
+            Ok(_) => {},
             Err(error) => {
                 let _ = self.connection.execute_batch("ROLLBACK");
                 return Err(error);
@@ -509,7 +509,6 @@ impl Database {
             let _ = self.connection.execute_batch("ROLLBACK");
             return Err(storage_error(format!("Could not commit game insertion: {error}")));
         }
-        let _ = catalogue_game_id;
         self.get_game(&id)?
             .ok_or_else(|| storage_error("Added game could not be read back."))
     }
