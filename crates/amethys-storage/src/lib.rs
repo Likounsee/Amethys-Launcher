@@ -215,7 +215,7 @@ impl Database {
             return Err(AmethysError::new(
                 ErrorCode::StorageMigration,
                 format!(
-                    "Database schema version {current_version} is newer than the supported version 3."
+                    "Database schema version {current_version} is newer than the supported version 4."
                 ),
             ));
         }
@@ -284,7 +284,7 @@ impl Database {
                  );
                  CREATE INDEX IF NOT EXISTS idx_game_external_ids_game
                      ON game_external_ids(game_id);
-                 INSERT OR IGNORE INTO schema_migrations (version) VALUES (5);",
+                 INSERT OR IGNORE INTO schema_migrations (version) VALUES (4);",
                 )
                 .map_err(|error| {
                     AmethysError::new(
@@ -1007,7 +1007,7 @@ mod tests {
                     version INTEGER PRIMARY KEY NOT NULL,
                     applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
-                INSERT INTO schema_migrations (version) VALUES (4);",
+                INSERT INTO schema_migrations (version) VALUES (5);",
                 )
                 .expect("future schema is created");
         }
