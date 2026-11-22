@@ -14,6 +14,8 @@ La priorité de la 0.2 est une interface de bureau complète, cohérente et soig
 - [ ] Compléter les états vides, chargements, erreurs, confirmations et notifications.
 - [ ] Rendre la mise en page adaptative aux dimensions réelles de la fenêtre.
 - [ ] Terminer la navigation clavier et le focus accessible des champs et dialogues.
+- [x] Afficher l'état réel de Core, le nombre de jeux locaux et le chemin du stockage média dans les paramètres.
+- [x] Ajouter aux paramètres des actions réelles pour actualiser la bibliothèque et lancer/annuler la détection des jeux.
 - [ ] Concevoir des paramètres cohérents, en distinguant les réglages réellement enregistrés des fonctions à venir.
 - [x] Retirer les prix, promotions et recommandations fictifs de l'écran Boutique 0.2 ; afficher clairement son statut indisponible jusqu'à la 0.3.
 
@@ -24,7 +26,8 @@ La priorité de la 0.2 est une interface de bureau complète, cohérente et soig
 - [x] Rattacher les métadonnées et identifiants externes au Game ID catalogue ; relier une installation existante uniquement lorsqu'un identifiant fournisseur exact correspond, sans fusion par nom.
 - [x] Migrer la première couche de métadonnées vers le modèle catalogue canonique sans perdre les données des bibliothèques existantes.
 - [x] Transmettre le Game ID catalogue et les métadonnées de catalogue au client de bureau via IPC ; les afficher dans la fiche de jeu.
-- [ ] Stocker localement les médias des jeux de la bibliothèque et les préférences propres à l'utilisateur.
+- [x] Stocker localement les illustrations personnalisées des jeux, indépendamment du dossier d'installation, avec remplacement et retour à l'image par défaut.
+- [ ] Stocker les préférences propres à l'utilisateur et les exposer dans une interface de paramètres complète.
 - [x] Utiliser des illustrations originales de remplacement pendant le développement ; aucun visuel de jeu non autorisé ne doit être distribué.
 - [ ] Améliorer le rapport d'import et les erreurs par installation.
 
