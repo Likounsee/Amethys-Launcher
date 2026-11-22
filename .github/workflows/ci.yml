@@ -343,6 +343,10 @@ jobs:
           & scripts/package-desktop-windows.ps1
           if ($LASTEXITCODE -ne 0) { throw "Windows desktop packaging failed." }
           $app = Join-Path $PWD "dist/Amethys/amethys-launcher.exe"
+          $cli = Join-Path $PWD "dist/Amethys/amethysctl.exe"
+          if (-not (Test-Path $cli -PathType Leaf)) { throw "Portable desktop package is missing amethysctl.exe." }
+          & $cli --help *> $null
+          if ($LASTEXITCODE -ne 0) { throw "Packaged amethysctl.exe failed its help smoke test." }
           $snapshot = Join-Path $env:RUNNER_TEMP "amethys-desktop-smoke"
           $env:AMETHYS_DATA_DIR = Join-Path $env:RUNNER_TEMP ("amethys-desktop-data-" + [guid]::NewGuid())
           New-Item -ItemType Directory -Force $snapshot | Out-Null
