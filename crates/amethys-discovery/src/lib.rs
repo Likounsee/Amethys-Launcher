@@ -1919,13 +1919,13 @@ pub fn discover_all_games_with_progress(
     stages.push(("Steam".to_owned(), Box::new(discover_steam_games)));
 
     for root in epic_manifest_roots() {
-        stages.push((format!("Epic Games · {}", root.display()), Box::new(move || scan_epic_manifests(&root))));
+        stages.push(("Epic Games".to_owned(), Box::new(move || scan_epic_manifests(&root))));
     }
     for file in heroic_legendary_installed_files() {
-        stages.push((format!("Heroic · {}", file.display()), Box::new(move || scan_heroic_legendary_installed(&file))));
+        stages.push(("Heroic".to_owned(), Box::new(move || scan_heroic_legendary_installed(&file))));
     }
     for database in gog_galaxy_databases() {
-        stages.push((format!("GOG Galaxy · {}", database.display()), Box::new(move || scan_gog_galaxy(&database))));
+        stages.push(("GOG Galaxy".to_owned(), Box::new(move || scan_gog_galaxy(&database))));
     }
     if let Some(database) = amazon_games_database() {
         stages.push(("Amazon Games".to_owned(), Box::new(move || scan_amazon_games(&database))));
@@ -2130,6 +2130,16 @@ fn unescape_vdf(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn discovery_cancellation_before_first_source_returns_without_scanning() {
+        let cancel = std::sync::atomic::AtomicBool::new(true);
+        let mut reports = 0;
+        let outcome = super::discover_all_games_with_progress(&cancel, |_| reports += 1);
+        assert!(outcome.cancelled);
+        assert!(outcome.games.is_empty());
+        assert_eq!(reports, 0);
+    }
+
     #[test]
     fn linux_steam_roots_cover_native_flatpak_and_custom_xdg_layouts() {
         let home = std::path::Path::new("/home/player");

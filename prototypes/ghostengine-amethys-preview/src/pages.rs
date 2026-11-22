@@ -708,6 +708,9 @@ pub fn library_live(
             "Aucun jeu enregistré ne correspond à cette plateforme. Choisissez « Tous » pour tout afficher."
         };
         p.paragraph(MX + 22, y + 52, MW - 44, 18, description, 13.0, W::Reg, MUT, 3);
+        if let Some(message) = notice {
+            p.paragraph(MX + 22, y + 88, MW - 44, 16, message, 11.0, W::Med, if message.starts_with("Import impossible") || message.starts_with("Échec") { AMBER } else { GREEN }, 2);
+        }
         y += 136;
     } else {
         if let Some(message) = notice {
