@@ -40,6 +40,7 @@ pub enum Action {
     Go(Page),
     StoreFilter(usize),
     LibFilter(usize),
+    RefreshLibrary,
 }
 
 /// A clickable region recorded while a page is drawn (page coordinates).
