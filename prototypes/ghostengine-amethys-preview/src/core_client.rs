@@ -30,7 +30,7 @@ fn list_games_with_timeouts(
             transport::connect(r"\\.\pipe\amethys-core"),
         )
         .await
-        .map_err(|_| "Délai dépassé lors de la connexion à Amethys Core (5 s).".to_owned())?
+        .map_err(|_| format!("Délai dépassé lors de la connexion à Amethys Core ({:.1} s).", connect_timeout.as_secs_f32()))?
         .map_err(|error| error.to_string())?;
 
         #[cfg(unix)]
@@ -51,7 +51,7 @@ fn list_games_with_timeouts(
             send_request(&mut stream, IpcRequest::new(IpcCommand::ListGames)),
         )
         .await
-        .map_err(|_| "Amethys Core n'a pas répondu dans les 15 secondes.".to_owned())?
+        .map_err(|_| format!("Amethys Core n'a pas répondu dans les {:.1} secondes.", request_timeout.as_secs_f32()))?
         .map_err(|error| error.to_string())?;
 
         match response.result {
