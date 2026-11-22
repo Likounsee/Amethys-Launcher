@@ -83,29 +83,34 @@ impl CoverStore {
     }
 
     fn load_image(&mut self, path: &Path, name: String) {
+        let result = self.load_decoded_image(path, &name);
+        if let Err(error) = result {
+            self.failed.push(format!("{name}: {error}"));
+        }
+    }
+
+    /// Loads or replaces a custom cover after it has been imported into local media.
+    /// The texture and mipmap chain are refreshed immediately, without restarting the UI.
+    pub fn load_library_cover(&mut self, game_id: &str, path: &Path) -> Result<(), String> {
+        self.load_decoded_image(path, game_id)
+    }
+
+    fn load_decoded_image(&mut self, path: &Path, name: &str) -> Result<(), String> {
         let ext = path
             .extension()
             .and_then(|extension| extension.to_str())
             .map(str::to_ascii_lowercase)
             .unwrap_or_default();
         if !matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "bmp") {
-            return;
+            return Err("unsupported image extension".to_owned());
         }
-        let decoded = std::fs::read(path)
-            .map_err(|error| error.to_string())
-            .and_then(|bytes| decode_texture(&bytes).map_err(|error| format!("{error:?}")));
-        match decoded.and_then(|texture| {
-            MipmapChain::new(&texture)
-                .map(|mips| (texture, mips))
-                .map_err(|error| format!("{error:?}"))
-        }) {
-            Ok((texture, mips)) => {
-                let _ = self.cache.insert(texture);
-                self.mips.insert(name, mips);
-                self.files += 1;
-            }
-            Err(error) => self.failed.push(format!("{name}: {error}")),
-        }
+        let bytes = std::fs::read(path).map_err(|error| error.to_string())?;
+        let texture = decode_texture(&bytes).map_err(|error| format!("{error:?}"))?;
+        let mips = MipmapChain::new(&texture).map_err(|error| format!("{error:?}"))?;
+        let _ = self.cache.insert(texture);
+        self.mips.insert(name.to_owned(), mips);
+        self.files += 1;
+        Ok(())
     }
 
     pub fn get(&self, title: &str) -> Option<&MipmapChain> {
