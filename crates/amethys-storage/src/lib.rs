@@ -222,7 +222,7 @@ impl Database {
             return Err(AmethysError::new(
                 ErrorCode::StorageMigration,
                 format!(
-                    "Database schema version {current_version} is newer than the supported version 4."
+                    "Database schema version {current_version} is newer than the supported version 5."
                 ),
             ));
         }
@@ -779,7 +779,7 @@ impl Database {
         let installation_id = validate_game_id(installation_id)?;
         self.connection
             .query_row(
-                "SELECT catalogue_game_id FROM games WHERE id = ?1",
+                "SELECT catalogue_game_id FROM games WHERE id = ?1 AND catalogue_game_id IS NOT NULL",
                 [installation_id],
                 |row| row.get(0),
             )
@@ -1139,6 +1139,50 @@ mod tests {
     }
 
     #[test]
+    fn separate_installations_can_share_one_explicit_catalogue_identity() {
+        let database = Database::open(":memory:").expect("database opens");
+        let steam = database
+            .add_game("Example Game", "Steam", "/games/steam", None)
+            .expect("Steam installation added");
+        let epic = database
+            .add_game("Example Game", "Epic", "/games/epic", None)
+            .expect("Epic installation added");
+        let catalogue_id = database
+            .get_catalogue_game_id(&steam.id)
+            .expect("catalogue ID lookup")
+            .expect("Steam catalogue ID exists");
+
+        assert_ne!(
+            database.get_catalogue_game_id(&epic.id).unwrap().unwrap(),
+            catalogue_id,
+            "installations must not be merged automatically"
+        );
+        assert!(
+            database
+                .set_game_catalogue_id(&epic.id, &catalogue_id)
+                .expect("explicit link succeeds")
+        );
+        assert_eq!(
+            database.get_catalogue_game_id(&epic.id).unwrap().as_deref(),
+            Some(catalogue_id.as_str())
+        );
+
+        let metadata = super::GameMetadata {
+            developer: Some("Shared Studio".to_owned()),
+            ..Default::default()
+        };
+        database.set_game_metadata(&steam.id, &metadata).unwrap();
+        database.set_external_game_id(&steam.id, "steam", "123456").unwrap();
+        database.set_external_game_id(&epic.id, "epic", "epic-abc").unwrap();
+
+        assert_eq!(database.get_game_metadata(&epic.id).unwrap(), Some(metadata));
+        let ids = database.list_external_game_ids(&epic.id).unwrap();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.iter().any(|id| id.provider == "steam" && id.external_id == "123456"));
+        assert!(ids.iter().any(|id| id.provider == "epic" && id.external_id == "epic-abc"));
+    }
+
+    #[test]
     fn external_provider_ids_cannot_be_ambiguous_or_overwritten_by_another_game() {
         let database = Database::open(":memory:").expect("database opens");
         let first = database
@@ -1324,7 +1368,7 @@ mod tests {
                     version INTEGER PRIMARY KEY NOT NULL,
                     applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
-                INSERT INTO schema_migrations (version) VALUES (5);",
+                INSERT INTO schema_migrations (version) VALUES (6);",
                 )
                 .expect("future schema is created");
         }
@@ -1337,7 +1381,7 @@ mod tests {
         assert!(
             error
                 .message()
-                .contains("newer than the supported version 4")
+                .contains("newer than the supported version 5")
         );
 
         let connection = rusqlite::Connection::open(&path).expect("fixture database reopens");
@@ -1402,7 +1446,7 @@ mod tests {
                 row.get(0)
             })
             .expect("version is readable");
-        assert_eq!(version, 5);
+        assert_eq!(version, 6);
         drop(database);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
@@ -1448,7 +1492,7 @@ mod tests {
                 row.get(0)
             })
             .expect("migration version is readable");
-        assert_eq!(version, 4);
+        assert_eq!(version, 5);
         assert!(
             database
                 .list_games()
@@ -1704,7 +1748,7 @@ mod tests {
                 row.get(0)
             })
             .expect("migration table readable");
-        assert_eq!(count, 4);
+        assert_eq!(count, 5);
         drop(database);
         let _ = std::fs::remove_file(path);
     }
