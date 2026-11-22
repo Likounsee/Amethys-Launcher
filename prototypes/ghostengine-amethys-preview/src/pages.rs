@@ -573,6 +573,20 @@ pub fn settings(p: &mut Painter, vh: i32, _st: &State) -> i32 {
 }
 
 
+/// Returns distinct, non-empty platform names in case-insensitive display order.
+fn library_platforms(games: &[amethys_ipc::IpcGameEntry]) -> Vec<String> {
+    let mut platforms = games
+        .iter()
+        .map(|game| game.platform.trim())
+        .filter(|platform| !platform.is_empty())
+        .map(str::to_owned)
+        .collect::<std::collections::BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    platforms.sort_by_key(|platform| platform.to_lowercase());
+    platforms
+}
+
 /// Real library page backed by entries returned by the Amethys Core IPC service.
 /// Real library page backed by entries returned by the Amethys Core IPC service.
 pub fn library_live(
@@ -584,15 +598,7 @@ pub fn library_live(
     notice: Option<&str>,
 ) -> i32 {
     p.text(MX, 25, 42, "Bibliothèque", 40.0, W::Disp, TXT);
-    let mut platforms = games
-        .iter()
-        .map(|game| game.platform.trim())
-        .filter(|platform| !platform.is_empty())
-        .map(str::to_owned)
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>();
-    platforms.sort_by_key(|platform| platform.to_lowercase());
+    let platforms = library_platforms(games);
 
     let active_filter = if selected_filter <= platforms.len() { selected_filter } else { 0 };
     let selected_platform = active_filter.checked_sub(1).and_then(|index| platforms.get(index)).map(String::as_str);
@@ -788,4 +794,32 @@ pub fn game_detail_live(
         p.hit(launch_x, y + 366, 80, 30, 8, Action::LaunchGame(index), false);
     }
     y + 450
+}
+
+
+#[cfg(test)]
+mod live_library_tests {
+    use super::*;
+
+    fn game(platform: &str) -> amethys_ipc::IpcGameEntry {
+        amethys_ipc::IpcGameEntry {
+            id: platform.to_owned(),
+            name: "Fixture".to_owned(),
+            platform: platform.to_owned(),
+            platform_id: None,
+            install_path: ".".to_owned(),
+            executable: None,
+        }
+    }
+
+    #[test]
+    fn platform_filters_are_unique_trimmed_and_sorted() {
+        let games = [game("Steam"), game(" Epic Games "), game("Steam"), game("GOG"), game(""), game("   ")];
+        assert_eq!(library_platforms(&games), vec!["Epic Games".to_owned(), "GOG".to_owned(), "Steam".to_owned()]);
+    }
+
+    #[test]
+    fn empty_library_has_no_platform_filters() {
+        assert!(library_platforms(&[]).is_empty());
+    }
 }
