@@ -837,23 +837,67 @@ pub fn catalogue_unavailable(p: &mut Painter, _vh: i32) -> i32 {
     340
 }
 
-/// Settings page exposes only the actual local Core connection state for now.
-pub fn settings_local(p: &mut Painter, _vh: i32, core_error: Option<&str>) -> i32 {
+/// Settings page reports the actual local Core and media-storage state.
+pub fn settings_local(
+    p: &mut Painter,
+    _vh: i32,
+    core_error: Option<&str>,
+    game_count: usize,
+    media_root: Option<&std::path::Path>,
+) -> i32 {
     p.text(MX, 25, 42, "Paramètres", 40.0, W::Disp, TXT);
-    let y = 104;
+    p.text(MX, 72, 20, "Configuration locale d'Amethys", 13.0, W::Reg, MUT);
+
+    let y = 112;
     p.rrect(MX, y, MW, 140, 16, PANEL);
     p.rrect_line(MX, y, MW, 140, 16, LINE);
-    p.text(MX + 24, y + 20, 26, "Amethys Core", 20.0, W::Semi, TXT);
+    p.text(MX + 24, y + 18, 26, "Amethys Core", 20.0, W::Semi, TXT);
     if let Some(error) = core_error {
-        p.text(MX + 24, y + 58, 20, "Déconnecté", 14.0, W::Semi, AMBER);
-        p.paragraph(MX + 24, y + 86, MW - 48, 18, error, 12.0, W::Reg, MUT, 2);
+        p.text(MX + 24, y + 52, 20, "Déconnecté", 14.0, W::Semi, AMBER);
+        p.paragraph(MX + 24, y + 78, MW - 48, 18, error, 12.0, W::Reg, MUT, 2);
     } else {
-        p.text(MX + 24, y + 62, 20, "Connecté · bibliothèque chargée via IPC local", 14.0, W::Semi, GREEN);
+        p.text(MX + 24, y + 58, 20, "Connecté · bibliothèque chargée via IPC local", 14.0, W::Semi, GREEN);
     }
-    p.text(MX, y + 176, 22, "Les réglages des boutiques, téléchargements et comptes seront ajoutés avec leurs services réels.", 13.0, W::Reg, MUT);
-    360
-}
 
+    let card_y = y + 164;
+    let gap = 16;
+    let card_w = (MW - gap) / 2;
+    p.rrect(MX, card_y, card_w, 154, 16, PANEL);
+    p.rrect_line(MX, card_y, card_w, 154, 16, LINE);
+    p.text(MX + 20, card_y + 16, 22, "Bibliothèque locale", 17.0, W::Semi, TXT);
+    p.text(MX + 20, card_y + 54, 34, &game_count.to_string(), 28.0, W::Bold, VIO);
+    p.text(MX + 20, card_y + 94, 20, "jeux enregistrés sur cet appareil", 12.0, W::Reg, MUT);
+
+    let storage_x = MX + card_w + gap;
+    p.rrect(storage_x, card_y, card_w, 154, 16, PANEL);
+    p.rrect_line(storage_x, card_y, card_w, 154, 16, LINE);
+    p.text(storage_x + 20, card_y + 16, 22, "Stockage des médias", 17.0, W::Semi, TXT);
+    if let Some(root) = media_root {
+        let path = root.to_string_lossy();
+        p.paragraph(storage_x + 20, card_y + 52, card_w - 40, 18, &path, 12.0, W::Reg, SOFT, 3);
+        p.text(storage_x + 20, card_y + 112, 18, "Images conservées sur cet appareil", 11.0, W::Reg, MUT);
+    } else {
+        p.text(storage_x + 20, card_y + 58, 20, "Indisponible", 13.0, W::Semi, AMBER);
+        p.text(storage_x + 20, card_y + 88, 18, "Le stockage local n'a pas été initialisé.", 11.0, W::Reg, MUT);
+    }
+
+    let info_y = card_y + 174;
+    p.rrect(MX, info_y, MW, 112, 16, PANEL);
+    p.rrect_line(MX, info_y, MW, 112, 16, LINE);
+    p.text(MX + 20, info_y + 14, 22, "Confidentialité et fonctionnement", 17.0, W::Semi, TXT);
+    p.paragraph(
+        MX + 20,
+        info_y + 48,
+        MW - 40,
+        18,
+        "La bibliothèque et les images personnalisées sont stockées localement. Aucun serveur Amethys payant n'est nécessaire pour utiliser ces fonctions. Les comptes et boutiques connectées arriveront avec leurs services dédiés.",
+        12.0,
+        W::Reg,
+        MUT,
+        3,
+    );
+    info_y + 132
+}
 
 /// Game details populated only from the selected real Amethys library entry.
 pub fn game_detail_live(
