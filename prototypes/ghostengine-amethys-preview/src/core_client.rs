@@ -8,6 +8,16 @@ use amethys_ipc::{
 
 /// Reads the real local library through the same IPC protocol used by Amethys clients.
 pub fn list_games() -> Result<Vec<IpcGameEntry>, String> {
+    list_games_with_timeouts(
+        std::time::Duration::from_secs(5),
+        std::time::Duration::from_secs(15),
+    )
+}
+
+fn list_games_with_timeouts(
+    connect_timeout: std::time::Duration,
+    request_timeout: std::time::Duration,
+) -> Result<Vec<IpcGameEntry>, String> {
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -16,7 +26,7 @@ pub fn list_games() -> Result<Vec<IpcGameEntry>, String> {
     runtime.block_on(async {
         #[cfg(windows)]
         let mut stream = tokio::time::timeout(
-            std::time::Duration::from_secs(5),
+            connect_timeout,
             transport::connect(r"\\.\pipe\amethys-core"),
         )
         .await
@@ -28,7 +38,7 @@ pub fn list_games() -> Result<Vec<IpcGameEntry>, String> {
             let directory = amethys_config::data_directory()
                 .map_err(|error| format!("Dossier de données Amethys indisponible : {error}"))?;
             tokio::time::timeout(
-                std::time::Duration::from_secs(5),
+                connect_timeout,
                 transport::connect(directory.join("amethys.sock")),
             )
             .await
@@ -37,7 +47,7 @@ pub fn list_games() -> Result<Vec<IpcGameEntry>, String> {
         };
 
         let response = tokio::time::timeout(
-            std::time::Duration::from_secs(15),
+            request_timeout,
             send_request(&mut stream, IpcRequest::new(IpcCommand::ListGames)),
         )
         .await
@@ -241,11 +251,15 @@ pub fn list_games_or_start_agent() -> Result<Vec<IpcGameEntry>, String> {
             command.spawn()
                 .map_err(|error| format!("Impossible de démarrer Amethys Core depuis {} : {error}", agent_path.display()))?;
 
-            for _ in 0..40 {
-                std::thread::sleep(std::time::Duration::from_millis(250));
-                if let Ok(games) = list_games() {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            while std::time::Instant::now() < deadline {
+                if let Ok(games) = list_games_with_timeouts(
+                    std::time::Duration::from_secs(1),
+                    std::time::Duration::from_secs(1),
+                ) {
                     return Ok(games);
                 }
+                std::thread::sleep(std::time::Duration::from_millis(250));
             }
             Err(format!(
                 "Amethys Core n'a pas répondu après son démarrage. Première erreur IPC : {initial_error}"
