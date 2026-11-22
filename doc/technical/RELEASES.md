@@ -11,18 +11,20 @@ The release workflow builds the CLI and core agent as native Rust executables:
 
 Each archive contains `amethys-agent` (or `.exe`), `amethysctl` (or `.exe`), the project `README.md`, the `LICENSE`, and this release/first-run guide as `RELEASES.md`. The archives are portable binaries, not an installer or operating-system service package. The agent must be running before the CLI can communicate with it. Automatic startup, service registration, desktop shortcuts, update delivery and uninstallers are not part of this initial release package.
 
-## Creating a draft release
+## Creating a 0.1 pre-release
 
-Push a version tag such as `v0.1.0`:
+The first public candidate should use a semantic pre-release tag such as `v0.1.0-pre.1`. The suffix identifies a pre-release while the base version must match the workspace version in `Cargo.toml`.
+
+Only after the maintainer approves the candidate, create and push its tag:
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.0-pre.1
+git push origin v0.1.0-pre.1
 ```
 
-The release workflow builds both targets, archives the two executables for each target, calculates SHA-256 checksums, and creates a **draft** GitHub release. The maintainer must inspect and manually publish the draft; a successful build does not automatically make a release public.
+The release workflow builds both targets, archives the two executables for each target, calculates SHA-256 checksums, and creates a **draft pre-release** on GitHub. It remains a draft and is not visible as a published download until the maintainer reviews and manually publishes it. The workflow never creates a tag; the maintainer must explicitly decide when to trigger it.
 
-The workflow can also be started manually for an existing tag through the GitHub Actions interface. Before building, it verifies that the tag exists and exactly matches the workspace version in `Cargo.toml`; this prevents publishing binaries under a version label that differs from the compiled project version.
+The workflow can also be started manually for an existing tag through the GitHub Actions interface. Before building, it verifies that the tag exists and that its base version matches the workspace version in `Cargo.toml`. A suffix such as `-pre.1`, `-rc.1` or `-beta.1` is accepted and causes GitHub to mark the draft as a pre-release. A stable tag such as `v0.1.0` creates a normal draft release.
 
 Before upload, each platform job extracts its own archive and checks the packaged `amethysctl --version` and `amethysctl --help` commands. It then starts the `amethys-agent` binary from that extracted archive, waits for the IPC endpoint, and verifies `amethysctl ping` and `amethysctl status` against that packaged agent. The smoke test uses a temporary `AMETHYS_DATA_DIR` and cleans up the process and data afterward. The publish job requires exactly one Windows ZIP and one Linux TAR.GZ, generates `SHA256SUMS`, and verifies the checksums before creating the draft release.
 
@@ -53,7 +55,10 @@ A release candidate is not ready merely because compilation succeeded. Before pu
 - `amethysctl --version` and `amethysctl --help` work from the packaged archive;
 - the agent starts and responds to `ping` and `status` in automated smoke tests;
 - scan, import, list, search and read-only verify are covered by automated tests and behave as documented;
-- SHA-256 checksums are generated and verified by the release workflow.
+- SHA-256 checksums are generated and verified by the release workflow;
+- the release is still a draft, has the intended pre-release flag and has not been published without maintainer approval.
+
+The repository includes a [0.1 pre-release checklist](../releases/0.1.0-pre-release-checklist.md) and [draft release notes](../releases/0.1.0-pre-release-notes.md).
 
 ### Test evidence and physical validation
 
