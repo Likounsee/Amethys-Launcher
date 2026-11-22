@@ -458,29 +458,58 @@ impl Database {
         }
 
         let id = uuid::Uuid::new_v4().to_string();
-        let catalogue_game_id = format!("game-{}", uuid::Uuid::new_v4());
+        // Allocate canonical catalogue IDs transactionally. The numeric namespace
+        // starts at 3000 and advances past any existing numeric IDs; legacy
+        // migrated IDs (for example "game-...") remain valid and unchanged.
         self.connection
-            .execute(
-                "INSERT INTO catalogue_games (id, name) VALUES (?1, ?2)",
-                params![catalogue_game_id, name],
-            )
-            .map_err(|error| storage_error(format!("Could not create catalogue game: {error}")))?;
-        self.connection
-            .execute(
-                "INSERT INTO games (
-                    id, name, platform, platform_id, install_path, executable, catalogue_game_id
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-                params![
-                    id,
-                    name,
-                    platform,
-                    platform_id,
-                    install_path,
-                    executable,
-                    catalogue_game_id
-                ],
-            )
-            .map_err(|error| storage_error(format!("Could not add game: {error}")))?;
+            .execute_batch("BEGIN IMMEDIATE")
+            .map_err(|error| storage_error(format!("Could not begin game insertion: {error}")))?;
+        let insertion = (|| {
+            let catalogue_game_id: String = self.connection
+                .query_row(
+                    "SELECT CAST(COALESCE(MAX(CAST(id AS INTEGER)), 2999) + 1 AS TEXT)
+                     FROM catalogue_games
+                     WHERE id <> '' AND id NOT GLOB '*[^0-9]*'",
+                    [],
+                    |row| row.get(0),
+                )
+                .map_err(|error| storage_error(format!("Could not allocate catalogue game ID: {error}")))?;
+            self.connection
+                .execute(
+                    "INSERT INTO catalogue_games (id, name) VALUES (?1, ?2)",
+                    params![catalogue_game_id, name],
+                )
+                .map_err(|error| storage_error(format!("Could not create catalogue game: {error}")))?;
+            self.connection
+                .execute(
+                    "INSERT INTO games (
+                        id, name, platform, platform_id, install_path, executable, catalogue_game_id
+                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    params![
+                        id,
+                        name,
+                        platform,
+                        platform_id,
+                        install_path,
+                        executable,
+                        catalogue_game_id
+                    ],
+                )
+                .map_err(|error| storage_error(format!("Could not add game: {error}")))?;
+            Ok::<String, AmethysError>(catalogue_game_id)
+        })();
+        let catalogue_game_id = match insertion {
+            Ok(catalogue_game_id) => catalogue_game_id,
+            Err(error) => {
+                let _ = self.connection.execute_batch("ROLLBACK");
+                return Err(error);
+            }
+        };
+        if let Err(error) = self.connection.execute_batch("COMMIT") {
+            let _ = self.connection.execute_batch("ROLLBACK");
+            return Err(storage_error(format!("Could not commit game insertion: {error}")));
+        }
+        let _ = catalogue_game_id;
         self.get_game(&id)?
             .ok_or_else(|| storage_error("Added game could not be read back."))
     }
@@ -1162,6 +1191,26 @@ mod tests {
             )
             .expect("catalogue ID remains stored");
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn new_catalogue_game_ids_are_numeric_and_start_at_3000() {
+        let database = Database::open(":memory:").expect("database opens");
+        let first = database
+            .add_game("First", "Local", "/games/first", None)
+            .expect("first game added");
+        let second = database
+            .add_game("Second", "Local", "/games/second", None)
+            .expect("second game added");
+
+        assert_eq!(
+            database.get_catalogue_game_id(&first.id).expect("first ID lookup").as_deref(),
+            Some("3000")
+        );
+        assert_eq!(
+            database.get_catalogue_game_id(&second.id).expect("second ID lookup").as_deref(),
+            Some("3001")
+        );
     }
 
     #[test]
