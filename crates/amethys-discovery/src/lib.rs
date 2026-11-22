@@ -1940,16 +1940,33 @@ pub fn discover_all_games_with_progress(
         if let Some(program_files_x86) = std::env::var_os("ProgramFiles(x86)") {
             ea_roots.push(PathBuf::from(program_files_x86).join("EA Games"));
         }
-        stages.push(("EA app".to_owned(), Box::new(move || scan_ea_games(&ea_roots))));
-        stages.push(("Ubisoft Connect".to_owned(), Box::new(discover_ubisoft_games)));
+        stages.push((
+            "EA app".to_owned(),
+            Box::new(move || scan_ea_games(&ea_roots)),
+        ));
+        stages.push((
+            "Ubisoft Connect".to_owned(),
+            Box::new(discover_ubisoft_games),
+        ));
         if let Some(installs_file) = riot_client_installs_file() {
-            stages.push(("Riot Games".to_owned(), Box::new(move || scan_riot_client_installs(&installs_file))));
+            stages.push((
+                "Riot Games".to_owned(),
+                Box::new(move || scan_riot_client_installs(&installs_file)),
+            ));
         }
         if let Some(program_data) = std::env::var_os("ProgramData").map(PathBuf::from) {
-            stages.push(("Riot Games · product settings".to_owned(), Box::new(move || scan_riot_product_settings(&program_data.join("Riot Games/Metadata")))));
+            stages.push((
+                "Riot Games · product settings".to_owned(),
+                Box::new(move || {
+                    scan_riot_product_settings(&program_data.join("Riot Games/Metadata"))
+                }),
+            ));
         }
         if let Some(database) = battlenet_product_database() {
-            stages.push(("Battle.net".to_owned(), Box::new(move || scan_battlenet_product_db(&database))));
+            stages.push((
+                "Battle.net".to_owned(),
+                Box::new(move || scan_battlenet_product_db(&database)),
+            ));
         }
         stages.push(("Xbox".to_owned(), Box::new(discover_xbox_games)));
     }
@@ -1958,7 +1975,10 @@ pub fn discover_all_games_with_progress(
     let mut games = Vec::new();
     for (index, (source, scan)) in stages.into_iter().enumerate() {
         if cancel.load(std::sync::atomic::Ordering::Relaxed) {
-            return DiscoveryOutcome { games, cancelled: true };
+            return DiscoveryOutcome {
+                games,
+                cancelled: true,
+            };
         }
         let found = scan();
         let found_count = found.len();
@@ -1971,27 +1991,31 @@ pub fn discover_all_games_with_progress(
         });
     }
 
-    games.sort_by_key(|game| (
-        game.platform,
-        game.name.to_lowercase(),
-        game.install_path.clone(),
-        game.platform_id.clone(),
-    ));
+    games.sort_by_key(|game| {
+        (
+            game.platform,
+            game.name.to_lowercase(),
+            game.install_path.clone(),
+            game.platform_id.clone(),
+        )
+    });
     let mut seen_installations = BTreeSet::new();
-    games.retain(|game| insert_unique_platform_install_path(
-        &mut seen_installations,
-        game.platform,
-        &game.install_path,
-    ));
-    DiscoveryOutcome { games, cancelled: false }
+    games.retain(|game| {
+        insert_unique_platform_install_path(
+            &mut seen_installations,
+            game.platform,
+            &game.install_path,
+        )
+    });
+    DiscoveryOutcome {
+        games,
+        cancelled: false,
+    }
 }
 
 /// Backwards-compatible complete scan for callers that do not need progress.
 pub fn discover_all_games() -> Vec<DetectedGame> {
-    discover_all_games_with_progress(
-        &std::sync::atomic::AtomicBool::new(false),
-        |_| {},
-    ).games
+    discover_all_games_with_progress(&std::sync::atomic::AtomicBool::new(false), |_| {}).games
 }
 
 /// Adds an install path once per platform, respecting the host filesystem's case rules.

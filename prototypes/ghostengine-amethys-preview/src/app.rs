@@ -5,7 +5,7 @@
 
 use crate::covers::CoverStore;
 use amethys_ipc::IpcGameEntry;
-use crate::gfx::{self, Action, Fonts, Hit, Page, Painter, State, BG, W};
+use crate::gfx::{self, Action, Fonts, Hit, Page, Painter, State, BG, LINE, PANEL, TXT, VIO, W};
 use crate::pages::{self, Active, PageFn, SIDE_W};
 use ghostengine::InputState;
 use std::{collections::VecDeque, sync::{Arc, atomic::{AtomicBool, Ordering}}, time::Instant};
@@ -672,7 +672,7 @@ impl App {
                     if let Some(id) = game.platform_id.as_deref() {
                         known_platform_ids.insert((platform.clone(), id.to_ascii_lowercase()));
                     }
-                    known_install_paths.insert(normalized_install_path(&game.install_path));
+                    known_install_paths.insert(normalized_install_path(std::path::Path::new(&game.install_path)));
                 }
                 let mut detected = outcome.games;
                 detected.retain(|candidate| {
