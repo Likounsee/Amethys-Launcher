@@ -79,7 +79,7 @@ fn resolve_launch_executable(game: &IpcGameEntry) -> Result<(std::path::PathBuf,
         {
             return Err("Chemin d'exécutable relatif non sûr.".to_owned());
         }
-        root.join(candidate)
+        root.join(trimmed)
     };
     let resolved = candidate.canonicalize()
         .map_err(|error| format!("Exécutable introuvable ou inaccessible : {error}"))?;
@@ -302,6 +302,20 @@ mod tests {
         assert!(resolve_launch_executable(&game).is_err());
         std::fs::remove_file(outside).unwrap();
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlink_that_escapes_install_root() {
+        let (root, mut game) = fixture();
+        let outside = root.parent().unwrap().join(format!("amethys-outside-{}", std::process::id()));
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("escape.exe"), b"outside").unwrap();
+        std::os::unix::fs::symlink(&outside, root.join("bin/linked")).unwrap();
+        game.executable = Some("bin/linked/escape.exe".to_owned());
+        assert!(resolve_launch_executable(&game).is_err());
+        std::fs::remove_dir_all(root).unwrap();
+        std::fs::remove_dir_all(outside).unwrap();
     }
 
     #[test]
