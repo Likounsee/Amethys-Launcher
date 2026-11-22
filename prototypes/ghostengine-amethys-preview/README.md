@@ -14,6 +14,7 @@ Amethys-Launcher/
 ├── prototypes/ghostengine-amethys-preview/
 └── vendor/ghostengine/
     ├── Cargo.toml
+    ├── examples/
     └── src/
 ```
 
