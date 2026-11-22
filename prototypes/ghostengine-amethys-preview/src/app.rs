@@ -43,6 +43,7 @@ pub struct App {
     pub st: State,
     pub games: Vec<IpcGameEntry>,
     pub core_error: Option<String>,
+    pub notice: Option<String>,
     /// Whole page pre-rendered once (sidebar occupies the first WIN_H rows).
     content: Framebuffer,
     hits: Vec<Hit>,
@@ -67,6 +68,7 @@ impl App {
             st: State::default(),
             games,
             core_error,
+            notice: None,
             content: blank(),
             hits: Vec::new(),
             scroll: ScrollViewport::new(Rect::new(SIDE_W as u32, 0, WIN_W - SIDE_W as u32, WIN_H), LayoutDirection::Vertical, WIN_H),
@@ -95,7 +97,7 @@ impl App {
         let mut p = Painter::new(WIN_W, MAX_PAGE_H, self.fonts).with_covers(self.covers);
         pages::sidebar(&mut p, active, vh);
         let h = if self.page == Page::Library {
-            pages::library_live(&mut p, vh, &self.games, self.core_error.as_deref())
+            pages::library_live(&mut p, vh, &self.games, self.core_error.as_deref(), self.notice.as_deref())
         } else if self.page == Page::Store || self.page == Page::Product {
             pages::catalogue_unavailable(&mut p, vh)
         } else if self.page == Page::Settings {
@@ -128,9 +130,17 @@ impl App {
             }
             Action::RefreshLibrary => {
                 match crate::core_client::list_games() {
-                    Ok(games) => { self.games = games; self.core_error = None; }
-                    Err(error) => self.core_error = Some(error),
+                    Ok(games) => { self.games = games; self.core_error = None; self.notice = Some("Bibliothèque actualisée.".to_owned()); }
+                    Err(error) => { self.core_error = Some(error); self.notice = None; }
                 }
+                self.render(false);
+            }
+            Action::LaunchGame(index) => {
+                let result = match self.games.get(index) {
+                    Some(game) => crate::core_client::launch_game(game).map(|pid| format!("Démarrage demandé : {} (processus {}).", game.name, pid)),
+                    None => Err("Ce jeu n'existe plus dans la bibliothèque chargée.".to_owned()),
+                };
+                self.notice = Some(match result { Ok(message) => message, Err(error) => format!("Échec du lancement : {error}") });
                 self.render(false);
             }
         }
