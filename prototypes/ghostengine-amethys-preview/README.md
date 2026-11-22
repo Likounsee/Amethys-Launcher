@@ -39,15 +39,18 @@ If the agent is not running or the IPC connection fails, the UI reports the conn
 - The Library page requests `ListGames` through the existing versioned IPC protocol.
 - Game names, source platform, IDs and install paths come from the real local SQLite-backed library.
 - Installation-directory presence is checked against the actual filesystem.
+- The Refresh button re-queries the real library over IPC.
+- Configured executables can be launched from the UI after canonical-path validation confines them to the registered game directory.
+- Library entries can be removed through the Core-owned SQLite service; this removes only the Amethys entry, never the game files.
 - Core connection state is shown in Settings.
 - The Store page explicitly reports that no catalogue provider is connected yet. It does not show sample games, prices, discounts or fake purchase links.
 - Inactive navigation entries, fake recently played games and the mock search field have been removed/hidden.
 
 ## Not implemented yet
 
-The current Amethys Core IPC protocol does not expose game launching, playtime tracking, download/install management, store catalogue queries, wishlists, platform account linking or settings mutation. The UI does not pretend those features work. They need real Core services and IPC commands before they can be exposed as functional controls.
+The current Amethys Core IPC protocol does not expose playtime tracking, download/install management, store catalogue queries, wishlists, platform account linking or settings mutation. The UI does not pretend those features work. They need real Core services and IPC commands before they can be exposed as functional controls.
 
-The current first milestone also loads the library once at application startup. Live refresh, add/remove actions, real search, selected-game detail pages and launch actions remain to be implemented.
+The library is loaded at startup and can be refreshed manually. Real search, add/import flows inside the GUI, selected-game detail pages and live synchronization remain to be implemented. Executables can currently be configured through the existing Amethys CLI.
 
 ## Temporary GhostEngine boundary
 
