@@ -16,6 +16,7 @@ pub fn pick_image() -> Result<Option<PathBuf>, String> {
         template_name: *const u16, reserved: *mut c_void, reserved_word: u32, flags_ex: u32,
     }
     #[link(name = "comdlg32")]
+    #[allow(non_snake_case)]
     extern "system" {
         fn GetOpenFileNameW(file_name: *mut OpenFileNameW) -> i32;
         fn CommDlgExtendedError() -> u32;
