@@ -292,3 +292,23 @@ jobs:
             exit 1
           fi
           archive-check/amethysctl status
+
+  desktop-integration:
+    name: GhostEngine desktop integration
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Amethys Launcher
+        uses: actions/checkout@v4
+        with:
+          path: Amethys-Launcher
+      - name: Checkout experimental GhostEngine
+        uses: actions/checkout@v4
+        with:
+          repository: Likounsee/GhostEngine
+          ref: GhostEngine
+          path: GhostEngine
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Check the desktop application against the current engine prototype
+        working-directory: Amethys-Launcher
+        run: cargo check --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml
