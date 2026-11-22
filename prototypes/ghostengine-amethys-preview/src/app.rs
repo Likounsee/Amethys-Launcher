@@ -214,6 +214,7 @@ impl App {
             let y = 4 + (self.scroll.offset() as f32 / self.scroll.max_offset() as f32 * travel as f32) as u32;
             fill_rounded_rect_aa(fb, Rect::new(WIN_W - 10, y, 6, thumb), 3, Color::rgba(185, 162, 255, 120));
         }
+    }
 
     // ------------------------------------------------------------ stats overlay
     fn chip_rect(&self) -> Rect {
