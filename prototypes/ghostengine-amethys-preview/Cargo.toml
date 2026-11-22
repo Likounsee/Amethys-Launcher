@@ -3,7 +3,7 @@ default-run = "amethyst-launcher-test"
 name = "amethyst-preview"
 version = "0.1.0"
 edition = "2021"
-description = "Headless GhostEngine rendering of the Amethyst Launcher page mockups (store, library, product, settings)."
+description = "Experimental Amethys desktop UI using GhostEngine and the real Amethys Core IPC library."
 license = "UNLICENSED"
 
 [lib]
