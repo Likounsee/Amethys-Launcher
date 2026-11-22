@@ -42,8 +42,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let fonts: &'static Fonts = Box::leak(Box::new(Fonts::load(&fonts_path)?));
     let covers: &'static CoverStore = Box::leak(Box::new(CoverStore::load(&assets_dir.join("covers"))));
     let library = core_client::list_games_or_start_agent();
-    match &library {
-    }
     let mut app = App::new(fonts, covers, library);
 
     if let Some(dir) = snapshot {
