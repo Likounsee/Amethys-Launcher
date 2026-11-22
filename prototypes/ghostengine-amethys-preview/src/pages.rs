@@ -830,7 +830,9 @@ pub fn game_detail_live(
     }
 
     let configure_x = MX + MW - 300;
-    button(p, configure_x, y + 366, Some(116), "Configurer", false);
+    p.rrect(configure_x, y + 366, 116, 30, 8, PANEL);
+    p.rrect_line(configure_x, y + 366, 116, 30, 8, LINE);
+    p.text(configure_x + 12, y + 366, 30, "Configurer", 12.0, W::Med, SOFT);
     p.hit(configure_x, y + 366, 116, 30, 8, Action::EditExecutable, false);
 
     let remove_x = MX + MW - 176;
@@ -847,8 +849,8 @@ pub fn game_detail_live(
     }
     if editing_executable {
         let editor_y = y + 422;
-        p.rrect(MX, editor_y, MW, 132, 16, PANEL);
-        p.rrect_line(MX, editor_y, MW, 132, 16, LINE);
+        p.rrect(MX, editor_y, MW, 142, 16, PANEL);
+        p.rrect_line(MX, editor_y, MW, 142, 16, LINE);
         p.text(MX + 22, editor_y + 10, 22, "Configurer l'exécutable", 17.0, W::Semi, TXT);
         p.text(
             MX + 22,
@@ -874,10 +876,10 @@ pub fn game_detail_live(
 
         let save_x = MX + MW - 22 - 120;
         button(p, save_x, editor_y + 94, Some(120), "Enregistrer", true);
-        p.hit(save_x, editor_y + 94, 120, 38, 10, Action::SaveExecutable, false);
+        p.hit(save_x, editor_y + 94, 120, 44, 10, Action::SaveExecutable, false);
         let cancel_x = save_x - 112;
         button(p, cancel_x, editor_y + 94, Some(104), "Annuler", false);
-        p.hit(cancel_x, editor_y + 94, 104, 38, 10, Action::CancelExecutableEdit, false);
+        p.hit(cancel_x, editor_y + 94, 104, 44, 10, Action::CancelExecutableEdit, false);
         editor_y + 160
     } else {
         y + 450
