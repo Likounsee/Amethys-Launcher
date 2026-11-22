@@ -45,7 +45,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut app = App::new(fonts, covers, library);
 
     if let Some(dir) = snapshot {
-        return replay(&mut app, PathBuf::from(dir));
+        let dir = PathBuf::from(dir);
+        return match replay(&mut app, dir.clone()) {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                let _ = std::fs::create_dir_all(&dir);
+                let _ = std::fs::write(dir.join("snapshot-error.txt"), error.to_string());
+                Err(error)
+            }
+        };
     }
 
     NativeWindowSurface::run("Amethys Launcher", WIN_W, WIN_H, move |fb, input, _clipboard| {
