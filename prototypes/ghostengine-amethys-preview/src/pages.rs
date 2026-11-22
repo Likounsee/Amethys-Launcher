@@ -611,6 +611,7 @@ pub fn library_live(
     games: &[amethys_ipc::IpcGameEntry],
     selected_filter: usize,
     search_query: &str,
+    search_focused: bool,
     core_error: Option<&str>,
     notice: Option<&str>,
 ) -> i32 {
@@ -623,7 +624,7 @@ pub fn library_live(
         330,
         44,
         12,
-        LINE,
+        if search_focused { VIO } else { LINE },
     );
     let platforms = library_platforms(games);
 
@@ -648,7 +649,7 @@ pub fn library_live(
     let refresh_x = MX + MW - 156;
     p.circle(search_x + 23, 46, 7, MUT);
     p.circle(search_x + 23, 46, 5, PANEL);
-    p.line(search_x + 28, 51, search_x + 34, 57, 2, MUT);
+    p.rrect(search_x + 28, 51, 10, 3, 1, MUT);
     let display_query = search_query.chars().take(30).collect::<String>();
     let search_label = if display_query.is_empty() { "Rechercher un jeu…" } else { display_query.as_str() };
     p.text(search_x + 44, 24, 44, search_label, 13.0, W::Reg, if search_query.is_empty() { MUT } else { TXT });
