@@ -2,7 +2,7 @@ use amethys_errors::{AmethysError, ErrorCode};
 use rusqlite::{Connection, OptionalExtension, params};
 use std::path::Path;
 
-/// A game registered in the user's local library.
+/// One local installation registered in the user's library. Its `id` is not the catalogue Game ID.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GameEntry {
     pub id: String,
@@ -21,7 +21,7 @@ pub struct CatalogueGame {
     pub name: String,
 }
 
-/// Amethys-owned metadata shared by every storefront identity for one game.
+/// Amethys-owned metadata shared by every installation linked to one catalogue game.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct GameMetadata {
     pub genres: Vec<String>,
@@ -35,7 +35,7 @@ pub struct GameMetadata {
     pub banner_ref: Option<String>,
 }
 
-/// An external storefront identifier attached to an Amethys game ID.
+/// An external storefront identifier attached to a canonical Amethys catalogue game.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalGameId {
     pub provider: String,
@@ -561,7 +561,7 @@ impl Database {
         self.get_game(id)
     }
 
-    /// Saves Amethys metadata without changing the stable local Game ID.
+    /// Saves Amethys metadata on the canonical catalogue game linked to this installation.
     pub fn set_game_metadata(
         &self,
         game_id: &str,
@@ -643,7 +643,7 @@ impl Database {
         Ok(changed != 0)
     }
 
-    /// Reads the optional metadata record for one game.
+    /// Reads the optional metadata record shared by this installation's catalogue game.
     pub fn get_game_metadata(&self, game_id: &str) -> Result<Option<GameMetadata>, AmethysError> {
         let game_id = validate_game_id(game_id)?;
         let Some(catalogue_game_id) = self.get_catalogue_game_id(game_id)? else {
@@ -681,7 +681,7 @@ impl Database {
             .map_err(|error| storage_error(format!("Could not read game metadata: {error}")))
     }
 
-    /// Adds or updates one provider ID. A provider ID can identify only one Amethys game.
+    /// Adds or updates one provider ID on the canonical catalogue game. A provider ID can identify only one catalogue game.
     pub fn set_external_game_id(
         &self,
         game_id: &str,
@@ -1402,6 +1402,99 @@ mod tests {
             "rejecting a future schema must not change its persistent journal mode"
         );
         drop(connection);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[test]
+    fn version_four_migration_preserves_metadata_and_provider_ids() {
+        let path = std::env::temp_dir().join(format!("amethys-v4-{}.sqlite", uuid::Uuid::new_v4()));
+        {
+            let connection = rusqlite::Connection::open(&path).expect("fixture database opens");
+            connection
+                .execute_batch(
+                    "PRAGMA foreign_keys = ON;
+                     CREATE TABLE schema_migrations (
+                         version INTEGER PRIMARY KEY NOT NULL,
+                         applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                     );
+                     INSERT INTO schema_migrations (version) VALUES (1), (2), (3), (4);
+                     CREATE TABLE app_settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
+                     CREATE TABLE games (
+                         id TEXT PRIMARY KEY NOT NULL,
+                         name TEXT NOT NULL,
+                         platform TEXT NOT NULL,
+                         install_path TEXT NOT NULL,
+                         executable TEXT,
+                         added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                         platform_id TEXT
+                     );
+                     INSERT INTO games (id, name, platform, install_path, platform_id)
+                         VALUES ('legacy-install', 'Legacy Game', 'Steam', '/games/legacy', '1234');
+                     CREATE TABLE game_metadata (
+                         game_id TEXT PRIMARY KEY NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+                         genres_json TEXT NOT NULL DEFAULT '[]',
+                         developer TEXT,
+                         publisher TEXT,
+                         release_date TEXT,
+                         description TEXT,
+                         icon_ref TEXT,
+                         logo_ref TEXT,
+                         cover_ref TEXT,
+                         banner_ref TEXT
+                     );
+                     INSERT INTO game_metadata (game_id, genres_json, developer, release_date)
+                         VALUES ('legacy-install', '[\"Action\"]', 'Legacy Studio', '2020-01-02');
+                     CREATE TABLE game_external_ids (
+                         game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+                         provider TEXT NOT NULL COLLATE NOCASE,
+                         external_id TEXT NOT NULL,
+                         PRIMARY KEY (game_id, provider),
+                         UNIQUE (provider, external_id)
+                     );
+                     INSERT INTO game_external_ids (game_id, provider, external_id)
+                         VALUES ('legacy-install', 'steam', '1234');",
+                )
+                .expect("version four fixture is created");
+        }
+
+        let database = Database::open(&path).expect("version four database migrates");
+        let installation = database
+            .get_game("legacy-install")
+            .expect("legacy installation lookup")
+            .expect("legacy installation remains");
+        let catalogue_id = database
+            .get_catalogue_game_id(&installation.id)
+            .expect("catalogue ID lookup")
+            .expect("migration links the installation");
+        assert_eq!(
+            database.get_game_metadata(&installation.id).expect("metadata reads"),
+            Some(super::GameMetadata {
+                genres: vec!["Action".to_owned()],
+                developer: Some("Legacy Studio".to_owned()),
+                release_date: Some("2020-01-02".to_owned()),
+                ..Default::default()
+            })
+        );
+        assert_eq!(
+            database.list_external_game_ids(&installation.id).expect("provider IDs read"),
+            vec![super::ExternalGameId {
+                provider: "steam".to_owned(),
+                external_id: "1234".to_owned()
+            }]
+        );
+        assert_eq!(
+            database.get_catalogue_game(&catalogue_id).unwrap().unwrap().name,
+            "Legacy Game"
+        );
+        let version: i64 = database
+            .connection()
+            .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| row.get(0))
+            .expect("migration version reads");
+        assert_eq!(version, 5);
+
+        drop(database);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
         let _ = std::fs::remove_file(format!("{}-shm", path.display()));
