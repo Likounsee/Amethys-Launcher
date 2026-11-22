@@ -44,6 +44,7 @@ pub struct App {
     pub games: Vec<IpcGameEntry>,
     pub core_error: Option<String>,
     pub notice: Option<String>,
+    pub selected_game: Option<usize>,
     /// Whole page pre-rendered once (sidebar occupies the first WIN_H rows).
     content: Framebuffer,
     hits: Vec<Hit>,
@@ -69,6 +70,7 @@ impl App {
             games,
             core_error,
             notice: None,
+            selected_game: None,
             content: blank(),
             hits: Vec::new(),
             scroll: ScrollViewport::new(Rect::new(SIDE_W as u32, 0, WIN_W - SIDE_W as u32, WIN_H), LayoutDirection::Vertical, WIN_H),
@@ -98,7 +100,9 @@ impl App {
         pages::sidebar(&mut p, active, vh);
         let h = (if self.page == Page::Library {
             pages::library_live(&mut p, vh, &self.games, self.core_error.as_deref(), self.notice.as_deref())
-        } else if self.page == Page::Store || self.page == Page::Product {
+        } else if self.page == Page::Product {
+            pages::game_detail_live(&mut p, self.games.get(self.selected_game.unwrap_or(usize::MAX)), self.selected_game.unwrap_or(usize::MAX), self.notice.as_deref())
+        } else if self.page == Page::Store {
             pages::catalogue_unavailable(&mut p, vh)
         } else if self.page == Page::Settings {
             pages::settings_local(&mut p, vh, self.core_error.as_deref())
@@ -118,7 +122,15 @@ impl App {
         match action {
             Action::Go(page) => {
                 self.page = page;
+                if page == Page::Library { self.selected_game = None; }
                 self.render(true);
+            }
+            Action::SelectGame(index) => {
+                if index < self.games.len() {
+                    self.selected_game = Some(index);
+                    self.page = Page::Product;
+                    self.render(true);
+                }
             }
             Action::StoreFilter(i) => {
                 self.st.store_filter = i;
@@ -151,6 +163,8 @@ impl App {
                 match result {
                     Ok(true) => {
                         self.notice = Some("Jeu retiré de la bibliothèque.".to_owned());
+                        self.page = Page::Library;
+                        self.selected_game = None;
                         match crate::core_client::list_games() {
                             Ok(games) => { self.games = games; self.core_error = None; }
                             Err(error) => self.core_error = Some(error),
