@@ -48,6 +48,7 @@ pub enum Action {
     FocusLibrarySearch,
     EditExecutable,
     ChangeGameCover,
+    ResetGameCover,
     SaveExecutable,
     CancelExecutableEdit,
     LaunchGame(usize),
