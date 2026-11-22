@@ -653,12 +653,22 @@ impl Database {
         Ok(changed != 0)
     }
 
-    /// Reads the optional metadata record for one game.
+    /// Reads metadata through a local installation ID.
     pub fn get_game_metadata(&self, game_id: &str) -> Result<Option<GameMetadata>, AmethysError> {
         let game_id = validate_game_id(game_id)?;
         let Some(catalogue_game_id) = self.get_catalogue_game_id(game_id)? else {
             return Ok(None);
         };
+        self.get_catalogue_game_metadata(&catalogue_game_id)
+    }
+
+    /// Reads metadata directly from the canonical Amethys Game ID.
+    /// This remains available even when the user has no local installation.
+    pub fn get_catalogue_game_metadata(
+        &self,
+        catalogue_game_id: &str,
+    ) -> Result<Option<GameMetadata>, AmethysError> {
+        let catalogue_game_id = validate_game_id(catalogue_game_id)?;
         self.connection
             .query_row(
                 "SELECT genres_json, developer, publisher, release_date, description,
@@ -688,7 +698,7 @@ impl Database {
                 },
             )
             .optional()
-            .map_err(|error| storage_error(format!("Could not read game metadata: {error}")))
+            .map_err(|error| storage_error(format!("Could not read catalogue game metadata: {error}")))
     }
 
     /// Adds or updates one provider ID. A provider ID can identify only one Amethys game.
@@ -816,6 +826,39 @@ impl Database {
             )
             .optional()
             .map_err(|error| storage_error(format!("Could not read catalogue game: {error}")))
+    }
+
+    /// Finds a canonical catalogue record using a provider identity.
+    /// Unlike a library lookup, this also works when no installation is present.
+    pub fn get_catalogue_game_by_external_id(
+        &self,
+        provider: &str,
+        external_id: &str,
+    ) -> Result<Option<CatalogueGame>, AmethysError> {
+        let provider = validate_provider_key(provider)?;
+        let external_id = external_id.trim();
+        if external_id.is_empty()
+            || external_id.len() > MAX_PLATFORM_ID_BYTES
+            || external_id.contains('\\0')
+        {
+            return Err(storage_error("External game ID is invalid."));
+        }
+        self.connection
+            .query_row(
+                "SELECT c.id, c.name
+             FROM catalogue_external_ids e
+             INNER JOIN catalogue_games c ON c.id = e.catalogue_game_id
+             WHERE e.provider = ?1 COLLATE NOCASE AND e.external_id = ?2",
+                params![provider, external_id],
+                |row| {
+                    Ok(CatalogueGame {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|error| storage_error(format!("Could not find catalogue game by external ID: {error}")))
     }
 
     /// Links an installation to an existing canonical game without matching by title.
@@ -1113,6 +1156,46 @@ mod tests {
             )
             .expect("catalogue ID remains stored");
         assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn catalogue_metadata_and_provider_identity_survive_without_installations() {
+        let database = Database::open(":memory:").expect("database opens");
+        let game = database
+            .add_game("Example", "Steam", "/games/example", None)
+            .expect("game added");
+        let catalogue_id = database
+            .get_catalogue_game_id(&game.id)
+            .expect("catalogue ID lookup")
+            .expect("catalogue ID exists");
+        let metadata = super::GameMetadata {
+            developer: Some("Studio".to_owned()),
+            ..Default::default()
+        };
+        database
+            .set_game_metadata(&game.id, &metadata)
+            .expect("metadata saved");
+        database
+            .set_external_game_id(&game.id, "steam", "765611")
+            .expect("external ID saved");
+        database
+            .remove_game(&game.id)
+            .expect("installation removed");
+
+        assert_eq!(
+            database
+                .get_catalogue_game_by_external_id("steam", "765611")
+                .expect("catalogue provider lookup")
+                .expect("catalogue game remains")
+                .id,
+            catalogue_id
+        );
+        assert_eq!(
+            database
+                .get_catalogue_game_metadata(&catalogue_id)
+                .expect("catalogue metadata lookup"),
+            Some(metadata)
+        );
     }
 
     #[test]
