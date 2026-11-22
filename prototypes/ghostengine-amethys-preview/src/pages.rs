@@ -573,6 +573,24 @@ pub fn settings(p: &mut Painter, vh: i32, _st: &State) -> i32 {
 }
 
 
+/// Matches every search term against the actual metadata stored for a game.
+fn library_matches_query(game: &amethys_ipc::IpcGameEntry, query: &str) -> bool {
+    let terms = query.split_whitespace().map(str::to_lowercase).collect::<Vec<_>>();
+    if terms.is_empty() {
+        return true;
+    }
+    let searchable = format!(
+        "{} {} {} {} {}",
+        game.name,
+        game.platform,
+        game.platform_id.as_deref().unwrap_or_default(),
+        game.install_path,
+        game.executable.as_deref().unwrap_or_default(),
+    )
+    .to_lowercase();
+    terms.iter().all(|term| searchable.contains(term))
+}
+
 /// Returns distinct, non-empty platform names in case-insensitive display order.
 fn library_platforms(games: &[amethys_ipc::IpcGameEntry]) -> Vec<String> {
     let mut platforms = Vec::new();
@@ -592,10 +610,21 @@ pub fn library_live(
     _vh: i32,
     games: &[amethys_ipc::IpcGameEntry],
     selected_filter: usize,
+    search_query: &str,
     core_error: Option<&str>,
     notice: Option<&str>,
 ) -> i32 {
     p.text(MX, 25, 42, "Bibliothèque", 40.0, W::Disp, TXT);
+    let search_x = MX + MW - 500;
+    p.rrect(search_x, 24, 330, 44, 12, PANEL);
+    p.rrect_line(
+        search_x,
+        24,
+        330,
+        44,
+        12,
+        LINE,
+    );
     let platforms = library_platforms(games);
 
     let active_filter = if selected_filter <= platforms.len() { selected_filter } else { 0 };
@@ -604,6 +633,7 @@ pub fn library_live(
         .iter()
         .enumerate()
         .filter(|(_, game)| selected_platform.is_none_or(|platform| game.platform.trim().eq_ignore_ascii_case(platform)))
+        .filter(|(_, game)| library_matches_query(game, search_query))
         .collect::<Vec<_>>();
 
     p.text(
@@ -616,6 +646,13 @@ pub fn library_live(
         MUT,
     );
     let refresh_x = MX + MW - 156;
+    p.circle(search_x + 23, 46, 7, MUT);
+    p.circle(search_x + 23, 46, 5, PANEL);
+    p.line(search_x + 28, 51, search_x + 34, 57, 2, MUT);
+    let display_query = search_query.chars().take(30).collect::<String>();
+    let search_label = if display_query.is_empty() { "Rechercher un jeu…" } else { display_query.as_str() };
+    p.text(search_x + 44, 24, 44, search_label, 13.0, W::Reg, if search_query.is_empty() { MUT } else { TXT });
+    p.hit(search_x, 24, 330, 44, 12, Action::FocusLibrarySearch, false);
     button(p, refresh_x, 24, Some(156), "Actualiser", false);
     p.hit(refresh_x, 24, 156, 44, 12, Action::RefreshLibrary, false);
 
@@ -648,10 +685,18 @@ pub fn library_live(
     if visible.is_empty() {
         p.rrect(MX, content_y, MW, 150, 14, PANEL);
         p.rrect_line(MX, content_y, MW, 150, 14, LINE);
-        let title = if games.is_empty() { "Votre bibliothèque est vide" } else { "Aucun jeu pour ce filtre" };
+        let title = if games.is_empty() {
+            "Votre bibliothèque est vide"
+        } else if !search_query.trim().is_empty() {
+            "Aucun résultat"
+        } else {
+            "Aucun jeu pour ce filtre"
+        };
         p.text(MX + 22, content_y + 24, 26, title, 20.0, W::Semi, TXT);
         let description = if games.is_empty() {
             "Aucun jeu n'est encore enregistré dans la base locale Amethys. Importez des jeux avec les outils Amethys existants ; ils apparaîtront ici automatiquement au prochain lancement."
+        } else if !search_query.trim().is_empty() {
+            "Aucun jeu ne correspond à votre recherche. Essayez un autre nom, une plateforme ou un chemin d'installation."
         } else {
             "Aucun jeu enregistré ne correspond à cette plateforme. Choisissez « Tous » pour afficher l'ensemble de votre bibliothèque."
         };
@@ -819,5 +864,16 @@ mod live_library_tests {
     #[test]
     fn empty_library_has_no_platform_filters() {
         assert!(library_platforms(&[]).is_empty());
+    }
+
+    #[test]
+    fn search_matches_multiple_terms_across_real_metadata() {
+        let mut entry = game("Steam");
+        entry.name = "Hollow Knight".to_owned();
+        entry.install_path = "C:/Games/HollowKnight".to_owned();
+        assert!(library_matches_query(&entry, "hollow steam"));
+        assert!(library_matches_query(&entry, "C:/Games knight"));
+        assert!(!library_matches_query(&entry, "hollow epic"));
+        assert!(library_matches_query(&entry, "  "));
     }
 }
