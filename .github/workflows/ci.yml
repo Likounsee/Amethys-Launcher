@@ -311,7 +311,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Check the desktop application against the current engine prototype
         working-directory: Amethys-Launcher
-        run: cargo check --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml
+        run: |
+          cargo check --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { throw "Desktop integration check failed." }
+          cargo test --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml --lib
+          if ($LASTEXITCODE -ne 0) { throw "Desktop integration unit tests failed." }
       - name: Build and smoke-test the portable Windows desktop package
         working-directory: Amethys-Launcher
         shell: pwsh
