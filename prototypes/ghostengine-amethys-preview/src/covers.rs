@@ -180,11 +180,32 @@ impl CoverStore {
 
 #[cfg(test)]
 mod tests {
-    use super::slug;
+    use super::{slug, CoverStore};
+    use std::{fs, time::{SystemTime, UNIX_EPOCH}};
 
     #[test]
     fn title_slug_is_stable() {
         assert_eq!(slug("Baldur's Gate 3"), "baldurs-gate-3");
         assert_eq!(slug("Pokémon Violet"), "pok-mon-violet");
+    }
+
+    #[test]
+    fn reset_library_cover_removes_custom_file_and_cache_entry() {
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let root = std::env::temp_dir().join(format!("amethys-cover-reset-{}-{nonce}", std::process::id()));
+        let game_dir = root.join("3000");
+        fs::create_dir_all(&game_dir).unwrap();
+        fs::write(game_dir.join("cover.png"), b"custom cover").unwrap();
+        fs::write(game_dir.join("cover.jpg"), b"stale cover").unwrap();
+
+        let mut store = CoverStore::empty();
+        store.files = 1;
+        assert!(store.reset_library_cover("3000", &root).unwrap());
+        assert_eq!(store.files, 0);
+        assert!(!game_dir.exists());
+        assert!(!store.reset_library_cover("3000", &root).unwrap());
+        assert!(store.reset_library_cover("../escape", &root).is_err());
+
+        fs::remove_dir_all(root).unwrap();
     }
 }
