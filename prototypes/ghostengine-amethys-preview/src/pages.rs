@@ -949,7 +949,32 @@ pub fn game_detail_live(
     }
 
     let metadata_y = y + SUMMARY_HEIGHT + 16;
-    let mut metadata_height = 132;
+    let mut metadata_height = 112;
+    let mut genres_text = None;
+    let mut genres_lines = 0usize;
+    let mut description_text = None;
+    let mut description_lines = 0usize;
+
+    if let Some(metadata) = game.catalogue_metadata.as_ref() {
+        if !metadata.genres.is_empty() {
+            let genres = format!("Genres : {}", metadata.genres.join(" · "));
+            genres_lines = p.wrap(&genres, 12.0, W::Reg, MW - 44).len().clamp(1, 3);
+            genres_text = Some(genres);
+            metadata_height += genres_lines as i32 * 18 + 8;
+        }
+        if let Some(description) = metadata
+            .description
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+        {
+            description_lines = p.wrap(description, 12.0, W::Reg, MW - 44).len();
+            metadata_height += description_lines.min(14) as i32 * 18 + 8;
+            if description_lines > 14 {
+                metadata_height += 18;
+            }
+        }
+    }
+
     p.rrect(MX, metadata_y, MW, metadata_height, 16, PANEL);
     p.rrect_line(MX, metadata_y, MW, metadata_height, 16, LINE);
     p.text(MX + 22, metadata_y + 10, 24, "À propos", 17.0, W::Semi, TXT);
@@ -971,22 +996,19 @@ pub fn game_detail_live(
         );
 
         let mut content_y = metadata_y + 66;
-        if !metadata.genres.is_empty() {
-            let genres = format!("Genres : {}", metadata.genres.join(" · "));
-            let genre_lines = p.wrap(&genres, 12.0, W::Reg, MW - 44).len().clamp(1, 3);
-            let genre_height = p.paragraph(
+        if let Some(genres) = genres_text.as_deref() {
+            let height = p.paragraph(
                 MX + 22,
                 content_y,
                 MW - 44,
                 18,
-                &genres,
+                genres,
                 12.0,
                 W::Reg,
                 MUT,
-                3,
+                genres_lines,
             );
-            content_y += genre_height + 8;
-            metadata_height += (genre_lines as i32 - 1) * 18;
+            content_y += height + 8;
         }
 
         if let Some(description) = metadata
@@ -994,9 +1016,8 @@ pub fn game_detail_live(
             .as_deref()
             .filter(|value| !value.trim().is_empty())
         {
-            let description_lines = p.wrap(description, 12.0, W::Reg, MW - 44).len();
             let visible_lines = description_lines.min(14);
-            let description_height = p.paragraph(
+            let height = p.paragraph(
                 MX + 22,
                 content_y,
                 MW - 44,
@@ -1007,19 +1028,17 @@ pub fn game_detail_live(
                 MUT,
                 visible_lines,
             );
-            content_y += description_height;
-            metadata_height = (content_y - metadata_y + 18).max(metadata_height);
+            content_y += height + 8;
             if description_lines > visible_lines {
                 p.text(
                     MX + 22,
-                    content_y + 2,
+                    content_y,
                     16,
                     "Description raccourcie dans cet aperçu.",
                     11.0,
                     W::Reg,
                     MUT,
                 );
-                metadata_height += 18;
             }
         }
     } else {
@@ -1035,9 +1054,6 @@ pub fn game_detail_live(
             3,
         );
     }
-    p.rrect(MX, metadata_y, MW, metadata_height, 16, PANEL);
-    p.rrect_line(MX, metadata_y, MW, metadata_height, 16, LINE);
-    p.text(MX + 22, metadata_y + 10, 24, "À propos", 17.0, W::Semi, TXT);
 
     let metadata_bottom = metadata_y + metadata_height;
     if editing_executable {
