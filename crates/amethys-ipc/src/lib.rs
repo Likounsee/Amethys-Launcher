@@ -79,6 +79,9 @@ pub struct IpcGameEntry {
     pub platform: String,
     #[serde(default)]
     pub platform_id: Option<String>,
+    /// Stable Amethys catalogue identity shared by linked installations.
+    #[serde(default)]
+    pub catalogue_game_id: Option<String>,
     pub install_path: String,
     pub executable: Option<String>,
 }
@@ -336,6 +339,7 @@ mod tests {
             name: "Example Game".to_owned(),
             platform: "Steam".to_owned(),
             platform_id: Some("570".to_owned()),
+            catalogue_game_id: Some("3000".to_owned()),
             install_path: "/games/example".to_owned(),
             executable: Some("game.exe".to_owned()),
         }];
@@ -374,6 +378,7 @@ mod tests {
         let game: super::IpcGameEntry =
             serde_json::from_str(json).expect("legacy game payload deserializes");
         assert_eq!(game.platform_id, None);
+        assert_eq!(game.catalogue_game_id, None);
     }
 
     #[test]

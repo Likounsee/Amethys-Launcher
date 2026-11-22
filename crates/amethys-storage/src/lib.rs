@@ -2,7 +2,7 @@ use amethys_errors::{AmethysError, ErrorCode};
 use rusqlite::{Connection, OptionalExtension, params};
 use std::path::Path;
 
-/// One local installation registered in the user's library. Its `id` is not the catalogue Game ID.
+/// A game registered in the user's local library.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GameEntry {
     pub id: String,
@@ -21,7 +21,7 @@ pub struct CatalogueGame {
     pub name: String,
 }
 
-/// Amethys-owned metadata shared by every installation linked to one catalogue game.
+/// Amethys-owned metadata shared by every storefront identity for one game.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct GameMetadata {
     pub genres: Vec<String>,
@@ -35,7 +35,7 @@ pub struct GameMetadata {
     pub banner_ref: Option<String>,
 }
 
-/// An external storefront identifier attached to a canonical Amethys catalogue game.
+/// An external storefront identifier attached to an Amethys game ID.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExternalGameId {
     pub provider: String,
@@ -222,7 +222,7 @@ impl Database {
             return Err(AmethysError::new(
                 ErrorCode::StorageMigration,
                 format!(
-                    "Database schema version {current_version} is newer than the supported version 5."
+                    "Database schema version {current_version} is newer than the supported version 4."
                 ),
             ));
         }
@@ -314,8 +314,7 @@ impl Database {
                      catalogue_game_id TEXT NOT NULL
                  );
                  INSERT INTO _amethys_catalogue_migration (installation_id, catalogue_game_id)
-                     SELECT id, CAST(2999 + ROW_NUMBER() OVER (ORDER BY added_at, id) AS TEXT)
-                     FROM games;
+                     SELECT id, 'game-' || lower(hex(randomblob(16))) FROM games;
                  INSERT INTO catalogue_games (id, name)
                      SELECT migration.catalogue_game_id, games.name
                      FROM games
@@ -459,20 +458,11 @@ impl Database {
         }
 
         let id = uuid::Uuid::new_v4().to_string();
-        // Allocate a compact, stable Amethys catalogue ID. RETURNING keeps
-        // allocation and insertion in one SQLite statement.
-        let catalogue_game_id: String = self
-            .connection
-            .query_row(
-                "INSERT INTO catalogue_games (id, name)
-                 VALUES (
-                     (SELECT CAST(COALESCE(MAX(CAST(id AS INTEGER)), 2999) + 1 AS TEXT)
-                      FROM catalogue_games),
-                     ?1
-                 )
-                 RETURNING id",
-                [name],
-                |row| row.get(0),
+        let catalogue_game_id = format!("game-{}", uuid::Uuid::new_v4());
+        self.connection
+            .execute(
+                "INSERT INTO catalogue_games (id, name) VALUES (?1, ?2)",
+                params![catalogue_game_id, name],
             )
             .map_err(|error| storage_error(format!("Could not create catalogue game: {error}")))?;
         self.connection
@@ -480,15 +470,7 @@ impl Database {
                 "INSERT INTO games (
                     id, name, platform, platform_id, install_path, executable, catalogue_game_id
                  ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-                params![
-                    id,
-                    name,
-                    platform,
-                    platform_id,
-                    install_path,
-                    executable,
-                    catalogue_game_id
-                ],
+                params![id, name, platform, platform_id, install_path, executable, catalogue_game_id],
             )
             .map_err(|error| storage_error(format!("Could not add game: {error}")))?;
         self.get_game(&id)?
@@ -579,7 +561,7 @@ impl Database {
         self.get_game(id)
     }
 
-    /// Saves Amethys metadata on the canonical catalogue game linked to this installation.
+    /// Saves Amethys metadata without changing the stable local Game ID.
     pub fn set_game_metadata(
         &self,
         game_id: &str,
@@ -657,13 +639,11 @@ impl Database {
                     metadata.banner_ref
                 ],
             )
-            .map_err(|error| {
-                storage_error(format!("Could not save catalogue metadata: {error}"))
-            })?;
+            .map_err(|error| storage_error(format!("Could not save catalogue metadata: {error}")))?;
         Ok(changed != 0)
     }
 
-    /// Reads the optional metadata record shared by this installation's catalogue game.
+    /// Reads the optional metadata record for one game.
     pub fn get_game_metadata(&self, game_id: &str) -> Result<Option<GameMetadata>, AmethysError> {
         let game_id = validate_game_id(game_id)?;
         let Some(catalogue_game_id) = self.get_catalogue_game_id(game_id)? else {
@@ -701,7 +681,7 @@ impl Database {
             .map_err(|error| storage_error(format!("Could not read game metadata: {error}")))
     }
 
-    /// Adds or updates one provider ID on the canonical catalogue game. A provider ID can identify only one catalogue game.
+    /// Adds or updates one provider ID. A provider ID can identify only one Amethys game.
     pub fn set_external_game_id(
         &self,
         game_id: &str,
@@ -799,7 +779,7 @@ impl Database {
         let installation_id = validate_game_id(installation_id)?;
         self.connection
             .query_row(
-                "SELECT catalogue_game_id FROM games WHERE id = ?1 AND catalogue_game_id IS NOT NULL",
+                "SELECT catalogue_game_id FROM games WHERE id = ?1",
                 [installation_id],
                 |row| row.get(0),
             )
@@ -817,12 +797,7 @@ impl Database {
             .query_row(
                 "SELECT id, name FROM catalogue_games WHERE id = ?1",
                 [catalogue_game_id],
-                |row| {
-                    Ok(CatalogueGame {
-                        id: row.get(0)?,
-                        name: row.get(1)?,
-                    })
-                },
+                |row| Ok(CatalogueGame { id: row.get(0)?, name: row.get(1)? }),
             )
             .optional()
             .map_err(|error| storage_error(format!("Could not read catalogue game: {error}")))
@@ -837,19 +812,12 @@ impl Database {
     ) -> Result<bool, AmethysError> {
         let installation_id = validate_game_id(installation_id)?;
         let catalogue_game_id = validate_game_id(catalogue_game_id)?;
-        let changed = self
-            .connection
-            .execute(
-                "UPDATE games SET catalogue_game_id = ?1
+        let changed = self.connection.execute(
+            "UPDATE games SET catalogue_game_id = ?1
              WHERE id = ?2
                AND EXISTS (SELECT 1 FROM catalogue_games WHERE id = ?1)",
-                params![catalogue_game_id, installation_id],
-            )
-            .map_err(|error| {
-                storage_error(format!(
-                    "Could not link installation to catalogue game: {error}"
-                ))
-            })?;
+            params![catalogue_game_id, installation_id],
+        ).map_err(|error| storage_error(format!("Could not link installation to catalogue game: {error}")))?;
         Ok(changed != 0)
     }
 
@@ -1086,42 +1054,26 @@ mod tests {
         database
             .set_external_game_id(&game.id, "steam", "98765")
             .expect("external ID saved");
-        assert!(
-            database
-                .remove_game(&game.id)
-                .expect("installation removed")
-        );
+        assert!(database.remove_game(&game.id).expect("installation removed"));
         assert_eq!(
-            database
-                .get_game_metadata(&game.id)
-                .expect("metadata lookup"),
+            database.get_game_metadata(&game.id).expect("metadata lookup"),
             None
         );
         assert_eq!(
-            database
-                .get_catalogue_game(&catalogue_id)
-                .expect("catalogue lookup")
-                .unwrap()
-                .name,
+            database.get_catalogue_game(&catalogue_id).expect("catalogue lookup").unwrap().name,
             "Temporary"
         );
         assert_eq!(
-            database
-                .list_external_game_ids(&game.id)
-                .expect("IDs listed")
-                .len(),
+            database.list_external_game_ids(&game.id).expect("IDs listed").len(),
             0
         );
         // The external identity remains attached to the canonical title even
         // when no local installation is currently present.
-        let count: i64 = database
-            .connection()
-            .query_row(
-                "SELECT COUNT(*) FROM catalogue_external_ids WHERE external_id = '98765'",
-                [],
-                |row| row.get(0),
-            )
-            .expect("catalogue ID remains stored");
+        let count: i64 = database.connection().query_row(
+            "SELECT COUNT(*) FROM catalogue_external_ids WHERE external_id = '98765'",
+            [],
+            |row| row.get(0),
+        ).expect("catalogue ID remains stored");
         assert_eq!(count, 1);
     }
 
@@ -1183,81 +1135,6 @@ mod tests {
                 .expect("IDs listed")
                 .len(),
             2
-        );
-    }
-
-    #[test]
-    fn new_catalogue_game_ids_are_numeric_and_start_at_three_thousand() {
-        let database = Database::open(":memory:").expect("database opens");
-        let first = database
-            .add_game("First", "Steam", "/games/first", None)
-            .expect("first installation added");
-        let second = database
-            .add_game("Second", "Epic", "/games/second", None)
-            .expect("second installation added");
-        let first_id = database.get_catalogue_game_id(&first.id).unwrap().unwrap();
-        let second_id = database.get_catalogue_game_id(&second.id).unwrap().unwrap();
-
-        assert_eq!(first_id, "3000");
-        assert_eq!(second_id, "3001");
-        assert!(first_id.parse::<u64>().is_ok());
-        assert!(second_id.parse::<u64>().is_ok());
-    }
-
-    #[test]
-    fn separate_installations_can_share_one_explicit_catalogue_identity() {
-        let database = Database::open(":memory:").expect("database opens");
-        let steam = database
-            .add_game("Example Game", "Steam", "/games/steam", None)
-            .expect("Steam installation added");
-        let epic = database
-            .add_game("Example Game", "Epic", "/games/epic", None)
-            .expect("Epic installation added");
-        let catalogue_id = database
-            .get_catalogue_game_id(&steam.id)
-            .expect("catalogue ID lookup")
-            .expect("Steam catalogue ID exists");
-
-        assert_ne!(
-            database.get_catalogue_game_id(&epic.id).unwrap().unwrap(),
-            catalogue_id,
-            "installations must not be merged automatically"
-        );
-        assert!(
-            database
-                .set_game_catalogue_id(&epic.id, &catalogue_id)
-                .expect("explicit link succeeds")
-        );
-        assert_eq!(
-            database.get_catalogue_game_id(&epic.id).unwrap().as_deref(),
-            Some(catalogue_id.as_str())
-        );
-
-        let metadata = super::GameMetadata {
-            developer: Some("Shared Studio".to_owned()),
-            ..Default::default()
-        };
-        database.set_game_metadata(&steam.id, &metadata).unwrap();
-        database
-            .set_external_game_id(&steam.id, "steam", "123456")
-            .unwrap();
-        database
-            .set_external_game_id(&epic.id, "epic", "epic-abc")
-            .unwrap();
-
-        assert_eq!(
-            database.get_game_metadata(&epic.id).unwrap(),
-            Some(metadata)
-        );
-        let ids = database.list_external_game_ids(&epic.id).unwrap();
-        assert_eq!(ids.len(), 2);
-        assert!(
-            ids.iter()
-                .any(|id| id.provider == "steam" && id.external_id == "123456")
-        );
-        assert!(
-            ids.iter()
-                .any(|id| id.provider == "epic" && id.external_id == "epic-abc")
         );
     }
 
@@ -1447,7 +1324,7 @@ mod tests {
                     version INTEGER PRIMARY KEY NOT NULL,
                     applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
-                INSERT INTO schema_migrations (version) VALUES (6);",
+                INSERT INTO schema_migrations (version) VALUES (5);",
                 )
                 .expect("future schema is created");
         }
@@ -1460,7 +1337,7 @@ mod tests {
         assert!(
             error
                 .message()
-                .contains("newer than the supported version 5")
+                .contains("newer than the supported version 4")
         );
 
         let connection = rusqlite::Connection::open(&path).expect("fixture database reopens");
@@ -1481,109 +1358,6 @@ mod tests {
             "rejecting a future schema must not change its persistent journal mode"
         );
         drop(connection);
-        let _ = std::fs::remove_file(&path);
-        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
-        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
-    }
-
-    #[test]
-    fn version_four_migration_preserves_metadata_and_provider_ids() {
-        let path = std::env::temp_dir().join(format!("amethys-v4-{}.sqlite", uuid::Uuid::new_v4()));
-        {
-            let connection = rusqlite::Connection::open(&path).expect("fixture database opens");
-            connection
-                .execute_batch(
-                    "PRAGMA foreign_keys = ON;
-                     CREATE TABLE schema_migrations (
-                         version INTEGER PRIMARY KEY NOT NULL,
-                         applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-                     );
-                     INSERT INTO schema_migrations (version) VALUES (1), (2), (3), (4);
-                     CREATE TABLE app_settings (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL);
-                     CREATE TABLE games (
-                         id TEXT PRIMARY KEY NOT NULL,
-                         name TEXT NOT NULL,
-                         platform TEXT NOT NULL,
-                         install_path TEXT NOT NULL,
-                         executable TEXT,
-                         added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                         platform_id TEXT
-                     );
-                     INSERT INTO games (id, name, platform, install_path, platform_id)
-                         VALUES ('legacy-install', 'Legacy Game', 'Steam', '/games/legacy', '1234');
-                     CREATE TABLE game_metadata (
-                         game_id TEXT PRIMARY KEY NOT NULL REFERENCES games(id) ON DELETE CASCADE,
-                         genres_json TEXT NOT NULL DEFAULT '[]',
-                         developer TEXT,
-                         publisher TEXT,
-                         release_date TEXT,
-                         description TEXT,
-                         icon_ref TEXT,
-                         logo_ref TEXT,
-                         cover_ref TEXT,
-                         banner_ref TEXT
-                     );
-                     INSERT INTO game_metadata (game_id, genres_json, developer, release_date)
-                         VALUES ('legacy-install', '[\"Action\"]', 'Legacy Studio', '2020-01-02');
-                     CREATE TABLE game_external_ids (
-                         game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
-                         provider TEXT NOT NULL COLLATE NOCASE,
-                         external_id TEXT NOT NULL,
-                         PRIMARY KEY (game_id, provider),
-                         UNIQUE (provider, external_id)
-                     );
-                     INSERT INTO game_external_ids (game_id, provider, external_id)
-                         VALUES ('legacy-install', 'steam', '1234');",
-                )
-                .expect("version four fixture is created");
-        }
-
-        let database = Database::open(&path).expect("version four database migrates");
-        let installation = database
-            .get_game("legacy-install")
-            .expect("legacy installation lookup")
-            .expect("legacy installation remains");
-        let catalogue_id = database
-            .get_catalogue_game_id(&installation.id)
-            .expect("catalogue ID lookup")
-            .expect("migration links the installation");
-        assert_eq!(
-            database
-                .get_game_metadata(&installation.id)
-                .expect("metadata reads"),
-            Some(super::GameMetadata {
-                genres: vec!["Action".to_owned()],
-                developer: Some("Legacy Studio".to_owned()),
-                release_date: Some("2020-01-02".to_owned()),
-                ..Default::default()
-            })
-        );
-        assert_eq!(
-            database
-                .list_external_game_ids(&installation.id)
-                .expect("provider IDs read"),
-            vec![super::ExternalGameId {
-                provider: "steam".to_owned(),
-                external_id: "1234".to_owned()
-            }]
-        );
-        assert_eq!(
-            database
-                .get_catalogue_game(&catalogue_id)
-                .unwrap()
-                .unwrap()
-                .name,
-            "Legacy Game"
-        );
-        let version: i64 = database
-            .connection()
-            .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
-                row.get(0)
-            })
-            .expect("migration version reads");
-        assert_eq!(version, 5);
-
-        drop(database);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
         let _ = std::fs::remove_file(format!("{}-shm", path.display()));
@@ -1674,7 +1448,7 @@ mod tests {
                 row.get(0)
             })
             .expect("migration version is readable");
-        assert_eq!(version, 5);
+        assert_eq!(version, 4);
         assert!(
             database
                 .list_games()
@@ -1930,7 +1704,7 @@ mod tests {
                 row.get(0)
             })
             .expect("migration table readable");
-        assert_eq!(count, 5);
+        assert_eq!(count, 4);
         drop(database);
         let _ = std::fs::remove_file(path);
     }

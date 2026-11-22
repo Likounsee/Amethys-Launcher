@@ -78,15 +78,8 @@ where
                         .map(|entries| IpcResponsePayload::Games {
                             games: entries
                                 .into_iter()
-                                .map(|game| IpcGameEntry {
-                                    id: game.id,
-                                    name: game.name,
-                                    platform: game.platform,
-                                    platform_id: game.platform_id,
-                                    install_path: game.install_path,
-                                    executable: game.executable,
-                                })
-                                .collect(),
+                                .map(|game| ipc_game_entry(&database, game))
+                                .collect::<Result<Vec<_>, _>>()?,
                         })
                 }
                 IpcCommand::AddGame {
@@ -96,15 +89,10 @@ where
                     executable,
                 } => database
                     .add_game(&name, &platform, &install_path, executable.as_deref())
-                    .map(|game| IpcResponsePayload::GameAdded {
-                        game: IpcGameEntry {
-                            id: game.id,
-                            name: game.name,
-                            platform: game.platform,
-                            platform_id: game.platform_id,
-                            install_path: game.install_path,
-                            executable: game.executable,
-                        },
+                    .and_then(|game| {
+                        ipc_game_entry(&database, game).map(|game| {
+                            IpcResponsePayload::GameAdded { game }
+                        })
                     }),
                 IpcCommand::AddDetectedGame {
                     name,
@@ -167,30 +155,18 @@ where
                             ),
                         }
                     };
-                    game.map(|game| IpcResponsePayload::GameAdded {
-                        game: IpcGameEntry {
-                            id: game.id,
-                            name: game.name,
-                            platform: game.platform,
-                            platform_id: game.platform_id,
-                            install_path: game.install_path,
-                            executable: game.executable,
-                        },
+                    game.and_then(|game| {
+                        ipc_game_entry(&database, game).map(|game| {
+                            IpcResponsePayload::GameAdded { game }
+                        })
                     })
                 }
                 IpcCommand::SetGameExecutable { id, executable } => database
                     .set_game_executable(&id, &executable)
                     .and_then(|game| {
-                        game.map(|game| IpcResponsePayload::GameAdded {
-                            game: IpcGameEntry {
-                                id: game.id,
-                                name: game.name,
-                                platform: game.platform,
-                                platform_id: game.platform_id,
-                                install_path: game.install_path,
-                                executable: game.executable,
-                            },
-                        })
+                        game.map(|game| ipc_game_entry(&database, game))
+                            .transpose()?
+                            .map(|game| IpcResponsePayload::GameAdded { game })
                         .ok_or_else(|| {
                             amethys_errors::AmethysError::new(
                                 amethys_errors::ErrorCode::StorageQuery,
@@ -214,6 +190,21 @@ where
     };
     write_message(stream, &response).await?;
     Ok(())
+}
+
+fn ipc_game_entry(
+    database: &Database,
+    game: amethys_storage::GameEntry,
+) -> Result<IpcGameEntry, amethys_errors::AmethysError> {
+    Ok(IpcGameEntry {
+        catalogue_game_id: database.get_catalogue_game_id(&game.id)?,
+        id: game.id,
+        name: game.name,
+        platform: game.platform,
+        platform_id: game.platform_id,
+        install_path: game.install_path,
+        executable: game.executable,
+    })
 }
 
 fn same_install_path(left: &str, right: &str) -> bool {
