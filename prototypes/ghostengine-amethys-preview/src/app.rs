@@ -152,6 +152,7 @@ impl App {
                 self.render(false);
             }
             Action::RefreshLibrary => {
+                self.st.lib_filter = 0;
                 match crate::core_client::list_games_or_start_agent() {
                     Ok(games) => { self.games = games; self.core_error = None; self.notice = Some("Bibliothèque actualisée.".to_owned()); }
                     Err(error) => { self.core_error = Some(error); self.notice = None; }
@@ -174,6 +175,7 @@ impl App {
                 match result {
                     Ok(true) => {
                         self.notice = Some("Jeu retiré de la bibliothèque.".to_owned());
+                        self.st.lib_filter = 0;
                         self.page = Page::Library;
                         self.selected_game = None;
                         match crate::core_client::list_games() {
