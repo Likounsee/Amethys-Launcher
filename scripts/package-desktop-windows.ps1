@@ -17,6 +17,9 @@ try {
     cargo build --release -p amethys-agent
     if ($LASTEXITCODE -ne 0) { throw "Building amethys-agent failed." }
 
+    cargo build --release -p amethys-cli --bin amethysctl
+    if ($LASTEXITCODE -ne 0) { throw "Building amethysctl failed." }
+
     cargo build --release --manifest-path $Manifest --bin amethys-launcher
     if ($LASTEXITCODE -ne 0) { throw "Building the GhostEngine desktop application failed." }
 
@@ -27,6 +30,7 @@ try {
     New-Item -ItemType Directory -Force (Join-Path $StageDir "assets") | Out-Null
 
     Copy-Item (Join-Path $TargetDir "release/amethys-agent.exe") $StageDir
+    Copy-Item (Join-Path $TargetDir "release/amethysctl.exe") $StageDir
     Copy-Item (Join-Path $TargetDir "release/amethys-launcher.exe") $StageDir
     Copy-Item (Join-Path $RepoRoot "prototypes/ghostengine-amethys-preview/assets/fonts") (Join-Path $StageDir "assets") -Recurse
     Copy-Item (Join-Path $RepoRoot "prototypes/ghostengine-amethys-preview/assets/covers") (Join-Path $StageDir "assets") -Recurse
@@ -37,6 +41,7 @@ try {
 Amethys Launcher — Windows x64 (development build)
 
 Run amethys-launcher.exe. It starts amethys-agent.exe automatically when the agent is not already running.
+Use amethysctl.exe from PowerShell to import and manage games (run amethysctl.exe --help for commands).
 Your local Amethys database and configuration remain in the normal per-user Amethys data directory.
 This is a portable development package, not an MSI installer or a production release.
 '@ | Set-Content -Encoding UTF8 (Join-Path $StageDir "LIRE-MOI.txt")
