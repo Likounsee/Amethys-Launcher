@@ -14,6 +14,13 @@ pub struct GameEntry {
     pub added_at: String,
 }
 
+/// A canonical catalogue record shared by multiple local installations.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CatalogueGame {
+    pub id: String,
+    pub name: String,
+}
+
 /// Amethys-owned metadata shared by every storefront identity for one game.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct GameMetadata {
@@ -148,11 +155,11 @@ impl Database {
         } else {
             0
         };
-        if detected_version > 4 {
+        if detected_version > 5 {
             return Err(AmethysError::new(
                 ErrorCode::StorageMigration,
                 format!(
-                    "Database schema version {detected_version} is newer than the supported version 4."
+                    "Database schema version {detected_version} is newer than the supported version 5."
                 ),
             ));
         }
@@ -211,7 +218,7 @@ impl Database {
                     format!("Could not read migration history: {error}"),
                 )
             })?;
-        if current_version > 4 {
+        if current_version > 5 {
             return Err(AmethysError::new(
                 ErrorCode::StorageMigration,
                 format!(
@@ -290,6 +297,83 @@ impl Database {
                     AmethysError::new(
                         ErrorCode::StorageMigration,
                         format!("Could not apply game metadata migration: {error}"),
+                    )
+                })?;
+        }
+        if current_version < 5 {
+            transaction
+                .execute_batch(
+                    "CREATE TABLE catalogue_games (
+                     id TEXT PRIMARY KEY NOT NULL,
+                     name TEXT NOT NULL
+                 );
+                 ALTER TABLE games ADD COLUMN catalogue_game_id TEXT
+                     REFERENCES catalogue_games(id) ON DELETE SET NULL;
+                 CREATE TEMP TABLE _amethys_catalogue_migration (
+                     installation_id TEXT PRIMARY KEY NOT NULL,
+                     catalogue_game_id TEXT NOT NULL
+                 );
+                 INSERT INTO _amethys_catalogue_migration (installation_id, catalogue_game_id)
+                     SELECT id, 'game-' || lower(hex(randomblob(16))) FROM games;
+                 INSERT INTO catalogue_games (id, name)
+                     SELECT migration.catalogue_game_id, games.name
+                     FROM games
+                     INNER JOIN _amethys_catalogue_migration AS migration
+                         ON migration.installation_id = games.id;
+                 UPDATE games
+                     SET catalogue_game_id = (
+                         SELECT catalogue_game_id
+                         FROM _amethys_catalogue_migration
+                         WHERE installation_id = games.id
+                     );
+                 CREATE TABLE catalogue_game_metadata (
+                     catalogue_game_id TEXT PRIMARY KEY NOT NULL
+                         REFERENCES catalogue_games(id) ON DELETE CASCADE,
+                     genres_json TEXT NOT NULL DEFAULT '[]',
+                     developer TEXT,
+                     publisher TEXT,
+                     release_date TEXT,
+                     description TEXT,
+                     icon_ref TEXT,
+                     logo_ref TEXT,
+                     cover_ref TEXT,
+                     banner_ref TEXT
+                 );
+                 INSERT INTO catalogue_game_metadata (
+                     catalogue_game_id, genres_json, developer, publisher, release_date,
+                     description, icon_ref, logo_ref, cover_ref, banner_ref
+                 )
+                     SELECT migration.catalogue_game_id, metadata.genres_json,
+                         metadata.developer, metadata.publisher, metadata.release_date,
+                         metadata.description, metadata.icon_ref, metadata.logo_ref,
+                         metadata.cover_ref, metadata.banner_ref
+                     FROM game_metadata AS metadata
+                     INNER JOIN _amethys_catalogue_migration AS migration
+                         ON migration.installation_id = metadata.game_id;
+                 CREATE TABLE catalogue_external_ids (
+                     catalogue_game_id TEXT NOT NULL
+                         REFERENCES catalogue_games(id) ON DELETE CASCADE,
+                     provider TEXT NOT NULL COLLATE NOCASE,
+                     external_id TEXT NOT NULL,
+                     PRIMARY KEY (catalogue_game_id, provider),
+                     UNIQUE (provider, external_id)
+                 );
+                 INSERT INTO catalogue_external_ids (catalogue_game_id, provider, external_id)
+                     SELECT migration.catalogue_game_id, external.provider, external.external_id
+                     FROM game_external_ids AS external
+                     INNER JOIN _amethys_catalogue_migration AS migration
+                         ON migration.installation_id = external.game_id;
+                 CREATE INDEX idx_catalogue_external_ids_game
+                     ON catalogue_external_ids(catalogue_game_id);
+                 DROP TABLE game_metadata;
+                 DROP TABLE game_external_ids;
+                 DROP TABLE _amethys_catalogue_migration;
+                 INSERT OR IGNORE INTO schema_migrations (version) VALUES (5);",
+                )
+                .map_err(|error| {
+                    AmethysError::new(
+                        ErrorCode::StorageMigration,
+                        format!("Could not apply canonical catalogue-ID migration: {error}"),
                     )
                 })?;
         }
@@ -374,11 +458,19 @@ impl Database {
         }
 
         let id = uuid::Uuid::new_v4().to_string();
+        let catalogue_game_id = format!("game-{}", uuid::Uuid::new_v4());
         self.connection
             .execute(
-                "INSERT INTO games (id, name, platform, platform_id, install_path, executable)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                params![id, name, platform, platform_id, install_path, executable],
+                "INSERT INTO catalogue_games (id, name) VALUES (?1, ?2)",
+                params![catalogue_game_id, name],
+            )
+            .map_err(|error| storage_error(format!("Could not create catalogue game: {error}")))?;
+        self.connection
+            .execute(
+                "INSERT INTO games (
+                    id, name, platform, platform_id, install_path, executable, catalogue_game_id
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![id, name, platform, platform_id, install_path, executable, catalogue_game_id],
             )
             .map_err(|error| storage_error(format!("Could not add game: {error}")))?;
         self.get_game(&id)?
@@ -514,16 +606,17 @@ impl Database {
                 )));
             }
         }
+        let Some(catalogue_game_id) = self.get_catalogue_game_id(game_id)? else {
+            return Ok(false);
+        };
         let changed = self
             .connection
             .execute(
-                "INSERT INTO game_metadata (
-                game_id, genres_json, developer, publisher, release_date, description,
+                "INSERT INTO catalogue_game_metadata (
+                catalogue_game_id, genres_json, developer, publisher, release_date, description,
                 icon_ref, logo_ref, cover_ref, banner_ref
-             )
-             SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10
-             WHERE EXISTS (SELECT 1 FROM games WHERE id = ?1)
-             ON CONFLICT(game_id) DO UPDATE SET
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+             ON CONFLICT(catalogue_game_id) DO UPDATE SET
                 genres_json = excluded.genres_json,
                 developer = excluded.developer,
                 publisher = excluded.publisher,
@@ -534,7 +627,7 @@ impl Database {
                 cover_ref = excluded.cover_ref,
                 banner_ref = excluded.banner_ref",
                 params![
-                    game_id,
+                    catalogue_game_id,
                     genres_json,
                     metadata.developer,
                     metadata.publisher,
@@ -546,19 +639,22 @@ impl Database {
                     metadata.banner_ref
                 ],
             )
-            .map_err(|error| storage_error(format!("Could not save game metadata: {error}")))?;
+            .map_err(|error| storage_error(format!("Could not save catalogue metadata: {error}")))?;
         Ok(changed != 0)
     }
 
     /// Reads the optional metadata record for one game.
     pub fn get_game_metadata(&self, game_id: &str) -> Result<Option<GameMetadata>, AmethysError> {
         let game_id = validate_game_id(game_id)?;
+        let Some(catalogue_game_id) = self.get_catalogue_game_id(game_id)? else {
+            return Ok(None);
+        };
         self.connection
             .query_row(
                 "SELECT genres_json, developer, publisher, release_date, description,
                     icon_ref, logo_ref, cover_ref, banner_ref
-             FROM game_metadata WHERE game_id = ?1",
-                [game_id],
+             FROM catalogue_game_metadata WHERE catalogue_game_id = ?1",
+                [catalogue_game_id],
                 |row| {
                     let genres_json: String = row.get(0)?;
                     let genres = serde_json::from_str(&genres_json).map_err(|error| {
@@ -603,13 +699,16 @@ impl Database {
                 "External game ID is empty, contains NUL, or exceeds the size limit.",
             ));
         }
+        let Some(catalogue_game_id) = self.get_catalogue_game_id(game_id)? else {
+            return Ok(false);
+        };
         let changed = self
             .connection
             .execute(
-                "INSERT INTO game_external_ids (game_id, provider, external_id)
-             SELECT ?1, ?2, ?3 WHERE EXISTS (SELECT 1 FROM games WHERE id = ?1)
-             ON CONFLICT(game_id, provider) DO UPDATE SET external_id = excluded.external_id",
-                params![game_id, provider, external_id],
+                "INSERT INTO catalogue_external_ids (catalogue_game_id, provider, external_id)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(catalogue_game_id, provider) DO UPDATE SET external_id = excluded.external_id",
+                params![catalogue_game_id, provider, external_id],
             )
             .map_err(|error| storage_error(format!("Could not save external game ID: {error}")))?;
         Ok(changed != 0)
@@ -632,9 +731,10 @@ impl Database {
         self.connection
             .query_row(
                 "SELECT g.id, g.name, g.platform, g.platform_id, g.install_path, g.executable, g.added_at
-             FROM games g
-             INNER JOIN game_external_ids e ON e.game_id = g.id
-             WHERE e.provider = ?1 COLLATE NOCASE AND e.external_id = ?2",
+             FROM catalogue_external_ids e
+             INNER JOIN games g ON g.catalogue_game_id = e.catalogue_game_id
+             WHERE e.provider = ?1 COLLATE NOCASE AND e.external_id = ?2
+             ORDER BY g.added_at, g.id LIMIT 1",
                 params![provider, external_id],
                 game_from_row,
             )
@@ -648,17 +748,20 @@ impl Database {
         game_id: &str,
     ) -> Result<Vec<ExternalGameId>, AmethysError> {
         let game_id = validate_game_id(game_id)?;
+        let Some(catalogue_game_id) = self.get_catalogue_game_id(game_id)? else {
+            return Ok(Vec::new());
+        };
         let mut statement = self
             .connection
             .prepare(
-                "SELECT provider, external_id FROM game_external_ids
-             WHERE game_id = ?1 ORDER BY provider COLLATE NOCASE",
+                "SELECT provider, external_id FROM catalogue_external_ids
+             WHERE catalogue_game_id = ?1 ORDER BY provider COLLATE NOCASE",
             )
             .map_err(|error| {
                 storage_error(format!("Could not prepare external ID list: {error}"))
             })?;
         let rows = statement
-            .query_map([game_id], |row| {
+            .query_map([catalogue_game_id], |row| {
                 Ok(ExternalGameId {
                     provider: row.get(0)?,
                     external_id: row.get(1)?,
@@ -668,6 +771,56 @@ impl Database {
         rows.collect::<Result<Vec<_>, _>>()
             .map_err(|error| storage_error(format!("Could not read external IDs: {error}")))
     }
+    /// Returns the canonical Amethys Game ID assigned to a local installation.
+    pub fn get_catalogue_game_id(
+        &self,
+        installation_id: &str,
+    ) -> Result<Option<String>, AmethysError> {
+        let installation_id = validate_game_id(installation_id)?;
+        self.connection
+            .query_row(
+                "SELECT catalogue_game_id FROM games WHERE id = ?1",
+                [installation_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| storage_error(format!("Could not read catalogue game ID: {error}")))
+    }
+
+    /// Reads one canonical catalogue record.
+    pub fn get_catalogue_game(
+        &self,
+        catalogue_game_id: &str,
+    ) -> Result<Option<CatalogueGame>, AmethysError> {
+        let catalogue_game_id = validate_game_id(catalogue_game_id)?;
+        self.connection
+            .query_row(
+                "SELECT id, name FROM catalogue_games WHERE id = ?1",
+                [catalogue_game_id],
+                |row| Ok(CatalogueGame { id: row.get(0)?, name: row.get(1)? }),
+            )
+            .optional()
+            .map_err(|error| storage_error(format!("Could not read catalogue game: {error}")))
+    }
+
+    /// Links an installation to an existing canonical game without matching by title.
+    /// Returns false when either record does not exist; conflicting links are explicit updates.
+    pub fn set_game_catalogue_id(
+        &self,
+        installation_id: &str,
+        catalogue_game_id: &str,
+    ) -> Result<bool, AmethysError> {
+        let installation_id = validate_game_id(installation_id)?;
+        let catalogue_game_id = validate_game_id(catalogue_game_id)?;
+        let changed = self.connection.execute(
+            "UPDATE games SET catalogue_game_id = ?1
+             WHERE id = ?2
+               AND EXISTS (SELECT 1 FROM catalogue_games WHERE id = ?1)",
+            params![catalogue_game_id, installation_id],
+        ).map_err(|error| storage_error(format!("Could not link installation to catalogue game: {error}")))?;
+        Ok(changed != 0)
+    }
+
     /// Updates the executable configured for an existing game.
     pub fn set_game_executable(
         &self,
@@ -880,11 +1033,15 @@ mod tests {
     }
 
     #[test]
-    fn deleting_a_library_entry_cascades_its_metadata_and_provider_ids() {
+    fn deleting_an_installation_preserves_its_canonical_catalogue_record() {
         let database = Database::open(":memory:").expect("database opens");
         let game = database
             .add_game("Temporary", "Local", "/games/temp", None)
             .expect("game added");
+        let catalogue_id = database
+            .get_catalogue_game_id(&game.id)
+            .expect("catalogue ID lookup")
+            .expect("catalogue identity exists");
         database
             .set_game_metadata(
                 &game.id,
@@ -897,25 +1054,27 @@ mod tests {
         database
             .set_external_game_id(&game.id, "steam", "98765")
             .expect("external ID saved");
-        assert!(database.remove_game(&game.id).expect("game removed"));
+        assert!(database.remove_game(&game.id).expect("installation removed"));
         assert_eq!(
-            database
-                .get_game_metadata(&game.id)
-                .expect("metadata lookup"),
+            database.get_game_metadata(&game.id).expect("metadata lookup"),
             None
         );
-        assert!(
-            database
-                .list_external_game_ids(&game.id)
-                .expect("IDs listed")
-                .is_empty()
+        assert_eq!(
+            database.get_catalogue_game(&catalogue_id).expect("catalogue lookup").unwrap().name,
+            "Temporary"
         );
-        assert!(
-            database
-                .get_game_by_external_id("steam", "98765")
-                .expect("external lookup")
-                .is_none()
+        assert_eq!(
+            database.list_external_game_ids(&game.id).expect("IDs listed").len(),
+            0
         );
+        // The external identity remains attached to the canonical title even
+        // when no local installation is currently present.
+        let count: i64 = database.connection().query_row(
+            "SELECT COUNT(*) FROM catalogue_external_ids WHERE external_id = '98765'",
+            [],
+            |row| row.get(0),
+        ).expect("catalogue ID remains stored");
+        assert_eq!(count, 1);
     }
 
     #[test]
@@ -1113,7 +1272,7 @@ mod tests {
                 row.get(0)
             })
             .expect("migration table readable");
-        assert_eq!(count, 4);
+        assert_eq!(count, 5);
         drop(database);
         let _ = std::fs::remove_file(path);
         let _ = std::fs::remove_file(format!("{filename}-wal"));
@@ -1243,7 +1402,7 @@ mod tests {
                 row.get(0)
             })
             .expect("version is readable");
-        assert_eq!(version, 4);
+        assert_eq!(version, 5);
         drop(database);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
@@ -1802,7 +1961,7 @@ mod tests {
                     |row| row.get(0),
                 )
                 .expect("migration history is readable");
-            assert_eq!(version, 4, "all schema migrations must be applied");
+            assert_eq!(version, 5, "all schema migrations must be applied");
 
             let platform_id_column: i64 = database
                 .connection
