@@ -1,4 +1,4 @@
-//! Interactive Amethyst Launcher test window (GhostEngine native window).
+//! Amethys Launcher desktop application using the temporary GhostEngine window backend.
 //!
 //!   cargo run --release                       (opens the window)
 //!   cargo run --release -- --snapshot OUT_DIR  (scripted session, no display)
