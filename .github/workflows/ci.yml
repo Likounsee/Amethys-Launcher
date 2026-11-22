@@ -312,3 +312,16 @@ jobs:
       - name: Check the desktop application against the current engine prototype
         working-directory: Amethys-Launcher
         run: cargo check --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml
+      - name: Build and smoke-test the portable Windows desktop package
+        working-directory: Amethys-Launcher
+        shell: pwsh
+        run: |
+          & scripts/package-desktop-windows.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Windows desktop packaging failed." }
+          $app = Join-Path $PWD "dist/Amethys/amethys-launcher.exe"
+          $snapshot = Join-Path $env:RUNNER_TEMP "amethys-desktop-smoke"
+          & $app --snapshot $snapshot
+          if ($LASTEXITCODE -ne 0) { throw "Packaged desktop application smoke test failed." }
+          if (-not (Test-Path (Join-Path $snapshot "w0-boutique.png"))) {
+            throw "Packaged desktop application did not produce its headless smoke-test image."
+          }
