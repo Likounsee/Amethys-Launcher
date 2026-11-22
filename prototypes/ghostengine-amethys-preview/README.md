@@ -38,6 +38,8 @@ If the agent is not running or the IPC connection fails, the UI reports the conn
 - Game names, source platform, IDs and install paths come from the real local SQLite-backed library.
 - Installation-directory presence is checked against the actual filesystem.
 - The Refresh button re-queries the real library over IPC.
+- The `Détecter les jeux` action runs the existing read-only platform discovery service, then displays installations that are not already in the library.
+- Each detected installation can be imported individually through the Core `AddDetectedGame` IPC command; Core retains ownership of persistence and deduplicates repeated imports.
 - The search field filters real saved metadata (name, platform, platform ID, install path and executable); platform filters are generated from the platforms actually present in Core.
 - The game details page can update the executable path through the Core `SetGameExecutable` IPC command; launch remains disabled until the configured path resolves to a file inside the registered game directory.
 - Configured executables can be launched from the UI after canonical-path validation confines them to the registered game directory.
@@ -50,7 +52,7 @@ If the agent is not running or the IPC connection fails, the UI reports the conn
 
 Game launching is currently performed by the desktop client after it retrieves the saved executable metadata; it is not yet a Core IPC command. The current Core protocol does not expose playtime tracking, download/install management, store catalogue queries, wishlists, platform account linking or settings mutation. Those features need real services before they can be exposed as functional controls.
 
-The library is loaded at startup and can be refreshed manually. Add/import flows inside the GUI, playtime tracking and live synchronization remain to be implemented. Games can still be imported through the existing Amethys CLI.
+The library is loaded at startup and can be refreshed manually. GUI import is now available for platforms covered by `amethys-discovery`. Playtime tracking, live synchronization, and broader library management remain to be implemented. The existing CLI remains available.
 
 ## Temporary GhostEngine boundary
 
@@ -76,4 +78,4 @@ Create a portable Windows x64 package from the repository root with:
 powershell -ExecutionPolicy Bypass -File scripts/package-desktop-windows.ps1
 ```
 
-The script builds the desktop launcher, Core agent and `amethysctl` CLI, stages the fonts/covers beside the launcher and creates `dist/Amethys-Windows-x64.zip`. The CLI can be used to import/manage games until the GUI import flow is implemented. This is a portable ZIP, not an MSI installer. The prototype has not yet been built or run on the user's PC as part of this change. Its fixed 1600×900 page layout is still a limitation; responsive layout is a follow-up task.
+The script builds the desktop launcher, Core agent and `amethysctl` CLI, stages the fonts/covers beside the launcher and creates `dist/Amethys-Windows-x64.zip`. The GUI can now detect and import installations covered by the discovery service. This is a portable ZIP, not an MSI installer. The prototype has not yet been built or run on the user's PC as part of this change. Its fixed 1600×900 page layout is still a limitation; responsive layout is a follow-up task.
