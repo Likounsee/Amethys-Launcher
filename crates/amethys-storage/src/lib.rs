@@ -368,7 +368,7 @@ impl Database {
                  DROP TABLE game_metadata;
                  DROP TABLE game_external_ids;
                  DROP TABLE _amethys_catalogue_migration;
-                 INSERT OR IGNORE INTO schema_migrations (version) VALUES (6);",
+                 INSERT OR IGNORE INTO schema_migrations (version) VALUES (5);",
                 )
                 .map_err(|error| {
                     AmethysError::new(
@@ -1512,7 +1512,7 @@ mod tests {
                     version INTEGER PRIMARY KEY NOT NULL,
                     applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
-                INSERT INTO schema_migrations (version) VALUES (5);",
+                INSERT INTO schema_migrations (version) VALUES (6);",
                 )
                 .expect("future schema is created");
         }
