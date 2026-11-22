@@ -168,6 +168,63 @@ pub fn remove_game(id: &str) -> Result<bool, String> {
 }
 
 
+/// Imports one discovered installation through the Core-owned database.
+pub fn add_detected_game(
+    detected: &amethys_discovery::DetectedGame,
+) -> Result<IpcGameEntry, String> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|error| format!("Impossible de démarrer le client IPC : {error}"))?;
+
+    runtime.block_on(async {
+        #[cfg(windows)]
+        let mut stream = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            transport::connect(r"\\.\pipe\amethys-core"),
+        )
+        .await
+        .map_err(|_| "Délai dépassé lors de la connexion à Amethys Core.".to_owned())?
+        .map_err(|error| error.to_string())?;
+
+        #[cfg(unix)]
+        let mut stream = {
+            let directory = amethys_config::data_directory()
+                .map_err(|error| format!("Dossier de données Amethys indisponible : {error}"))?;
+            tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                transport::connect(directory.join("amethys.sock")),
+            )
+            .await
+            .map_err(|_| "Délai dépassé lors de la connexion à Amethys Core.".to_owned())?
+            .map_err(|error| error.to_string())?
+        };
+
+        let response = tokio::time::timeout(
+            std::time::Duration::from_secs(15),
+            send_request(
+                &mut stream,
+                IpcRequest::new(IpcCommand::AddDetectedGame {
+                    name: detected.name.clone(),
+                    platform: detected.platform.to_owned(),
+                    platform_id: detected.platform_id.clone(),
+                    install_path: detected.install_path.to_string_lossy().into_owned(),
+                    executable: None,
+                }),
+            ),
+        )
+        .await
+        .map_err(|_| "Amethys Core n'a pas répondu dans les 15 secondes.".to_owned())?
+        .map_err(|error| error.to_string())?;
+
+        match response.result {
+            Ok(IpcResponsePayload::GameAdded { game }) => Ok(game),
+            Ok(other) => Err(format!("Réponse IPC inattendue : {other:?}")),
+            Err(error) => Err(format!("{} : {}", error.code, error.message)),
+        }
+    })
+}
+
 /// Saves the executable path for an existing library entry through Core IPC.
 pub fn set_game_executable(id: &str, executable: &str) -> Result<IpcGameEntry, String> {
     let runtime = tokio::runtime::Builder::new_current_thread()
