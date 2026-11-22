@@ -1520,7 +1520,9 @@ mod tests {
             .expect("catalogue ID lookup")
             .expect("migration links the installation");
         assert_eq!(
-            database.get_game_metadata(&installation.id).expect("metadata reads"),
+            database
+                .get_game_metadata(&installation.id)
+                .expect("metadata reads"),
             Some(super::GameMetadata {
                 genres: vec!["Action".to_owned()],
                 developer: Some("Legacy Studio".to_owned()),
@@ -1529,19 +1531,27 @@ mod tests {
             })
         );
         assert_eq!(
-            database.list_external_game_ids(&installation.id).expect("provider IDs read"),
+            database
+                .list_external_game_ids(&installation.id)
+                .expect("provider IDs read"),
             vec![super::ExternalGameId {
                 provider: "steam".to_owned(),
                 external_id: "1234".to_owned()
             }]
         );
         assert_eq!(
-            database.get_catalogue_game(&catalogue_id).unwrap().unwrap().name,
+            database
+                .get_catalogue_game(&catalogue_id)
+                .unwrap()
+                .unwrap()
+                .name,
             "Legacy Game"
         );
         let version: i64 = database
             .connection()
-            .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| row.get(0))
+            .query_row("SELECT MAX(version) FROM schema_migrations", [], |row| {
+                row.get(0)
+            })
             .expect("migration version reads");
         assert_eq!(version, 5);
 
