@@ -665,9 +665,9 @@ pub fn library_live(
     let gap = 18_i32;
     let card_w = (MW - gap * (columns - 1)) / columns;
     let card_h = 190_i32;
-    for (index, game) in visible.iter().copied() {
-        let col = index as i32 % columns;
-        let row = visible.iter().position(|(candidate, _)| *candidate == index).unwrap_or(0) as i32 / columns;
+    for (visible_index, (index, game)) in visible.iter().copied().enumerate() {
+        let col = visible_index as i32 % columns;
+        let row = visible_index as i32 / columns;
         let x = MX + col * (card_w + gap);
         let y = cards_y + row * (card_h + gap);
         let exists = std::path::Path::new(&game.install_path).is_dir();
