@@ -143,6 +143,24 @@ impl App {
                 self.notice = Some(match result { Ok(message) => message, Err(error) => format!("Échec du lancement : {error}") });
                 self.render(false);
             }
+            Action::RemoveGame(index) => {
+                let result = match self.games.get(index) {
+                    Some(game) => crate::core_client::remove_game(&game.id),
+                    None => Err("Ce jeu n'existe plus dans la bibliothèque chargée.".to_owned()),
+                };
+                match result {
+                    Ok(true) => {
+                        self.notice = Some("Jeu retiré de la bibliothèque.".to_owned());
+                        match crate::core_client::list_games() {
+                            Ok(games) => { self.games = games; self.core_error = None; }
+                            Err(error) => self.core_error = Some(error),
+                        }
+                    }
+                    Ok(false) => self.notice = Some("Le jeu n'était déjà plus présent dans la bibliothèque.".to_owned()),
+                    Err(error) => self.notice = Some(format!("Impossible de retirer le jeu : {error}")),
+                }
+                self.render(false);
+            }
         }
     }
 
