@@ -579,6 +579,7 @@ pub fn library_live(
     _vh: i32,
     games: &[amethys_ipc::IpcGameEntry],
     core_error: Option<&str>,
+    notice: Option<&str>,
 ) -> i32 {
     p.text(MX, 25, 42, "Bibliothèque", 40.0, W::Disp, TXT);
     p.text(MX, 74, 22, &format!("{} jeu(x) enregistré(s) dans votre bibliothèque locale", games.len()), 14.0, W::Reg, MUT);
@@ -605,6 +606,11 @@ pub fn library_live(
         return 320;
     }
 
+    if let Some(message) = notice {
+        p.paragraph(MX, 96, MW, 18, message, 12.0, W::Med, GREEN, 2);
+    }
+
+    let content_y = if notice.is_some() { 144 } else { 122 };
     let columns = 4_i32;
     let gap = 18_i32;
     let card_w = (MW - gap * (columns - 1)) / columns;
@@ -613,7 +619,7 @@ pub fn library_live(
         let col = index as i32 % columns;
         let row = index as i32 / columns;
         let x = MX + col * (card_w + gap);
-        let y = 122 + row * (card_h + gap);
+        let y = content_y + row * (card_h + gap);
         let exists = std::path::Path::new(&game.install_path).is_dir();
         p.rrect(x, y, card_w, card_h, 14, PANEL);
         p.rrect_line(x, y, card_w, card_h, 14, LINE);
@@ -623,10 +629,15 @@ pub fn library_live(
         let (status, color) = if exists { ("Dossier présent", GREEN) } else { ("Chemin introuvable", AMBER) };
         p.text(x + 14, y + 112, 18, status, 12.0, W::Med, color);
         p.paragraph(x + 14, y + 136, card_w - 28, 16, &game.install_path, 10.0, W::Reg, MUT, 2);
+        if game.executable.is_some() && exists {
+            let launch_x = x + card_w - 94;
+            button(p, launch_x, y + 76, Some(80), "Lancer", true);
+            p.hit(launch_x, y + 76, 80, 44, 12, Action::LaunchGame(index), false);
+        }
     }
 
     let rows = (games.len() as i32 + columns - 1) / columns;
-    122 + rows * (card_h + gap) + 24
+    content_y + rows * (card_h + gap) + 24
 }
 
 /// The catalogue has no connected provider yet; do not invent games or prices.
