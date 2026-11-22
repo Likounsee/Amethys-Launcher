@@ -349,6 +349,33 @@ mod tests {
     }
 
     #[test]
+    fn importing_new_cover_format_removes_stale_extensions() {
+        use std::{
+            fs,
+            time::{SystemTime, UNIX_EPOCH},
+        };
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "amethys-media-replace-{}-{unique}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let old_source = root.join("old.jpg");
+        let new_source = root.join("new.png");
+        fs::write(&old_source, b"old").unwrap();
+        fs::write(&new_source, b"new").unwrap();
+        let store = MediaStore::new(root.join("data"));
+
+        let old_path = store.import_library_asset("3000", MediaKind::Cover, &old_source).unwrap();
+        assert!(old_path.is_file());
+        let new_path = store.import_library_asset("3000", MediaKind::Cover, &new_source).unwrap();
+
+        assert_eq!(fs::read(&new_path).unwrap(), b"new");
+        assert!(!old_path.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn importing_library_asset_rejects_unsupported_extensions_and_missing_sources() {
         use std::{
             fs,
