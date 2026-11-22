@@ -11,7 +11,7 @@ use amethyst_preview::app::{App, WIN_H, WIN_W};
 use amethyst_preview::covers::CoverStore;
 use amethyst_preview::core_client;
 use amethyst_preview::gfx::{save_png, Fonts, BG};
-use ghostengine::window::InputState;
+use ghostengine::InputState;
 use ghostengine::{Framebuffer, NativeWindowSurface, Point};
 use std::path::PathBuf;
 
