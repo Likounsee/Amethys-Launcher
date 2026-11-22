@@ -23,8 +23,6 @@ pub enum Active {
 enum Icon {
     Gem,
     Books,
-    Heart,
-    Download,
     Gear,
     Search,
 }
@@ -37,16 +35,6 @@ fn icon(p: &mut Painter, ic: Icon, x: i32, y: i32, c: ghostengine::Color, bg: gh
             p.rrect(x + 2, y + 3, 4, 14, 1, c);
             p.rrect(x + 8, y + 3, 4, 14, 1, c);
             p.poly(&[(xf + 14.0, yf + 4.0), (xf + 18.0, yf + 5.0), (xf + 15.5, yf + 17.5), (xf + 11.5, yf + 16.5)], c);
-        }
-        Icon::Heart => {
-            p.circle(x + 6, y + 7, 4, c);
-            p.circle(x + 14, y + 7, 4, c);
-            p.poly(&[(xf + 2.2, yf + 8.5), (xf + 17.8, yf + 8.5), (xf + 10.0, yf + 17.5)], c);
-        }
-        Icon::Download => {
-            p.rrect(x + 9, y + 2, 2, 9, 0, c);
-            p.poly(&[(xf + 4.0, yf + 9.0), (xf + 16.0, yf + 9.0), (xf + 10.0, yf + 15.0)], c);
-            p.rrect(x + 3, y + 17, 14, 2, 1, c);
         }
         Icon::Gear => {
             p.rrect(x + 8, y, 4, 3, 1, c);
