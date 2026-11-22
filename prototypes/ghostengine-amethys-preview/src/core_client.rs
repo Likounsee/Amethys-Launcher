@@ -158,8 +158,14 @@ pub fn list_games_or_start_agent() -> Result<Vec<IpcGameEntry>, String> {
                 ));
             }
 
-            std::process::Command::new(&agent_path)
-                .spawn()
+            let mut command = std::process::Command::new(&agent_path);
+            #[cfg(windows)]
+            {
+                use std::os::windows::process::CommandExt;
+                const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+                command.creation_flags(CREATE_NO_WINDOW);
+            }
+            command.spawn()
                 .map_err(|error| format!("Impossible de démarrer Amethys Core depuis {} : {error}", agent_path.display()))?;
 
             for _ in 0..40 {
