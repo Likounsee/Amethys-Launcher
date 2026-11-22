@@ -38,7 +38,7 @@ If the agent is not running or the IPC connection fails, the UI reports the conn
 - Game names, source platform, IDs and install paths come from the real local SQLite-backed library.
 - Installation-directory presence is checked against the actual filesystem.
 - The Refresh button re-queries the real library over IPC.
-- The `Détecter les jeux` action runs the existing read-only platform discovery service, then displays installations that are not already in the library.
+- The `Détecter les jeux` action runs the existing read-only platform discovery service on a background thread, so scanning does not freeze the UI, then displays installations that are not already in the library.
 - Each detected installation can be imported individually through the Core `AddDetectedGame` IPC command; Core retains ownership of persistence and deduplicates repeated imports.
 - The search field filters real saved metadata (name, platform, platform ID, install path and executable); platform filters are generated from the platforms actually present in Core.
 - The game details page can update the executable path through the Core `SetGameExecutable` IPC command; launch remains disabled until the configured path resolves to a file inside the registered game directory.
@@ -52,7 +52,7 @@ If the agent is not running or the IPC connection fails, the UI reports the conn
 
 Game launching is currently performed by the desktop client after it retrieves the saved executable metadata; it is not yet a Core IPC command. The current Core protocol does not expose playtime tracking, download/install management, store catalogue queries, wishlists, platform account linking or settings mutation. Those features need real services before they can be exposed as functional controls.
 
-The library is loaded at startup and can be refreshed manually. GUI import is now available for platforms covered by `amethys-discovery`. Playtime tracking, live synchronization, and broader library management remain to be implemented. The existing CLI remains available.
+The library is loaded at startup and can be refreshed manually. GUI import is now available for platforms covered by `amethys-discovery`, and discovery runs outside the UI thread. Playtime tracking, live synchronization, and broader library management remain to be implemented. The existing CLI remains available.
 
 ## Temporary GhostEngine boundary
 
