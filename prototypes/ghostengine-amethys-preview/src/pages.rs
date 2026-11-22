@@ -696,7 +696,7 @@ pub fn library_live(
         let columns = 4_i32;
         let gap = 18_i32;
         let card_w = (MW - gap * (columns - 1)) / columns;
-        let card_h = 190_i32;
+        let card_h = 228_i32;
         for (visible_index, (index, game)) in visible.iter().copied().enumerate() {
             let col = visible_index as i32 % columns;
             let row = visible_index as i32 / columns;
@@ -704,25 +704,37 @@ pub fn library_live(
             let cy = y + row * (card_h + gap);
             let exists = std::path::Path::new(&game.install_path).is_dir();
             let launchable = crate::core_client::can_launch(game);
+            // Artwork-first library card, matching the visual language of the
+            // original concept while keeping every label backed by Core data.
             p.rrect(x, cy, card_w, card_h, 14, PANEL);
-            p.rrect_line(x, cy, card_w, card_h, 14, LINE);
-            chip(p, x + 14, cy + 14, &game.platform);
-            p.paragraph(x + 14, cy + 48, card_w - 28, 20, &game.name, 17.0, W::Semi, TXT, 1);
-            let (status, color) = if !exists { ("Chemin introuvable", AMBER) } else if launchable { ("Prêt à lancer", GREEN) } else if game.executable.is_some() { ("Exécutable invalide", AMBER) } else { ("Exécutable à configurer", AMBER) };
-            p.text(x + 14, cy + 76, 18, status, 12.0, W::Med, color);
-            p.paragraph(x + 14, cy + 100, card_w - 28, 16, &game.install_path, 10.0, W::Reg, MUT, 2);
-            p.hit(x, cy, card_w, card_h, 14, Action::SelectGame(index), false);
+            gradient_cover(p, x, cy, card_w, 104, 14, &game.name, 160.0, PANEL);
+            chip(p, x + 12, cy + 12, &game.platform);
+            let (status, color, status_bg) = if !exists {
+                ("Dossier introuvable", AMBER, AMBER_DARK)
+            } else if launchable {
+                ("Prêt à lancer", GREEN, GREEN_DARK)
+            } else if game.executable.is_some() {
+                ("Exécutable invalide", AMBER, AMBER_DARK)
+            } else {
+                ("À configurer", AMBER, AMBER_DARK)
+            };
+            badge_right(p, x + card_w - 12, cy + 12, status, status_bg, color);
+            cover_title(p, x + 2, cy, card_w - 4, 104, &game.name, 19.0);
+            p.fill(x + 1, cy + 104, card_w - 2, card_h - 105, PANEL);
+            p.paragraph(x + 14, cy + 112, card_w - 28, 16, &game.install_path, 10.0, W::Reg, MUT, 2);
+            p.hit(x, cy, card_w, 104, 14, Action::SelectGame(index), false);
             let remove_x = x + card_w - 174;
-            p.rrect(remove_x, cy + 146, 72, 30, 8, ACT);
-            p.rrect_line(remove_x, cy + 146, 72, 30, 8, LINE);
-            p.text(remove_x + 12, cy + 146, 30, "Retirer", 12.0, W::Med, SOFT);
-            p.hit(remove_x, cy + 146, 72, 30, 8, Action::RemoveGame(index), false);
+            p.rrect(remove_x, cy + 180, 72, 30, 8, ACT);
+            p.rrect_line(remove_x, cy + 180, 72, 30, 8, LINE);
+            p.text(remove_x + 12, cy + 180, 30, "Retirer", 12.0, W::Med, SOFT);
+            p.hit(remove_x, cy + 180, 72, 30, 8, Action::RemoveGame(index), false);
             if launchable {
                 let launch_x = x + card_w - 94;
-                p.rrect(launch_x, cy + 146, 80, 30, 8, VIO);
-                p.text(launch_x + 14, cy + 146, 30, "Lancer", 12.0, W::Semi, VIO_DARK);
-                p.hit(launch_x, cy + 146, 80, 30, 8, Action::LaunchGame(index), false);
+                p.rrect(launch_x, cy + 180, 80, 30, 8, VIO);
+                p.text(launch_x + 14, cy + 180, 30, "Lancer", 12.0, W::Semi, VIO_DARK);
+                p.hit(launch_x, cy + 180, 80, 30, 8, Action::LaunchGame(index), false);
             }
+            p.rrect_line(x, cy, card_w, card_h, 14, LINE);
         }
         let rows = (visible.len() as i32 + columns - 1) / columns;
         y += rows * (card_h + gap) + 24;
