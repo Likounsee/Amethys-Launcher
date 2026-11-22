@@ -42,6 +42,7 @@ pub struct App {
     pub page: Page,
     pub st: State,
     pub games: Vec<IpcGameEntry>,
+    pub detected_games: Vec<amethys_discovery::DetectedGame>,
     pub core_error: Option<String>,
     pub notice: Option<String>,
     pub selected_game: Option<usize>,
@@ -72,6 +73,7 @@ impl App {
             page: Page::Library,
             st: State::default(),
             games,
+            detected_games: Vec::new(),
             core_error,
             notice: None,
             selected_game: None,
@@ -107,7 +109,17 @@ impl App {
         let mut p = Painter::new(WIN_W, MAX_PAGE_H, self.fonts).with_covers(self.covers);
         pages::sidebar(&mut p, active, vh);
         let h = (if self.page == Page::Library {
-            pages::library_live(&mut p, vh, &self.games, self.st.lib_filter, &self.search_query, self.search_focused, self.core_error.as_deref(), self.notice.as_deref())
+            pages::library_live(
+                &mut p,
+                vh,
+                &self.games,
+                &self.detected_games,
+                self.st.lib_filter,
+                &self.search_query,
+                self.search_focused,
+                self.core_error.as_deref(),
+                self.notice.as_deref(),
+            )
         } else if self.page == Page::Product {
             pages::game_detail_live(
                 &mut p,
@@ -203,6 +215,43 @@ impl App {
                     .and_then(|game| game.executable.clone())
                     .unwrap_or_default();
                 self.editing_executable = false;
+                self.render(false);
+            }
+            Action::ScanGames => {
+                self.notice = Some("Recherche des installations locales en cours…".to_owned());
+                self.detected_games.clear();
+                self.render(false);
+                self.detected_games = amethys_discovery::discover_all_games();
+                let imported = self.games.iter().map(|game| {
+                    (game.platform.to_ascii_lowercase(), game.platform_id.clone(), game.install_path.clone())
+                }).collect::<Vec<_>>();
+                self.detected_games.retain(|candidate| {
+                    !imported.iter().any(|(platform, platform_id, install_path)| {
+                        platform.eq_ignore_ascii_case(candidate.platform)
+                            && (candidate.platform_id.as_ref().is_some_and(|id| platform_id.as_ref() == Some(id))
+                                || std::path::Path::new(install_path) == candidate.install_path.as_path())
+                    })
+                });
+                let count = self.detected_games.len();
+                self.notice = Some(format!("{count} installation(s) détectée(s) à importer."));
+                self.render(false);
+            }
+            Action::ImportDetectedGame(index) => {
+                let result = self.detected_games.get(index)
+                    .ok_or_else(|| "Cette installation détectée n'est plus disponible.".to_owned())
+                    .and_then(crate::core_client::add_detected_game);
+                match result {
+                    Ok(game) => {
+                        let name = game.name.clone();
+                        match crate::core_client::list_games() {
+                            Ok(games) => { self.games = games; self.core_error = None; }
+                            Err(error) => self.core_error = Some(error),
+                        }
+                        self.detected_games.remove(index);
+                        self.notice = Some(format!("{name} a été ajouté à votre bibliothèque."));
+                    }
+                    Err(error) => self.notice = Some(format!("Import impossible : {error}")),
+                }
                 self.render(false);
             }
             Action::RefreshLibrary => {
