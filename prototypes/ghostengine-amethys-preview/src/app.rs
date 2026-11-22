@@ -36,7 +36,7 @@ pub const WIN_H: u32 = 900;
 fn normalized_install_path(path: &std::path::Path) -> String {
     let normalized = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
     normalized.to_string_lossy()
-        .replace('\\\\', "/")
+        .replace(char::from(92), "/")
         .trim_end_matches('/')
         .to_ascii_lowercase()
 }
