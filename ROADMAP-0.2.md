@@ -17,9 +17,9 @@ La priorité de la 0.2 est une interface de bureau complète, cohérente et soig
 - [ ] Concevoir des paramètres cohérents, en distinguant les réglages réellement enregistrés des fonctions à venir.
 
 ### Bibliothèque et métadonnées
-- [ ] Introduire un Game ID Amethys stable, indépendant des identifiants Steam/Epic/GOG/Xbox.
-- [ ] Définir les métadonnées : nom, genres, développeur, éditeur, date de sortie, description et identifiants externes.
-- [ ] Prévoir les références de médias icon, logo, cover et banner sans lier ces ressources à un fournisseur.
+- [x] Utiliser l'identifiant stable de bibliothèque Amethys (UUID local), indépendant des identifiants Steam/Epic/GOG/Xbox.
+- [x] Définir et persister les métadonnées : genres, développeur, éditeur, date de sortie, description et identifiants externes multiples par jeu.
+- [x] Prévoir et persister les références de médias icon, logo, cover et banner sans lier ces ressources à un fournisseur.
 - [ ] Stocker localement les médias des jeux de la bibliothèque et les préférences propres à l'utilisateur.
 - [ ] Utiliser des illustrations originales de remplacement pendant le développement ; aucun visuel de jeu non autorisé ne doit être distribué.
 - [ ] Améliorer le rapport d'import et les erreurs par installation.

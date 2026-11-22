@@ -821,6 +821,22 @@ mod tests {
     }
 
 
+
+    #[test]
+    fn deleting_a_library_entry_cascades_its_metadata_and_provider_ids() {
+        let database = Database::open(":memory:").expect("database opens");
+        let game = database.add_game("Temporary", "Local", "/games/temp", None).expect("game added");
+        database.set_game_metadata(&game.id, &super::GameMetadata {
+            developer: Some("Studio".to_owned()),
+            ..Default::default()
+        }).expect("metadata saved");
+        database.set_external_game_id(&game.id, "steam", "98765").expect("external ID saved");
+        assert!(database.remove_game(&game.id).expect("game removed"));
+        assert_eq!(database.get_game_metadata(&game.id).expect("metadata lookup"), None);
+        assert!(database.list_external_game_ids(&game.id).expect("IDs listed").is_empty());
+        assert!(database.get_game_by_external_id("steam", "98765").expect("external lookup").is_none());
+    }
+
     #[test]
     fn metadata_and_multiple_provider_ids_share_one_stable_game_id() {
         let database = Database::open(":memory:").expect("database opens");
@@ -1371,7 +1387,7 @@ mod tests {
                 row.get(0)
             })
             .expect("migration table readable");
-        assert_eq!(count, 3);
+        assert_eq!(count, 4);
         drop(database);
         let _ = std::fs::remove_file(path);
     }
