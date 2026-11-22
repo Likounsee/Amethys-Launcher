@@ -44,9 +44,8 @@ pub fn list_games() -> Result<Vec<IpcGameEntry>, String> {
 }
 
 
-/// Starts a configured game after canonicalizing and constraining its executable
-/// to the registered installation directory, matching the CLI safety boundary.
-pub fn launch_game(game: &IpcGameEntry) -> Result<u32, String> {
+/// Resolves a configured executable and guarantees it remains inside the registered game directory.
+fn resolve_launch_executable(game: &IpcGameEntry) -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
     let executable = game.executable.as_deref()
         .ok_or_else(|| "Aucun exécutable n'est configuré pour ce jeu.".to_owned())?;
     let root = std::path::Path::new(&game.install_path)
@@ -81,8 +80,18 @@ pub fn launch_game(game: &IpcGameEntry) -> Result<u32, String> {
     if !resolved.is_file() {
         return Err("Le chemin configuré ne désigne pas un fichier exécutable.".to_owned());
     }
+    Ok((root, resolved))
+}
 
-    std::process::Command::new(&resolved)
+/// Whether the configured executable currently passes the same checks as launch.
+pub fn can_launch(game: &IpcGameEntry) -> bool {
+    resolve_launch_executable(game).is_ok()
+}
+
+/// Starts a configured game after validating its executable against the registered installation.
+pub fn launch_game(game: &IpcGameEntry) -> Result<u32, String> {
+    let (root, executable) = resolve_launch_executable(game)?;
+    std::process::Command::new(&executable)
         .current_dir(&root)
         .spawn()
         .map(|child| child.id())
