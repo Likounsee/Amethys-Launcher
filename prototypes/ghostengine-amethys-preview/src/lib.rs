@@ -1,4 +1,4 @@
-//! Amethyst Launcher mockups rendered with GhostEngine's CPU renderer.
+//! Experimental Amethys desktop UI rendered with GhostEngine and connected to Amethys Core.
 pub mod covers;
 pub mod core_client;
 pub mod data;
