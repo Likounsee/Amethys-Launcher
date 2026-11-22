@@ -14,6 +14,27 @@ pub struct GameEntry {
     pub added_at: String,
 }
 
+/// Amethys-owned metadata shared by every storefront identity for one game.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct GameMetadata {
+    pub genres: Vec<String>,
+    pub developer: Option<String>,
+    pub publisher: Option<String>,
+    pub release_date: Option<String>,
+    pub description: Option<String>,
+    pub icon_ref: Option<String>,
+    pub logo_ref: Option<String>,
+    pub cover_ref: Option<String>,
+    pub banner_ref: Option<String>,
+}
+
+/// An external storefront identifier attached to an Amethys game ID.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalGameId {
+    pub provider: String,
+    pub external_id: String,
+}
+
 const MAX_GAME_ID_BYTES: usize = 128;
 const MAX_GAME_NAME_BYTES: usize = 512;
 const MAX_PLATFORM_NAME_BYTES: usize = 128;
@@ -127,11 +148,11 @@ impl Database {
         } else {
             0
         };
-        if detected_version > 3 {
+        if detected_version > 4 {
             return Err(AmethysError::new(
                 ErrorCode::StorageMigration,
                 format!(
-                    "Database schema version {detected_version} is newer than the supported version 3."
+                    "Database schema version {detected_version} is newer than the supported version 4."
                 ),
             ));
         }
@@ -190,7 +211,7 @@ impl Database {
                     format!("Could not read migration history: {error}"),
                 )
             })?;
-        if current_version > 3 {
+        if current_version > 4 {
             return Err(AmethysError::new(
                 ErrorCode::StorageMigration,
                 format!(
@@ -236,6 +257,39 @@ impl Database {
                     AmethysError::new(
                         ErrorCode::StorageMigration,
                         format!("Could not apply game platform-ID migration: {error}"),
+                    )
+                })?;
+        }
+        if current_version < 4 {
+            transaction
+                .execute_batch(
+                    "CREATE TABLE IF NOT EXISTS game_metadata (
+                     game_id TEXT PRIMARY KEY NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+                     genres_json TEXT NOT NULL DEFAULT '[]',
+                     developer TEXT,
+                     publisher TEXT,
+                     release_date TEXT,
+                     description TEXT,
+                     icon_ref TEXT,
+                     logo_ref TEXT,
+                     cover_ref TEXT,
+                     banner_ref TEXT
+                 );
+                 CREATE TABLE IF NOT EXISTS game_external_ids (
+                     game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+                     provider TEXT NOT NULL COLLATE NOCASE,
+                     external_id TEXT NOT NULL,
+                     PRIMARY KEY (game_id, provider),
+                     UNIQUE (provider, external_id)
+                 );
+                 CREATE INDEX IF NOT EXISTS idx_game_external_ids_game
+                     ON game_external_ids(game_id);
+                 INSERT OR IGNORE INTO schema_migrations (version) VALUES (5);",
+                )
+                .map_err(|error| {
+                    AmethysError::new(
+                        ErrorCode::StorageMigration,
+                        format!("Could not apply game metadata migration: {error}"),
                     )
                 })?;
         }
@@ -415,6 +469,150 @@ impl Database {
         self.get_game(id)
     }
 
+    /// Saves Amethys metadata without changing the stable local Game ID.
+    pub fn set_game_metadata(
+        &self,
+        game_id: &str,
+        metadata: &GameMetadata,
+    ) -> Result<bool, AmethysError> {
+        let game_id = validate_game_id(game_id)?;
+        if metadata.genres.len() > 64 {
+            return Err(storage_error("A game cannot have more than 64 genres."));
+        }
+        let genres = metadata.genres.iter().map(|value| value.trim()).collect::<Vec<_>>();
+        if genres.iter().any(|value| value.is_empty() || value.len() > 128 || value.contains('\0')) {
+            return Err(storage_error("Genre names must be non-empty, NUL-free and at most 128 bytes."));
+        }
+        let genres_json = serde_json::to_string(&genres)
+            .map_err(|error| storage_error(format!("Could not encode game genres: {error}")))?;
+        let optional_fields = [
+            (&metadata.developer, 512, "developer"),
+            (&metadata.publisher, 512, "publisher"),
+            (&metadata.release_date, 32, "release date"),
+            (&metadata.description, 32 * 1024, "description"),
+            (&metadata.icon_ref, 2048, "icon reference"),
+            (&metadata.logo_ref, 2048, "logo reference"),
+            (&metadata.cover_ref, 2048, "cover reference"),
+            (&metadata.banner_ref, 2048, "banner reference"),
+        ];
+        for (value, max_bytes, label) in optional_fields {
+            if value.as_ref().is_some_and(|value| value.contains('\0') || value.len() > max_bytes) {
+                return Err(storage_error(format!("Game {label} is invalid or exceeds {max_bytes} bytes.")));
+            }
+        }
+        let changed = self.connection.execute(
+            "INSERT INTO game_metadata (
+                game_id, genres_json, developer, publisher, release_date, description,
+                icon_ref, logo_ref, cover_ref, banner_ref
+             )
+             SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10
+             WHERE EXISTS (SELECT 1 FROM games WHERE id = ?1)
+             ON CONFLICT(game_id) DO UPDATE SET
+                genres_json = excluded.genres_json,
+                developer = excluded.developer,
+                publisher = excluded.publisher,
+                release_date = excluded.release_date,
+                description = excluded.description,
+                icon_ref = excluded.icon_ref,
+                logo_ref = excluded.logo_ref,
+                cover_ref = excluded.cover_ref,
+                banner_ref = excluded.banner_ref",
+            params![
+                game_id, genres_json, metadata.developer, metadata.publisher,
+                metadata.release_date, metadata.description, metadata.icon_ref,
+                metadata.logo_ref, metadata.cover_ref, metadata.banner_ref
+            ],
+        ).map_err(|error| storage_error(format!("Could not save game metadata: {error}")))?;
+        Ok(changed != 0)
+    }
+
+    /// Reads the optional metadata record for one game.
+    pub fn get_game_metadata(&self, game_id: &str) -> Result<Option<GameMetadata>, AmethysError> {
+        let game_id = validate_game_id(game_id)?;
+        self.connection.query_row(
+            "SELECT genres_json, developer, publisher, release_date, description,
+                    icon_ref, logo_ref, cover_ref, banner_ref
+             FROM game_metadata WHERE game_id = ?1",
+            [game_id],
+            |row| {
+                let genres_json: String = row.get(0)?;
+                let genres = serde_json::from_str(&genres_json).map_err(|error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        0, rusqlite::types::Type::Text, Box::new(error)
+                    )
+                })?;
+                Ok(GameMetadata {
+                    genres,
+                    developer: row.get(1)?,
+                    publisher: row.get(2)?,
+                    release_date: row.get(3)?,
+                    description: row.get(4)?,
+                    icon_ref: row.get(5)?,
+                    logo_ref: row.get(6)?,
+                    cover_ref: row.get(7)?,
+                    banner_ref: row.get(8)?,
+                })
+            },
+        ).optional().map_err(|error| storage_error(format!("Could not read game metadata: {error}")))
+    }
+
+    /// Adds or updates one provider ID. A provider ID can identify only one Amethys game.
+    pub fn set_external_game_id(
+        &self,
+        game_id: &str,
+        provider: &str,
+        external_id: &str,
+    ) -> Result<bool, AmethysError> {
+        let game_id = validate_game_id(game_id)?;
+        let provider = validate_provider_key(provider)?;
+        let external_id = external_id.trim();
+        if external_id.is_empty() || external_id.len() > MAX_PLATFORM_ID_BYTES || external_id.contains('\0') {
+            return Err(storage_error("External game ID is empty, contains NUL, or exceeds the size limit."));
+        }
+        let changed = self.connection.execute(
+            "INSERT INTO game_external_ids (game_id, provider, external_id)
+             SELECT ?1, ?2, ?3 WHERE EXISTS (SELECT 1 FROM games WHERE id = ?1)
+             ON CONFLICT(game_id, provider) DO UPDATE SET external_id = excluded.external_id",
+            params![game_id, provider, external_id],
+        ).map_err(|error| storage_error(format!("Could not save external game ID: {error}")))?;
+        Ok(changed != 0)
+    }
+
+    /// Finds a game by a provider ID, independently of the primary library platform.
+    pub fn get_game_by_external_id(
+        &self,
+        provider: &str,
+        external_id: &str,
+    ) -> Result<Option<GameEntry>, AmethysError> {
+        let provider = validate_provider_key(provider)?;
+        let external_id = external_id.trim();
+        if external_id.is_empty() || external_id.len() > MAX_PLATFORM_ID_BYTES || external_id.contains('\0') {
+            return Err(storage_error("External game ID is invalid."));
+        }
+        self.connection.query_row(
+            "SELECT g.id, g.name, g.platform, g.platform_id, g.install_path, g.executable, g.added_at
+             FROM games g
+             INNER JOIN game_external_ids e ON e.game_id = g.id
+             WHERE e.provider = ?1 COLLATE NOCASE AND e.external_id = ?2",
+            params![provider, external_id],
+            game_from_row,
+        ).optional().map_err(|error| storage_error(format!("Could not find game by external ID: {error}")))
+    }
+
+    /// Returns all provider identities for a game in stable provider order.
+    pub fn list_external_game_ids(&self, game_id: &str) -> Result<Vec<ExternalGameId>, AmethysError> {
+        let game_id = validate_game_id(game_id)?;
+        let mut statement = self.connection.prepare(
+            "SELECT provider, external_id FROM game_external_ids
+             WHERE game_id = ?1 ORDER BY provider COLLATE NOCASE"
+        ).map_err(|error| storage_error(format!("Could not prepare external ID list: {error}")))?;
+        let rows = statement.query_map([game_id], |row| {
+            Ok(ExternalGameId { provider: row.get(0)?, external_id: row.get(1)? })
+        }).map_err(|error| storage_error(format!("Could not list external IDs: {error}")))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| storage_error(format!("Could not read external IDs: {error}")))
+    }
+
     /// Updates the executable configured for an existing game.
     pub fn set_game_executable(
         &self,
@@ -578,6 +776,17 @@ fn validate_platform_identity<'a>(
     Ok((platform, platform_id))
 }
 
+fn validate_provider_key(provider: &str) -> Result<&str, AmethysError> {
+    let provider = provider.trim();
+    if provider.is_empty()
+        || provider.len() > 48
+        || !provider.bytes().all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    {
+        return Err(storage_error("Provider keys must use lowercase ASCII letters, digits or hyphens."));
+    }
+    Ok(provider)
+}
+
 fn validate_setting_key(key: &str) -> Result<&str, AmethysError> {
     let key = key.trim();
     const MAX_SETTING_KEY_BYTES: usize = 256;
@@ -609,6 +818,55 @@ mod tests {
         let path = std::env::temp_dir().join(format!("amethys-{}.sqlite", uuid::Uuid::new_v4()));
         let database = Database::open(&path).expect("database opens");
         (database, path)
+    }
+
+
+    #[test]
+    fn metadata_and_multiple_provider_ids_share_one_stable_game_id() {
+        let database = Database::open(":memory:").expect("database opens");
+        let game = database.add_game("Example", "Steam", "/games/example", None).expect("game added");
+        let metadata = super::GameMetadata {
+            genres: vec!["Action".to_owned(), "Adventure".to_owned()],
+            developer: Some("Studio".to_owned()),
+            publisher: Some("Publisher".to_owned()),
+            release_date: Some("2026-11-22".to_owned()),
+            description: Some("A local catalogue record.".to_owned()),
+            icon_ref: Some("media/library/icon.png".to_owned()),
+            logo_ref: None,
+            cover_ref: Some("media/library/cover.png".to_owned()),
+            banner_ref: None,
+        };
+        assert!(database.set_game_metadata(&game.id, &metadata).expect("metadata saved"));
+        assert_eq!(database.get_game_metadata(&game.id).expect("metadata read"), Some(metadata));
+        assert!(database.set_external_game_id(&game.id, "steam", "123456").expect("Steam ID saved"));
+        assert!(database.set_external_game_id(&game.id, "epic", "epic-product-abc").expect("Epic ID saved"));
+        assert_eq!(database.get_game_by_external_id("steam", "123456").expect("Steam lookup").unwrap().id, game.id);
+        assert_eq!(database.get_game_by_external_id("epic", "epic-product-abc").expect("Epic lookup").unwrap().id, game.id);
+        assert_eq!(database.list_external_game_ids(&game.id).expect("IDs listed").len(), 2);
+    }
+
+    #[test]
+    fn external_provider_ids_cannot_be_ambiguous_or_overwritten_by_another_game() {
+        let database = Database::open(":memory:").expect("database opens");
+        let first = database.add_game("First", "Local", "/games/first", None).expect("first game");
+        let second = database.add_game("Second", "Local", "/games/second", None).expect("second game");
+        database.set_external_game_id(&first.id, "steam", "42").expect("first ID saved");
+        assert!(database.set_external_game_id(&second.id, "steam", "42").is_err());
+        assert!(database.set_external_game_id(&first.id, "../steam", "99").is_err());
+        assert!(database.set_external_game_id(&first.id, "steam", "../99").is_ok());
+        assert_eq!(database.get_game_by_external_id("steam", "../99").expect("lookup").unwrap().id, first.id);
+    }
+
+    #[test]
+    fn metadata_requires_an_existing_game_and_rejects_invalid_fields() {
+        let database = Database::open(":memory:").expect("database opens");
+        assert!(!database.set_game_metadata("missing", &super::GameMetadata::default()).expect("missing game is ignored"));
+        let game = database.add_game("Valid", "Local", "/games/valid", None).expect("game added");
+        let invalid = super::GameMetadata { genres: vec!["\0bad".to_owned()], ..Default::default() };
+        assert!(database.set_game_metadata(&game.id, &invalid).is_err());
+        let invalid = super::GameMetadata { developer: Some("\0bad".to_owned()), ..Default::default() };
+        assert!(database.set_game_metadata(&game.id, &invalid).is_err());
+        assert!(database.set_external_game_id("missing", "steam", "123").expect("missing game ignored") == false);
     }
 
     #[test]
@@ -681,7 +939,7 @@ mod tests {
                 row.get(0)
             })
             .expect("migration table readable");
-        assert_eq!(count, 3);
+        assert_eq!(count, 4);
         drop(database);
         let _ = std::fs::remove_file(path);
         let _ = std::fs::remove_file(format!("{filename}-wal"));
@@ -746,7 +1004,7 @@ mod tests {
         assert!(
             error
                 .message()
-                .contains("newer than the supported version 3")
+                .contains("newer than the supported version 4")
         );
 
         let connection = rusqlite::Connection::open(&path).expect("fixture database reopens");
@@ -811,7 +1069,7 @@ mod tests {
                 row.get(0)
             })
             .expect("version is readable");
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
         drop(database);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
@@ -857,7 +1115,7 @@ mod tests {
                 row.get(0)
             })
             .expect("migration version is readable");
-        assert_eq!(version, 3);
+        assert_eq!(version, 4);
         assert!(
             database
                 .list_games()
@@ -1370,7 +1628,7 @@ mod tests {
                     |row| row.get(0),
                 )
                 .expect("migration history is readable");
-            assert_eq!(version, 3, "all schema migrations must be applied");
+            assert_eq!(version, 4, "all schema migrations must be applied");
 
             let platform_id_column: i64 = database
                 .connection
