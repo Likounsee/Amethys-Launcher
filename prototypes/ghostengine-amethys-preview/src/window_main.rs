@@ -97,10 +97,9 @@ fn replay(app: &mut App, dir: PathBuf) -> Result<(), Box<dyn std::error::Error>>
     shot(app, "w7-retour-boutique", release(285, 32))?;
     shot(app, "w8-recherche-press", press(400, 46))?;
     shot(app, "w8-recherche-focus", release(400, 46))?;
-    // stats overlay: open, then run the real benchmark
+    // Capture the stats overlay without running the expensive interactive benchmark in CI.
     shot(app, "w9-stats-ouvert-press", press(1480, 869))?;
     shot(app, "w9-stats-ouvert", release(1480, 869))?;
-    shot(app, "w10-benchmark-press", press(1180, 760))?;
-    shot(app, "w10-benchmark", release(1180, 760))?;
+    shot(app, "w10-stats-survol", at(1180, 760))?;
     Ok(())
 }
