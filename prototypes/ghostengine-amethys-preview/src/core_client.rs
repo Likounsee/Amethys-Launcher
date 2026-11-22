@@ -126,3 +126,42 @@ pub fn remove_game(id: &str) -> Result<bool, String> {
         }
     })
 }
+
+
+/// Connects to the running agent or starts the bundled agent beside the desktop executable.
+pub fn list_games_or_start_agent() -> Result<Vec<IpcGameEntry>, String> {
+    match list_games() {
+        Ok(games) => return Ok(games),
+        Err(initial_error) => {
+            let executable = std::env::current_exe()
+                .map_err(|error| format!("Impossible de localiser le launcher : {error}"))?;
+            let directory = executable.parent()
+                .ok_or_else(|| "Impossible de localiser le dossier du launcher.".to_owned())?;
+            #[cfg(windows)]
+            let agent_path = directory.join("amethys-agent.exe");
+            #[cfg(not(windows))]
+            let agent_path = directory.join("amethys-agent");
+
+            if !agent_path.is_file() {
+                return Err(format!(
+                    "Amethys Core est inaccessible ({initial_error}) et amethys-agent est absent de {}. Placez l'agent à côté du launcher ou démarrez-le séparément.",
+                    directory.display()
+                ));
+            }
+
+            std::process::Command::new(&agent_path)
+                .spawn()
+                .map_err(|error| format!("Impossible de démarrer Amethys Core depuis {} : {error}", agent_path.display()))?;
+
+            for _ in 0..40 {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                if let Ok(games) = list_games() {
+                    return Ok(games);
+                }
+            }
+            Err(format!(
+                "Amethys Core n'a pas répondu après son démarrage. Première erreur IPC : {initial_error}"
+            ))
+        }
+    }
+}
