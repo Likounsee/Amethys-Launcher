@@ -34,7 +34,7 @@ If the agent is not running or the IPC connection fails, the UI reports the conn
 
 ## Implemented against real Amethys services
 
-- The Library page requests `ListGames` through the existing versioned IPC protocol.
+- The Library page requests `ListGames` through the existing versioned IPC protocol and opens a real details page for each saved entry.
 - Game names, source platform, IDs and install paths come from the real local SQLite-backed library.
 - Installation-directory presence is checked against the actual filesystem.
 - The Refresh button re-queries the real library over IPC.
@@ -48,7 +48,7 @@ If the agent is not running or the IPC connection fails, the UI reports the conn
 
 Game launching is currently performed by the desktop client after it retrieves the saved executable metadata; it is not yet a Core IPC command. The current Core protocol does not expose playtime tracking, download/install management, store catalogue queries, wishlists, platform account linking or settings mutation. Those features need real services before they can be exposed as functional controls.
 
-The library is loaded at startup and can be refreshed manually. Real search, add/import flows inside the GUI, selected-game detail pages and live synchronization remain to be implemented. Executables can currently be configured through the existing Amethys CLI.
+The library is loaded at startup and can be refreshed manually. Real search, add/import flows inside the GUI, playtime tracking and live synchronization remain to be implemented. Executables can currently be configured through the existing Amethys CLI.
 
 ## Temporary GhostEngine boundary
 
