@@ -611,6 +611,7 @@ pub fn library_live(
     games: &[amethys_ipc::IpcGameEntry],
     detected: &[amethys_discovery::DetectedGame],
     scan_in_progress: bool,
+    scan_progress: Option<&amethys_discovery::DiscoveryProgress>,
     selected_filter: usize,
     sort_mode: usize,
     search_query: &str,
@@ -652,8 +653,15 @@ pub fn library_live(
 
     p.text(MX, 76, 22, &format!("{} jeu(x) affiché(s) · {} au total", visible.len(), games.len()), 14.0, W::Reg, MUT);
     let scan_x = MX + MW - 180;
-    button(p, scan_x, 68, Some(180), if scan_in_progress { "Analyse en cours…" } else { "Détecter les jeux" }, true);
-    if !scan_in_progress {
+    if scan_in_progress {
+        let progress_label = scan_progress.map(|progress| format!("{} / {} · {}", progress.completed, progress.total, progress.source))
+            .unwrap_or_else(|| "Préparation de l'analyse…".to_owned());
+        p.text(MX, 102, 20, &progress_label, 11.0, W::Med, VIO);
+        let cancel_x = scan_x + 8;
+        button(p, cancel_x, 68, Some(164), "Annuler", false);
+        p.hit(cancel_x, 68, 164, 44, 12, Action::CancelScan, false);
+    } else {
+        button(p, scan_x, 68, Some(180), "Détecter les jeux", true);
         p.hit(scan_x, 68, 180, 44, 12, Action::ScanGames, false);
     }
 

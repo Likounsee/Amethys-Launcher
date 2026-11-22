@@ -1890,19 +1890,45 @@ pub fn riot_client_installs_file() -> Option<PathBuf> {
 
 /// Collects read-only detections from supported launchers. Missing launchers
 /// simply contribute no results and never prevent other adapters from running.
-pub fn discover_all_games() -> Vec<DetectedGame> {
-    let mut games = discover_steam_games();
+/// Progress after one provider metadata source has finished scanning.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiscoveryProgress {
+    pub completed: usize,
+    pub total: usize,
+    pub source: String,
+    pub found: usize,
+}
+
+/// Result of a discovery run. Cancellation is cooperative and takes effect
+/// between provider scans; a provider already scanning is allowed to finish.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiscoveryOutcome {
+    pub games: Vec<DetectedGame>,
+    pub cancelled: bool,
+}
+
+/// Performs a read-only scan of supported local game launchers and reports
+/// progress after each provider metadata source. The cancellation flag is
+/// checked before starting every source, never in the middle of a provider's
+/// filesystem/database operation.
+pub fn discover_all_games_with_progress(
+    cancel: &std::sync::atomic::AtomicBool,
+    mut on_progress: impl FnMut(DiscoveryProgress),
+) -> DiscoveryOutcome {
+    let mut stages: Vec<(String, Box<dyn FnOnce() -> Vec<DetectedGame>>)> = Vec::new();
+    stages.push(("Steam".to_owned(), Box::new(discover_steam_games)));
+
     for root in epic_manifest_roots() {
-        games.extend(scan_epic_manifests(&root));
+        stages.push((format!("Epic Games · {}", root.display()), Box::new(move || scan_epic_manifests(&root))));
     }
-    for installed_json in heroic_legendary_installed_files() {
-        games.extend(scan_heroic_legendary_installed(&installed_json));
+    for file in heroic_legendary_installed_files() {
+        stages.push((format!("Heroic · {}", file.display()), Box::new(move || scan_heroic_legendary_installed(&file))));
     }
     for database in gog_galaxy_databases() {
-        games.extend(scan_gog_galaxy(&database));
+        stages.push((format!("GOG Galaxy · {}", database.display()), Box::new(move || scan_gog_galaxy(&database))));
     }
     if let Some(database) = amazon_games_database() {
-        games.extend(scan_amazon_games(&database));
+        stages.push(("Amazon Games".to_owned(), Box::new(move || scan_amazon_games(&database))));
     }
 
     #[cfg(windows)]
@@ -1911,57 +1937,61 @@ pub fn discover_all_games() -> Vec<DetectedGame> {
         if let Some(program_files) = std::env::var_os("ProgramFiles").map(PathBuf::from) {
             ea_roots.push(program_files.join("EA Games"));
         }
-        // EA app may store games in either Program Files tree. Every candidate
-        // still needs EA's installerdata.xml and an existing absolute directory.
         if let Some(program_files_x86) = std::env::var_os("ProgramFiles(x86)") {
             ea_roots.push(PathBuf::from(program_files_x86).join("EA Games"));
         }
-        games.extend(scan_ea_games(&ea_roots));
-        // Registry records also cover custom EA game-library locations.
-
-        // GOG is detected from Galaxy's installed-product database rather
-        // than guessed from folders that may contain unrelated files.
-        // Xbox is intentionally not inferred from XboxGames folders:
-        // that directory alone does not prove a package is installed.
-        // Add Xbox discovery only when package metadata can identify games
-        // reliably without bypassing Windows package permissions.
-        // Ubisoft is detected from its registry install records. A generic
-        // folder scan could report manually-created or leftover directories.
-        games.extend(discover_ubisoft_games());
+        stages.push(("EA app".to_owned(), Box::new(move || scan_ea_games(&ea_roots))));
+        stages.push(("Ubisoft Connect".to_owned(), Box::new(discover_ubisoft_games)));
         if let Some(installs_file) = riot_client_installs_file() {
-            games.extend(scan_riot_client_installs(&installs_file));
+            stages.push(("Riot Games".to_owned(), Box::new(move || scan_riot_client_installs(&installs_file))));
         }
         if let Some(program_data) = std::env::var_os("ProgramData").map(PathBuf::from) {
-            games.extend(scan_riot_product_settings(
-                &program_data.join("Riot Games/Metadata"),
-            ));
+            stages.push(("Riot Games · product settings".to_owned(), Box::new(move || scan_riot_product_settings(&program_data.join("Riot Games/Metadata")))));
         }
         if let Some(database) = battlenet_product_database() {
-            games.extend(scan_battlenet_product_db(&database));
+            stages.push(("Battle.net".to_owned(), Box::new(move || scan_battlenet_product_db(&database))));
         }
-        games.extend(discover_xbox_games());
+        stages.push(("Xbox".to_owned(), Box::new(discover_xbox_games)));
     }
 
-    // Do not infer installed games from generic `GOG Games` directories.
-    // GOG Galaxy metadata is the source of truth when its database is available.
+    let total = stages.len();
+    let mut games = Vec::new();
+    for (index, (source, scan)) in stages.into_iter().enumerate() {
+        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            return DiscoveryOutcome { games, cancelled: true };
+        }
+        let found = scan();
+        let found_count = found.len();
+        games.extend(found);
+        on_progress(DiscoveryProgress {
+            completed: index + 1,
+            total,
+            source,
+            found: found_count,
+        });
+    }
 
-    games.sort_by_key(|game| {
-        (
-            game.platform,
-            game.name.to_lowercase(),
-            game.install_path.clone(),
-            game.platform_id.clone(),
-        )
-    });
+    games.sort_by_key(|game| (
+        game.platform,
+        game.name.to_lowercase(),
+        game.install_path.clone(),
+        game.platform_id.clone(),
+    ));
     let mut seen_installations = BTreeSet::new();
-    games.retain(|game| {
-        insert_unique_platform_install_path(
-            &mut seen_installations,
-            game.platform,
-            &game.install_path,
-        )
-    });
-    games
+    games.retain(|game| insert_unique_platform_install_path(
+        &mut seen_installations,
+        game.platform,
+        &game.install_path,
+    ));
+    DiscoveryOutcome { games, cancelled: false }
+}
+
+/// Backwards-compatible complete scan for callers that do not need progress.
+pub fn discover_all_games() -> Vec<DetectedGame> {
+    discover_all_games_with_progress(
+        &std::sync::atomic::AtomicBool::new(false),
+        |_| {},
+    ).games
 }
 
 /// Adds an install path once per platform, respecting the host filesystem's case rules.

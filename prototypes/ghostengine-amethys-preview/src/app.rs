@@ -8,7 +8,12 @@ use amethys_ipc::IpcGameEntry;
 use crate::gfx::{self, Action, Fonts, Hit, Page, Painter, State, BG, W};
 use crate::pages::{self, Active, PageFn, SIDE_W};
 use ghostengine::InputState;
-use std::{collections::VecDeque, time::Instant};
+use std::{collections::VecDeque, sync::{Arc, atomic::{AtomicBool, Ordering}}, time::Instant};
+
+enum ScanMessage {
+    Progress(amethys_discovery::DiscoveryProgress),
+    Finished(amethys_discovery::DiscoveryOutcome),
+}
 use ghostengine::{
     draw_rounded_rect_aa, fill_rounded_rect_aa, Color, Framebuffer, LayoutDirection, Rect,
     ScrollViewport, UiInteraction,
@@ -54,7 +59,9 @@ pub struct App {
     keyboard_focus: Option<usize>,
     pub games: Vec<IpcGameEntry>,
     pub detected_games: Vec<amethys_discovery::DetectedGame>,
-    scan_receiver: Option<std::sync::mpsc::Receiver<Vec<amethys_discovery::DetectedGame>>>,
+    scan_receiver: Option<std::sync::mpsc::Receiver<ScanMessage>>,
+    scan_cancel: Option<Arc<AtomicBool>>,
+    scan_progress: Option<amethys_discovery::DiscoveryProgress>,
     scan_in_progress: bool,
     pub core_error: Option<String>,
     pub notice: Option<String>,
@@ -91,6 +98,8 @@ impl App {
             games,
             detected_games: Vec::new(),
             scan_receiver: None,
+            scan_cancel: None,
+            scan_progress: None,
             scan_in_progress: false,
             core_error,
             notice: None,
@@ -134,6 +143,7 @@ impl App {
                 &self.games,
                 &self.detected_games,
                 self.scan_in_progress,
+                self.scan_progress.as_ref(),
                 self.st.lib_filter,
                 self.library_sort,
                 &self.search_query,
@@ -271,14 +281,28 @@ impl App {
             Action::ScanGames => {
                 if !self.scan_in_progress {
                     let (sender, receiver) = std::sync::mpsc::channel();
+                    let cancel = Arc::new(AtomicBool::new(false));
+                    let worker_cancel = Arc::clone(&cancel);
                     std::thread::spawn(move || {
-                        let detected = amethys_discovery::discover_all_games();
-                        let _ = sender.send(detected);
+                        let outcome = amethys_discovery::discover_all_games_with_progress(
+                            &worker_cancel,
+                            |progress| { let _ = sender.send(ScanMessage::Progress(progress)); },
+                        );
+                        let _ = sender.send(ScanMessage::Finished(outcome));
                     });
                     self.scan_receiver = Some(receiver);
+                    self.scan_cancel = Some(cancel);
+                    self.scan_progress = None;
                     self.scan_in_progress = true;
                     self.detected_games.clear();
                     self.notice = Some("Recherche des installations locales en cours…".to_owned());
+                    self.render(false);
+                }
+            }
+            Action::CancelScan => {
+                if let Some(cancel) = &self.scan_cancel {
+                    cancel.store(true, Ordering::Relaxed);
+                    self.notice = Some("Annulation demandée : le fournisseur en cours termine son analyse avant l'arrêt.".to_owned());
                     self.render(false);
                 }
             }
@@ -631,13 +655,16 @@ impl App {
         let start = Instant::now();
         let scan_result = self.scan_receiver.as_ref().map(|receiver| receiver.try_recv());
         match scan_result {
-            Some(Ok(mut detected)) => {
+            Some(Ok(ScanMessage::Progress(progress))) => {
+                self.scan_progress = Some(progress);
+                self.render(false);
+            }
+            Some(Ok(ScanMessage::Finished(outcome))) => {
                 self.scan_receiver = None;
+                self.scan_cancel = None;
                 self.scan_in_progress = false;
-                // Seed identity sets from the saved library, then deduplicate the
-                // discovery result itself. Paths are canonicalized when possible so
-                // aliases such as "..", symlinks and Windows case differences do
-                // not create duplicate import suggestions.
+                self.scan_progress = None;
+                // Deduplicate against the saved library and within this scan.
                 let mut known_platform_ids = std::collections::HashSet::new();
                 let mut known_install_paths = std::collections::HashSet::new();
                 for game in &self.games {
@@ -647,32 +674,32 @@ impl App {
                     }
                     known_install_paths.insert(normalized_install_path(&game.install_path));
                 }
+                let mut detected = outcome.games;
                 detected.retain(|candidate| {
                     let platform = candidate.platform.to_ascii_lowercase();
-                    let platform_id = candidate.platform_id.as_deref()
-                        .map(str::to_ascii_lowercase);
+                    let platform_id = candidate.platform_id.as_deref().map(str::to_ascii_lowercase);
                     let install_path = normalized_install_path(&candidate.install_path);
-                    let known_id = platform_id.as_ref().is_some_and(|id| {
-                        known_platform_ids.contains(&(platform.clone(), id.clone()))
-                    });
+                    let known_id = platform_id.as_ref().is_some_and(|id| known_platform_ids.contains(&(platform.clone(), id.clone())));
                     let known_path = known_install_paths.contains(&install_path);
-                    if known_id || known_path {
-                        return false;
-                    }
-                    if let Some(id) = platform_id {
-                        known_platform_ids.insert((platform, id));
-                    }
+                    if known_id || known_path { return false; }
+                    if let Some(id) = platform_id { known_platform_ids.insert((platform, id)); }
                     known_install_paths.insert(install_path);
                     true
                 });
                 let count = detected.len();
                 self.detected_games = detected;
-                self.notice = Some(format!("{count} installation(s) détectée(s) à importer."));
+                self.notice = Some(if outcome.cancelled {
+                    format!("Détection annulée. {count} installation(s) trouvée(s) avant l'annulation.")
+                } else {
+                    format!("{count} installation(s) détectée(s) à importer.")
+                });
                 self.render(false);
             }
             Some(Err(std::sync::mpsc::TryRecvError::Disconnected)) => {
                 self.scan_receiver = None;
+                self.scan_cancel = None;
                 self.scan_in_progress = false;
+                self.scan_progress = None;
                 self.notice = Some("La détection des jeux s'est interrompue de manière inattendue.".to_owned());
                 self.render(false);
             }
@@ -686,7 +713,13 @@ impl App {
         }
         self.last_frame = Some(start);
         if input.escape_down {
-            if self.pending_remove.is_some() {
+            if self.scan_in_progress {
+                if let Some(cancel) = &self.scan_cancel {
+                    cancel.store(true, Ordering::Relaxed);
+                    self.notice = Some("Annulation de la détection demandée…".to_owned());
+                    self.render(false);
+                }
+            } else if self.pending_remove.is_some() {
                 self.pending_remove = None;
                 self.render(false);
             } else if self.search_focused || self.editing_executable {

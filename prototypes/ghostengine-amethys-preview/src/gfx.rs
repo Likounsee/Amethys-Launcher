@@ -43,6 +43,7 @@ pub enum Action {
     CycleLibrarySort,
     RefreshLibrary,
     ScanGames,
+    CancelScan,
     ImportDetectedGame(usize),
     FocusLibrarySearch,
     EditExecutable,

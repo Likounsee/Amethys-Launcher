@@ -31,7 +31,7 @@ Cette feuille de route décrit les critères de sortie de la version 0.2. Elle d
 - [x] Afficher la cause réelle d'indisponibilité du lancement (exécutable absent, chemin invalide, dossier inaccessible ou tentative de sortie du dossier du jeu) sans bloquer l'accès aux détails.
 - [x] Confirmation avant retrait et explication que les fichiers ne sont pas supprimés.
 - [x] Dédupliquer les résultats de détection contre la bibliothèque existante et entre eux (identité plateforme + chemin canonique).
-- [ ] Ajouter une progression détaillée et une annulation réelle du scan (nécessite une API de découverte coopérative).
+- [x] Ajouter une progression par fournisseur et une annulation coopérative entre les scans de métadonnées (un fournisseur déjà lancé termine son étape avant l'arrêt).
 - [ ] Rapport détaillé des imports réussis/échoués et gestion des erreurs par entrée.
 - Ne pas afficher de temps de jeu ni de dernière session tant que Core ne les fournit pas.
 
