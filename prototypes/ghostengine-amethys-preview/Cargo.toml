@@ -11,7 +11,7 @@ name = "amethyst_preview"
 path = "src/lib.rs"
 
 [[bin]]
-name = "amethyst-launcher-test"
+name = "amethys-launcher"
 path = "src/window_main.rs"
 required-features = ["window"]
 
