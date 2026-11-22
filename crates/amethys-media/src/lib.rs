@@ -58,6 +58,8 @@ pub enum MediaPathError {
     InvalidProvider,
     #[error("media extension must be png, jpg, jpeg or bmp")]
     InvalidExtension,
+    #[error("source media file does not exist or is not a regular file")]
+    InvalidSource,
     #[error("media directory could not be prepared: {0}")]
     Io(#[from] io::Error),
 }
@@ -134,6 +136,47 @@ impl MediaStore {
             )))
     }
 
+    /// Imports a user-selected image into the local library media store.
+    ///
+    /// The source is copied through a temporary file in the destination directory so
+    /// an interrupted copy cannot leave a partially written cover at its final path.
+    /// The returned path is deterministic and uses the source image extension.
+    pub fn import_library_asset(
+        &self,
+        game_id: &str,
+        kind: MediaKind,
+        source: &Path,
+    ) -> Result<PathBuf, MediaPathError> {
+        if !source.is_file() {
+            return Err(MediaPathError::InvalidSource);
+        }
+        let extension = source
+            .extension()
+            .and_then(|value| value.to_str())
+            .ok_or(MediaPathError::InvalidExtension)?;
+        let destination = self.library_asset(game_id, kind, extension)?;
+        self.prepare_asset_path(&destination)?;
+
+        let parent = destination.parent().ok_or(MediaPathError::InvalidProvider)?;
+        let temporary = parent.join(format!(
+            ".{}.import-{}-{}.{}",
+            kind.file_stem(),
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos(),
+            extension.trim_start_matches('.').to_ascii_lowercase(),
+        ));
+        fs::copy(source, &temporary)?;
+        let result = replace_file(&temporary, &destination);
+        if result.is_err() {
+            let _ = fs::remove_file(&temporary);
+        }
+        result?;
+        Ok(destination)
+    }
+
     /// Creates parent directories for a path returned by this store.
     pub fn prepare_asset_path(&self, path: &Path) -> Result<(), MediaPathError> {
         if !path.starts_with(&self.root)
@@ -148,6 +191,22 @@ impl MediaStore {
         }
         Ok(())
     }
+}
+
+#[cfg(not(windows))]
+fn replace_file(source: &Path, destination: &Path) -> Result<(), MediaPathError> {
+    fs::rename(source, destination)?;
+    Ok(())
+}
+
+#[cfg(windows)]
+fn replace_file(source: &Path, destination: &Path) -> Result<(), MediaPathError> {
+    // std::fs::rename does not replace an existing destination on Windows.
+    if destination.exists() {
+        fs::remove_file(destination)?;
+    }
+    fs::rename(source, destination)?;
+    Ok(())
 }
 
 fn validate_game_id(value: &str) -> Result<(), MediaPathError> {
@@ -238,6 +297,45 @@ mod tests {
             store.catalogue_asset(&provider, "123", MediaKind::Cover, "exe"),
             Err(MediaPathError::InvalidExtension)
         ));
+    }
+
+    #[test]
+    fn importing_library_asset_copies_supported_image_to_game_directory() {
+        use std::{fs, time::{SystemTime, UNIX_EPOCH}};
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let root = std::env::temp_dir().join(format!("amethys-media-import-{}-{unique}", std::process::id()));
+        let source = root.join("picked-cover.PNG");
+        let store = MediaStore::new(root.join("data"));
+        fs::create_dir_all(&root).unwrap();
+        fs::write(&source, b"image bytes").unwrap();
+
+        let imported = store.import_library_asset("3000", MediaKind::Cover, &source).unwrap();
+        assert_eq!(imported, root.join("data/media/library/3000/cover.png"));
+        assert_eq!(fs::read(&imported).unwrap(), b"image bytes");
+
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn importing_library_asset_rejects_unsupported_extensions_and_missing_sources() {
+        use std::{fs, time::{SystemTime, UNIX_EPOCH}};
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let root = std::env::temp_dir().join(format!("amethys-media-invalid-{}-{unique}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let store = MediaStore::new(root.join("data"));
+        let unsupported = root.join("cover.exe");
+        fs::write(&unsupported, b"not an image").unwrap();
+
+        assert!(matches!(
+            store.import_library_asset("3000", MediaKind::Cover, &unsupported),
+            Err(MediaPathError::InvalidExtension)
+        ));
+        assert!(matches!(
+            store.import_library_asset("3000", MediaKind::Cover, &root.join("missing.png")),
+            Err(MediaPathError::InvalidSource)
+        ));
+
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
