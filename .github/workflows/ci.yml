@@ -301,12 +301,6 @@ jobs:
         uses: actions/checkout@v4
         with:
           path: Amethys-Launcher
-      - name: Checkout experimental GhostEngine
-        uses: actions/checkout@v4
-        with:
-          repository: Likounsee/GhostEngine
-          ref: GhostEngine
-          path: GhostEngine
       - name: Install stable Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Run desktop library and filesystem-safety tests

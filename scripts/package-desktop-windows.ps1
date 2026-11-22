@@ -1,14 +1,13 @@
 $ErrorActionPreference = "Stop"
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
-$GhostEngineRoot = Join-Path (Split-Path -Parent $RepoRoot) "GhostEngine"
 $Manifest = Join-Path $RepoRoot "prototypes/ghostengine-amethys-preview/Cargo.toml"
 $TargetDir = Join-Path $RepoRoot "target"
 $StageDir = Join-Path $RepoRoot "dist/Amethys"
 $Archive = Join-Path $RepoRoot "dist/Amethys-Windows-x64.zip"
 
-if (-not (Test-Path (Join-Path $GhostEngineRoot "ghostengine/crates/ghostengine/Cargo.toml"))) {
-    throw "GhostEngine sibling checkout not found at $GhostEngineRoot"
+if (-not (Test-Path (Join-Path $RepoRoot "vendor/ghostengine/Cargo.toml"))) {
+    throw "Vendored GhostEngine source is missing from this Amethys-Launcher checkout."
 }
 
 $env:CARGO_TARGET_DIR = $TargetDir

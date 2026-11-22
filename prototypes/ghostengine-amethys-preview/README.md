@@ -2,19 +2,24 @@
 
 > First working integration milestone. This application uses the current experimental GhostEngine window/rendering prototype. It is not a stable GhostEngine integration or a production release.
 
-This folder is isolated from the main Cargo workspace. It uses a local path dependency on the sibling GhostEngine checkout and connects to the existing Amethys Core through the real local IPC protocol.
+This folder is isolated from the main Cargo workspace and uses the GhostEngine source snapshot vendored in this repository at `vendor/ghostengine`. A separate GhostEngine checkout is not required. Amethys connects to the existing Core through the real local IPC protocol.
 
 ## Repository layout
 
-The two repositories must be checked out side by side:
+Only this repository is needed:
 
 ```text
-workspace-parent/
-├── Amethys-Launcher/
-│   └── prototypes/ghostengine-amethys-preview/
-└── GhostEngine/
-    └── ghostengine/crates/ghostengine/
+Amethys-Launcher/
+├── crates/
+├── prototypes/ghostengine-amethys-preview/
+└── vendor/ghostengine/
+    ├── Cargo.toml
+    └── src/
 ```
+
+The vendored engine snapshot was imported from `Likounsee/GhostEngine` branch `GhostEngine`, commit `dd402cd44b53b8a8182910d7efdf4b1c51ed751b`. Its MIT and Apache-2.0 license texts are included beside the crate manifest. This is a source snapshot, not a Git submodule or a live link: later GhostEngine development does not silently change Amethys builds. Updating the snapshot is an explicit maintenance task.
+
+Cargo still downloads the engine's third-party crates from crates.io on the first build; no second Git repository is needed.
 
 ## Run on Windows
 
@@ -58,7 +63,7 @@ The library is loaded at startup and can be refreshed manually. GUI import is no
 
 The window currently relies on the prototype's `native-window` feature (Winit/Softbuffer) and CPU framebuffer. This is deliberately temporary and must be replaced when GhostEngine's public API and platform backends are redesigned. Amethys page appearance and interaction design should be preserved across that migration; internal rendering and native-window integration are not contractual.
 
-The production launcher must eventually depend on an official GhostEngine release, pinned to its release tag/version and committed `Cargo.lock`. This prototype's local path dependency is only for development.
+The vendored snapshot is intentionally pinned inside this repository so the launcher can be built from a single checkout. When GhostEngine's architecture changes, the integration can be updated by importing a reviewed new snapshot while keeping Amethys page and Core logic separate.
 
 ## Build and validation
 
@@ -78,4 +83,4 @@ Create a portable Windows x64 package from the repository root with:
 powershell -ExecutionPolicy Bypass -File scripts/package-desktop-windows.ps1
 ```
 
-The script builds the desktop launcher, Core agent and `amethysctl` CLI, stages the fonts/covers beside the launcher and creates `dist/Amethys-Windows-x64.zip`. The GUI can now detect and import installations covered by the discovery service. This is a portable ZIP, not an MSI installer. The prototype has not yet been built or run on the user's PC as part of this change. Its fixed 1600×900 page layout is still a limitation; responsive layout is a follow-up task.
+The script builds the desktop launcher, Core agent and `amethysctl` CLI, stages the fonts/covers beside the launcher and creates `dist/Amethys-Windows-x64.zip`. The GUI can detect and import installations covered by the discovery service. This is a portable ZIP, not an MSI installer. The prototype has not yet been built or run on the user's PC. Its fixed 1600×900 page layout is still a limitation; responsive layout is a follow-up task.
