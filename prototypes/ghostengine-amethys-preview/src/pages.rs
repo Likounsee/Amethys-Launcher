@@ -730,6 +730,9 @@ pub fn library_live(
         let (status, color) = if !exists { ("Chemin introuvable", AMBER) } else if launchable { ("Prêt à lancer", GREEN) } else if game.executable.is_some() { ("Exécutable invalide", AMBER) } else { ("Exécutable à configurer", AMBER) };
         p.text(x + 14, y + 76, 18, status, 12.0, W::Med, color);
         p.paragraph(x + 14, y + 100, card_w - 28, 16, &game.install_path, 10.0, W::Reg, MUT, 2);
+        // Register the card first: UiInteraction resolves overlapping regions from topmost to bottommost.
+        // The action buttons are added afterwards so they win over the card's open-details action.
+        p.hit(x, y, card_w, card_h, 14, Action::SelectGame(index), false);
         let remove_x = x + card_w - 174;
         p.rrect(remove_x, y + 146, 72, 30, 8, ACT);
         p.rrect_line(remove_x, y + 146, 72, 30, 8, LINE);
@@ -741,7 +744,6 @@ pub fn library_live(
             p.text(launch_x + 14, y + 146, 30, "Lancer", 12.0, W::Semi, VIO_DARK);
             p.hit(launch_x, y + 146, 80, 30, 8, Action::LaunchGame(index), false);
         }
-        p.hit(x, y, card_w, card_h, 14, Action::SelectGame(index), false);
     }
 
     let rows = (visible.len() as i32 + columns - 1) / columns;
