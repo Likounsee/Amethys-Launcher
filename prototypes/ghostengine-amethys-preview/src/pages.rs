@@ -575,14 +575,12 @@ pub fn settings(p: &mut Painter, vh: i32, _st: &State) -> i32 {
 
 /// Returns distinct, non-empty platform names in case-insensitive display order.
 fn library_platforms(games: &[amethys_ipc::IpcGameEntry]) -> Vec<String> {
-    let mut platforms = games
-        .iter()
-        .map(|game| game.platform.trim())
-        .filter(|platform| !platform.is_empty())
-        .map(str::to_owned)
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
-        .collect::<Vec<_>>();
+    let mut platforms = Vec::new();
+    for platform in games.iter().map(|game| game.platform.trim()).filter(|value| !value.is_empty()) {
+        if !platforms.iter().any(|known: &String| known.eq_ignore_ascii_case(platform)) {
+            platforms.push(platform.to_owned());
+        }
+    }
     platforms.sort_by_key(|platform| platform.to_lowercase());
     platforms
 }
@@ -605,7 +603,7 @@ pub fn library_live(
     let visible = games
         .iter()
         .enumerate()
-        .filter(|(_, game)| selected_platform.is_none_or(|platform| game.platform.trim() == platform))
+        .filter(|(_, game)| selected_platform.is_none_or(|platform| game.platform.trim().eq_ignore_ascii_case(platform)))
         .collect::<Vec<_>>();
 
     p.text(
@@ -814,7 +812,7 @@ mod live_library_tests {
 
     #[test]
     fn platform_filters_are_unique_trimmed_and_sorted() {
-        let games = [game("Steam"), game(" Epic Games "), game("Steam"), game("GOG"), game(""), game("   ")];
+        let games = [game("Steam"), game(" Epic Games "), game("steam"), game("GOG"), game(""), game("   ")];
         assert_eq!(library_platforms(&games), vec!["Epic Games".to_owned(), "GOG".to_owned(), "Steam".to_owned()]);
     }
 
