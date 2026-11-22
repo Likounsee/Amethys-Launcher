@@ -368,7 +368,7 @@ impl Database {
                  DROP TABLE game_metadata;
                  DROP TABLE game_external_ids;
                  DROP TABLE _amethys_catalogue_migration;
-                 INSERT OR IGNORE INTO schema_migrations (version) VALUES (5);",
+                 INSERT OR IGNORE INTO schema_migrations (version) VALUES (6);",
                 )
                 .map_err(|error| {
                     AmethysError::new(
@@ -1525,7 +1525,7 @@ mod tests {
         assert!(
             error
                 .message()
-                .contains("newer than the supported version 4")
+                .contains("newer than the supported version 5")
         );
 
         let connection = rusqlite::Connection::open(&path).expect("fixture database reopens");
@@ -1643,7 +1643,7 @@ mod tests {
                 row.get(0)
             })
             .expect("migration version is readable");
-        assert_eq!(version, 4);
+        assert_eq!(version, 5);
         assert!(
             database
                 .list_games()
@@ -1899,7 +1899,7 @@ mod tests {
                 row.get(0)
             })
             .expect("migration table readable");
-        assert_eq!(count, 4);
+        assert_eq!(count, 5);
         drop(database);
         let _ = std::fs::remove_file(path);
     }
