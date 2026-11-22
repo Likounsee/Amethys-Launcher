@@ -935,6 +935,12 @@ pub fn game_detail_live(
     p.text(cover_x + 10, y + 430, 30, "Changer la jaquette", 11.0, W::Med, SOFT);
     p.hit(cover_x, y + 430, 120, 30, 8, Action::ChangeGameCover, false);
 
+    let reset_x = cover_x + 130;
+    p.rrect(reset_x, y + 430, 120, 30, 8, PANEL);
+    p.rrect_line(reset_x, y + 430, 120, 30, 8, LINE);
+    p.text(reset_x + 12, y + 430, 30, "Image par défaut", 11.0, W::Med, SOFT);
+    p.hit(reset_x, y + 430, 120, 30, 8, Action::ResetGameCover, false);
+
     let configure_x = MX + MW - 300;
     p.rrect(configure_x, y + 430, 116, 30, 8, PANEL);
     p.rrect_line(configure_x, y + 430, 116, 30, 8, LINE);
@@ -1102,7 +1108,7 @@ pub fn game_detail_live(
         p.hit(cancel_x, editor_y + 94, 104, 44, 10, Action::CancelExecutableEdit, false);
         editor_y + 160
     } else {
-        metadata_bottom + 12
+        metadata_bottom + 48
     }
 }
 
