@@ -258,54 +258,81 @@ fn kv_rows(p: &mut Painter, x: i32, y: i32, w: i32, rows: &[(&str, &str)]) -> i3
 
 // ------------------------------------------------------------------ pages
 /// Store: the launcher's home page, personalised to the player's tastes.
-pub fn store(p: &mut Painter, vh: i32, st: &State) -> i32 {
-    search_bar(p, 24, "Rechercher un jeu, un studio, un genre", Some("Boutique mise à jour à chaque synchro"));
-
-    // Hero
-    let (hy, hh) = (104, 380);
-    p.gradient(MX, hy, MW, hh, 120.0, &[(0.0, hex("#12091f")), (0.55, hex("#3b1a5e")), (1.0, hex("#0b2a4a"))]);
-    p.round_corners(MX, hy, MW, hh, 20, BG);
-    p.rrect_line(MX, hy, MW, hh, 20, LINE);
-    let hx = MX + 40;
-    let by = hy + hh - 40 - 44;
-    let para = "Vous jouez surtout des RPG de science-fiction à récit fort : celui-ci coche tout, et il est moins cher chez GOG que sur vos autres boutiques.";
-    let lines = p.wrap(para, 16.0, W::Reg, 600).len() as i32;
-    let py = by - 16 - lines * 24;
-    p.paragraph(hx, py, 600, 24, para, 16.0, W::Reg, PALE, 4);
-    p.text(hx, py - 16 - 56, 56, "Cyberpunk 2077", 56.0, W::Disp, ghostengine::Color::WHITE);
-    p.text(hx, py - 16 - 56 - 16 - 16, 16, "Notre meilleure suggestion pour vous · 96 % de compatibilité", 13.0, W::Semi, ACT_TXT);
-    let mut bx = hx;
-    let wv = button(p, bx, by, None, "Voir la fiche", true);
-    p.hit(bx, by, wv, 44, 12, Action::Go(Page::Product), false);
-    bx += wv + 12;
-    bx += button(p, bx, by, None, "Ajouter à la liste d'envies", false) + 12;
-    button(p, bx, by, None, "Pas intéressé", false);
-
-    // Tastes + store filter
-    let fy = hy + hh + 36;
-    let tastes: Vec<(&str, bool)> = TASTES.iter().map(|s| (*s, true)).chain([("+ Modifier", false)]).collect();
-    let stores: Vec<(&str, bool)> = STORES.iter().enumerate().map(|(i, s)| (*s, i == st.store_filter)).collect();
-    pills_row(p, MX, fy, "Vos goûts", &tastes, None);
-    let rw = pills_width(p, "Boutique", &stores);
-    pills_row(p, MX + MW - rw, fy, "Boutique", &stores, Some(Action::StoreFilter));
-
-    // Sections
-    let mut y = fy + 36 + 36;
-    for (title, sub, games, kind) in [
-        ("Choisis pour vous", "Selon vos goûts et votre historique", picks(), Kind::Pick),
-        ("En promotion dans vos genres", "Meilleur prix parmi vos boutiques", deals(), Kind::Deal),
-        ("Nouveautés", "Triées selon vos goûts", fresh(), Kind::Fresh),
-        ("Pour sortir de vos habitudes", "Hors de vos genres habituels", explore(), Kind::Explore),
-    ] {
-        let games: Vec<Game> = games.into_iter().filter(|g| st.store_filter == 0 || g.store == STORES[st.store_filter]).collect();
-        if games.is_empty() {
-            continue;
-        }
-        y = section_header(p, MX, MW, y, title, sub);
-        y += card_row(p, y, &games, kind) + 36;
-    }
+pub fn store(p: &mut Painter, vh: i32, _st: &State) -> i32 {
     let _ = vh;
-    y - 36 + 56
+    search_bar(p, 24, "Boutique indisponible en version 0.2", Some("Aucun fournisseur connecté"));
+
+    let y = 104;
+    p.rrect(MX, y, MW, 360, 20, PANEL);
+    p.rrect_line(MX, y, MW, 360, 20, LINE);
+    p.gradient(
+        MX + 1,
+        y + 1,
+        MW - 2,
+        5,
+        0.0,
+        &[(0.0, VIO), (1.0, hex("#3b1a5e"))],
+    );
+    p.round_corners(MX, y, MW, 360, 20, PANEL);
+
+    let x = MX + 36;
+    p.text(x, y + 36, 32, "La boutique arrive en version 0.3", 27.0, W::Disp, TXT);
+    p.paragraph(
+        x,
+        y + 88,
+        MW - 72,
+        24,
+        "La version 0.2 se concentre sur votre bibliothèque, vos jeux installés et une interface complète. Les catalogues, prix, promotions et achats ne sont pas encore connectés.",
+        15.0,
+        W::Reg,
+        SOFT,
+        3,
+    );
+
+    let info_y = y + 176;
+    for (index, (title, description)) in [
+        (
+            "Catalogue fiable",
+            "Les jeux et les offres viendront de fournisseurs réels, jamais de produits ou de prix inventés.",
+        ),
+        (
+            "Personnalisation locale",
+            "Vos recommandations seront calculées sur votre PC à partir de votre bibliothèque et de vos préférences.",
+        ),
+        (
+            "Sans serveur payant obligatoire",
+            "Le catalogue public pourra être distribué sous forme de fichiers statiques ; vos données personnelles resteront locales.",
+        ),
+    ]
+    .iter()
+    .enumerate()
+    {
+        let row_y = info_y + index as i32 * 54;
+        p.circle(x + 5, row_y + 9, 4, VIO);
+        p.text(x + 20, row_y, 20, title, 14.0, W::Semi, TXT);
+        p.paragraph(
+            x + 20,
+            row_y + 20,
+            MW - 112,
+            17,
+            description,
+            12.0,
+            W::Reg,
+            MUT,
+            2,
+        );
+    }
+
+    p.text(
+        x,
+        y + 326,
+        18,
+        "Aucun achat, prix ou téléchargement n'est simulé dans cette version.",
+        12.0,
+        W::Med,
+        MUT,
+    );
+    y + 392
 }
 
 /// Library: detected games, status, and the selected game's detail panel.

@@ -14,7 +14,7 @@ La priorité de la 0.2 est une interface de bureau complète, cohérente et soig
 - [ ] Compléter les états vides, chargements, erreurs, confirmations et notifications.
 - [ ] Rendre la mise en page adaptative aux dimensions réelles de la fenêtre.
 - [ ] Terminer la navigation clavier et le focus accessible des champs et dialogues.
-- [ ] Concevoir des paramètres cohérents, en distinguant les réglages réellement enregistrés des fonctions à venir.
+- [ ] Concevoir des paramètres cohérents, en distinguant les réglages réellement enregistrés des fonctions à venir.\n- [x] Retirer les prix, promotions et recommandations fictifs de l'écran Boutique 0.2 ; afficher clairement son statut indisponible jusqu'à la 0.3.
 
 ### Bibliothèque et métadonnées
 - [x] Conserver un UUID local stable pour chaque installation/import de jeu, indépendant de l'identifiant du fournisseur.
@@ -23,7 +23,7 @@ La priorité de la 0.2 est une interface de bureau complète, cohérente et soig
 - [ ] Rattacher les métadonnées et identifiants externes à ce Game ID catalogue, puis relier chaque installation locale au titre correspondant sans fusion automatique hasardeuse.
 - [ ] Migrer proprement la première couche de métadonnées vers le modèle catalogue canonique, sans perdre les données des bibliothèques existantes.
 - [ ] Stocker localement les médias des jeux de la bibliothèque et les préférences propres à l'utilisateur.
-- [ ] Utiliser des illustrations originales de remplacement pendant le développement ; aucun visuel de jeu non autorisé ne doit être distribué.
+- [x] Utiliser des illustrations originales de remplacement pendant le développement ; aucun visuel de jeu non autorisé ne doit être distribué.
 - [ ] Améliorer le rapport d'import et les erreurs par installation.
 
 ### Qualité
