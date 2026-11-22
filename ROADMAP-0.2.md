@@ -17,9 +17,11 @@ La priorité de la 0.2 est une interface de bureau complète, cohérente et soig
 - [ ] Concevoir des paramètres cohérents, en distinguant les réglages réellement enregistrés des fonctions à venir.
 
 ### Bibliothèque et métadonnées
-- [x] Utiliser l'identifiant stable de bibliothèque Amethys (UUID local), indépendant des identifiants Steam/Epic/GOG/Xbox.
-- [x] Définir et persister les métadonnées : genres, développeur, éditeur, date de sortie, description et identifiants externes multiples par jeu.
-- [x] Prévoir et persister les références de médias icon, logo, cover et banner sans lier ces ressources à un fournisseur.
+- [x] Conserver un UUID local stable pour chaque installation/import de jeu, indépendant de l'identifiant du fournisseur.
+- [x] Poser une première couche SQLite pour les métadonnées (genres, développeur, éditeur, date de sortie, description), les identifiants externes multiples et les références icon/logo/cover/banner.
+- [ ] Créer le Game ID catalogue canonique, distinct de l'UUID d'installation : plusieurs installations Steam/Epic/GOG/Xbox du même titre doivent pouvoir partager un seul Game ID Amethys.
+- [ ] Rattacher les métadonnées et identifiants externes à ce Game ID catalogue, puis relier chaque installation locale au titre correspondant sans fusion automatique hasardeuse.
+- [ ] Migrer proprement la première couche de métadonnées vers le modèle catalogue canonique, sans perdre les données des bibliothèques existantes.
 - [ ] Stocker localement les médias des jeux de la bibliothèque et les préférences propres à l'utilisateur.
 - [ ] Utiliser des illustrations originales de remplacement pendant le développement ; aucun visuel de jeu non autorisé ne doit être distribué.
 - [ ] Améliorer le rapport d'import et les erreurs par installation.
