@@ -959,6 +959,8 @@ mod tests {
             name: "Example".to_owned(),
             platform: "Steam".to_owned(),
             platform_id: Some("570".to_owned()),
+            catalogue_game_id: None,
+            catalogue_metadata: None,
             install_path: "/games/example".to_owned(),
             executable: None,
         };
@@ -1100,6 +1102,8 @@ mod tests {
             name: "Example".to_owned(),
             platform: "Test".to_owned(),
             platform_id: None,
+            catalogue_game_id: None,
+            catalogue_metadata: None,
             install_path: install.to_string_lossy().into_owned(),
             executable: Some(path.to_owned()),
         };
@@ -1176,6 +1180,8 @@ mod tests {
             name: "Example".to_owned(),
             platform: "Steam".to_owned(),
             platform_id: Some("123".to_owned()),
+            catalogue_game_id: None,
+            catalogue_metadata: None,
             install_path: root.to_string_lossy().into_owned(),
             executable: None,
         };
@@ -1213,6 +1219,8 @@ mod tests {
             name: "Example".to_owned(),
             platform: "Test".to_owned(),
             platform_id: None,
+            catalogue_game_id: None,
+            catalogue_metadata: None,
             install_path: root.to_string_lossy().into_owned(),
             executable: Some(executable.to_owned()),
         };
@@ -1297,6 +1305,8 @@ mod tests {
             name: "Example".to_owned(),
             platform: "Test".to_owned(),
             platform_id: None,
+            catalogue_game_id: None,
+            catalogue_metadata: None,
             install_path: root.to_string_lossy().into_owned(),
             executable: Some(executable.to_owned()),
         };
@@ -1407,6 +1417,8 @@ mod tests {
             name: "First game".to_owned(),
             platform: "Steam".to_owned(),
             platform_id: Some("100".to_owned()),
+            catalogue_game_id: None,
+            catalogue_metadata: None,
             install_path: "/games/shared".to_owned(),
             executable: None,
         };
@@ -1427,6 +1439,8 @@ mod tests {
             name: "Example".to_owned(),
             platform: "Steam".to_owned(),
             platform_id: None,
+            catalogue_game_id: None,
+            catalogue_metadata: None,
             install_path: "/games/example".to_owned(),
             executable: None,
         };
@@ -1448,6 +1462,8 @@ mod tests {
                 name: "Example".to_owned(),
                 platform: "Steam".to_owned(),
                 platform_id: Some("10".to_owned()),
+                catalogue_game_id: None,
+                catalogue_metadata: None,
                 install_path: "A:/Steam/Example".to_owned(),
                 executable: None,
             },
@@ -1456,6 +1472,8 @@ mod tests {
                 name: "Example".to_owned(),
                 platform: "Epic Games".to_owned(),
                 platform_id: Some("10".to_owned()),
+                catalogue_game_id: None,
+                catalogue_metadata: None,
                 install_path: "A:/Epic/Example".to_owned(),
                 executable: None,
             },
@@ -1475,6 +1493,8 @@ mod tests {
                 name: "Clair Obscur: Expedition 33".to_owned(),
                 platform: "Steam".to_owned(),
                 platform_id: Some("1903340".to_owned()),
+                catalogue_game_id: None,
+                catalogue_metadata: None,
                 install_path: "A:/SteamLibrary/steamapps/common/Expedition 33".to_owned(),
                 executable: Some("Expedition33.exe".to_owned()),
             },
@@ -1483,6 +1503,8 @@ mod tests {
                 name: "Fortnite".to_owned(),
                 platform: "Epic Games".to_owned(),
                 platform_id: Some("Fortnite".to_owned()),
+                catalogue_game_id: None,
+                catalogue_metadata: None,
                 install_path: "A:/Epic Games/Fortnite".to_owned(),
                 executable: None,
             },
@@ -1633,6 +1655,8 @@ mod tests {
             name: "Example".into(),
             platform: "Test".into(),
             platform_id: None,
+            catalogue_game_id: None,
+            catalogue_metadata: None,
             install_path: root.to_string_lossy().into_owned(),
             executable: Some(
                 executable
@@ -1689,6 +1713,8 @@ mod tests {
             name: "Example".into(),
             platform: "Test".into(),
             platform_id: None,
+            catalogue_game_id: None,
+            catalogue_metadata: None,
             install_path: root.to_string_lossy().into_owned(),
             executable: Some("linked-game".into()),
         };

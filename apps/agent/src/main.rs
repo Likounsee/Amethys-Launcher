@@ -562,7 +562,7 @@ mod tests {
             amethys_ipc::IpcResponsePayload::Games { games } => games,
             other => panic!("unexpected list response: {other:?}"),
         };
-        assert_eq!(games, vec![added_game.clone()]);
+        assert_eq!(games, vec![*added_game.clone()]);
 
         let removed = round_trip(
             &database,
