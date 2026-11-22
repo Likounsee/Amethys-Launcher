@@ -41,6 +41,7 @@ pub enum Action {
     StoreFilter(usize),
     LibFilter(usize),
     RefreshLibrary,
+    FocusLibrarySearch,
     LaunchGame(usize),
     RemoveGame(usize),
     SelectGame(usize),
