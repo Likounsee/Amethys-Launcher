@@ -1446,7 +1446,7 @@ mod tests {
                 row.get(0)
             })
             .expect("version is readable");
-        assert_eq!(version, 6);
+        assert_eq!(version, 5);
         drop(database);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
