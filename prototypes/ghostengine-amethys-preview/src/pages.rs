@@ -607,7 +607,8 @@ pub fn library_live(
     }
 
     if let Some(message) = notice {
-        p.paragraph(MX, 96, MW, 18, message, 12.0, W::Med, GREEN, 2);
+        let color = if message.starts_with("Échec") || message.starts_with("Impossible") { AMBER } else { GREEN };
+        p.paragraph(MX, 96, MW, 18, message, 12.0, W::Med, color, 2);
     }
 
     let content_y = if notice.is_some() { 144 } else { 122 };
