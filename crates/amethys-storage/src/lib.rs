@@ -470,7 +470,15 @@ impl Database {
                 "INSERT INTO games (
                     id, name, platform, platform_id, install_path, executable, catalogue_game_id
                  ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-                params![id, name, platform, platform_id, install_path, executable, catalogue_game_id],
+                params![
+                    id,
+                    name,
+                    platform,
+                    platform_id,
+                    install_path,
+                    executable,
+                    catalogue_game_id
+                ],
             )
             .map_err(|error| storage_error(format!("Could not add game: {error}")))?;
         self.get_game(&id)?
@@ -639,7 +647,9 @@ impl Database {
                     metadata.banner_ref
                 ],
             )
-            .map_err(|error| storage_error(format!("Could not save catalogue metadata: {error}")))?;
+            .map_err(|error| {
+                storage_error(format!("Could not save catalogue metadata: {error}"))
+            })?;
         Ok(changed != 0)
     }
 
@@ -797,7 +807,12 @@ impl Database {
             .query_row(
                 "SELECT id, name FROM catalogue_games WHERE id = ?1",
                 [catalogue_game_id],
-                |row| Ok(CatalogueGame { id: row.get(0)?, name: row.get(1)? }),
+                |row| {
+                    Ok(CatalogueGame {
+                        id: row.get(0)?,
+                        name: row.get(1)?,
+                    })
+                },
             )
             .optional()
             .map_err(|error| storage_error(format!("Could not read catalogue game: {error}")))
@@ -812,12 +827,19 @@ impl Database {
     ) -> Result<bool, AmethysError> {
         let installation_id = validate_game_id(installation_id)?;
         let catalogue_game_id = validate_game_id(catalogue_game_id)?;
-        let changed = self.connection.execute(
-            "UPDATE games SET catalogue_game_id = ?1
+        let changed = self
+            .connection
+            .execute(
+                "UPDATE games SET catalogue_game_id = ?1
              WHERE id = ?2
                AND EXISTS (SELECT 1 FROM catalogue_games WHERE id = ?1)",
-            params![catalogue_game_id, installation_id],
-        ).map_err(|error| storage_error(format!("Could not link installation to catalogue game: {error}")))?;
+                params![catalogue_game_id, installation_id],
+            )
+            .map_err(|error| {
+                storage_error(format!(
+                    "Could not link installation to catalogue game: {error}"
+                ))
+            })?;
         Ok(changed != 0)
     }
 
@@ -1054,26 +1076,42 @@ mod tests {
         database
             .set_external_game_id(&game.id, "steam", "98765")
             .expect("external ID saved");
-        assert!(database.remove_game(&game.id).expect("installation removed"));
+        assert!(
+            database
+                .remove_game(&game.id)
+                .expect("installation removed")
+        );
         assert_eq!(
-            database.get_game_metadata(&game.id).expect("metadata lookup"),
+            database
+                .get_game_metadata(&game.id)
+                .expect("metadata lookup"),
             None
         );
         assert_eq!(
-            database.get_catalogue_game(&catalogue_id).expect("catalogue lookup").unwrap().name,
+            database
+                .get_catalogue_game(&catalogue_id)
+                .expect("catalogue lookup")
+                .unwrap()
+                .name,
             "Temporary"
         );
         assert_eq!(
-            database.list_external_game_ids(&game.id).expect("IDs listed").len(),
+            database
+                .list_external_game_ids(&game.id)
+                .expect("IDs listed")
+                .len(),
             0
         );
         // The external identity remains attached to the canonical title even
         // when no local installation is currently present.
-        let count: i64 = database.connection().query_row(
-            "SELECT COUNT(*) FROM catalogue_external_ids WHERE external_id = '98765'",
-            [],
-            |row| row.get(0),
-        ).expect("catalogue ID remains stored");
+        let count: i64 = database
+            .connection()
+            .query_row(
+                "SELECT COUNT(*) FROM catalogue_external_ids WHERE external_id = '98765'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("catalogue ID remains stored");
         assert_eq!(count, 1);
     }
 
@@ -1172,14 +1210,27 @@ mod tests {
             ..Default::default()
         };
         database.set_game_metadata(&steam.id, &metadata).unwrap();
-        database.set_external_game_id(&steam.id, "steam", "123456").unwrap();
-        database.set_external_game_id(&epic.id, "epic", "epic-abc").unwrap();
+        database
+            .set_external_game_id(&steam.id, "steam", "123456")
+            .unwrap();
+        database
+            .set_external_game_id(&epic.id, "epic", "epic-abc")
+            .unwrap();
 
-        assert_eq!(database.get_game_metadata(&epic.id).unwrap(), Some(metadata));
+        assert_eq!(
+            database.get_game_metadata(&epic.id).unwrap(),
+            Some(metadata)
+        );
         let ids = database.list_external_game_ids(&epic.id).unwrap();
         assert_eq!(ids.len(), 2);
-        assert!(ids.iter().any(|id| id.provider == "steam" && id.external_id == "123456"));
-        assert!(ids.iter().any(|id| id.provider == "epic" && id.external_id == "epic-abc"));
+        assert!(
+            ids.iter()
+                .any(|id| id.provider == "steam" && id.external_id == "123456")
+        );
+        assert!(
+            ids.iter()
+                .any(|id| id.provider == "epic" && id.external_id == "epic-abc")
+        );
     }
 
     #[test]
