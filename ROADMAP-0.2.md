@@ -17,17 +17,18 @@ Cette feuille de route décrit les critères de sortie de la version 0.2. Elle d
 ## Travaux nécessaires avant 0.2
 
 ### P0 — Interface de bureau aboutie
-- Reprendre le langage visuel du concept : cartes illustrées, hiérarchie typographique, états vides, badges et espacements cohérents.
-- Adapter la grille et les panneaux à la taille réelle de la fenêtre ; supprimer les hypothèses rigides 1600×900.
+- [x] Cartes de bibliothèque avec couverture, plateforme, statut réel, chemin et actions.
+- [ ] Finaliser la hiérarchie visuelle, les états de chargement et les interactions clavier.
+- [ ] Adapter la grille et les panneaux à la taille réelle de la fenêtre ; supprimer les hypothèses rigides 1600×900.
 - Rendre les interactions évidentes : focus clavier, retour visuel, raccourcis, navigation et états de chargement.
 - Conserver les données réelles et afficher clairement les fonctionnalités non connectées.
 
 ### P0 — Bibliothèque fiable
-- Tri réel (nom, plateforme, état d'installation) et filtres robustes.
+- [x] Tri réel par nom, plateforme et état de lancement, avec filtres de plateforme et recherche multicritère.
+- [ ] Navigation clavier complète et focus visuel cohérent.
 - Afficher les erreurs de chemin et les exécutables non configurés sans bloquer l'accès aux détails.
 - [x] Confirmation avant retrait et explication que les fichiers ne sont pas supprimés.
-- [ ] Tri réel (nom, plateforme, état) et navigation clavier complète.
-- Améliorer la détection/import : progression, annulation, déduplication et rapport des résultats.
+- [ ] Améliorer la détection/import : progression, annulation, déduplication et rapport des résultats.
 - Ne pas afficher de temps de jeu ni de dernière session tant que Core ne les fournit pas.
 
 ### P1 — Cycle de vie des jeux
@@ -67,6 +68,6 @@ Cette feuille de route décrit les critères de sortie de la version 0.2. Elle d
 - Le catalogue de boutique n'est pas connecté.
 - Le temps de jeu et l'historique des sessions ne sont pas disponibles.
 - Le lancement est encore effectué côté client de bureau.
-- La confirmation de retrait est désormais présente ; tri et navigation clavier restent à faire.
+- La confirmation de retrait et le tri sont présents ; la navigation clavier complète reste à faire.
 - Le backend de fenêtre/rendu GhostEngine est expérimental et temporaire.
 - La mise en page du launcher reste actuellement conçue autour d'une fenêtre 1600×900.
