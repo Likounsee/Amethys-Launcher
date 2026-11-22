@@ -76,4 +76,4 @@ Create a portable Windows x64 package from the repository root with:
 powershell -ExecutionPolicy Bypass -File scripts/package-desktop-windows.ps1
 ```
 
-The script builds both executables, stages the fonts/covers beside the launcher and creates `dist/Amethys-Windows-x64.zip`. This is a portable ZIP, not an MSI installer. The prototype has not yet been built or run on the user's PC as part of this change. Its fixed 1600×900 page layout is still a limitation; responsive layout is a follow-up task.
+The script builds the desktop launcher, Core agent and `amethysctl` CLI, stages the fonts/covers beside the launcher and creates `dist/Amethys-Windows-x64.zip`. The CLI can be used to import/manage games until the GUI import flow is implemented. This is a portable ZIP, not an MSI installer. The prototype has not yet been built or run on the user's PC as part of this change. Its fixed 1600×900 page layout is still a limitation; responsive layout is a follow-up task.
