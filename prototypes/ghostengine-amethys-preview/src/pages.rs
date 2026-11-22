@@ -837,7 +837,9 @@ pub fn game_detail_live(
     let install_root = std::path::Path::new(&game.install_path);
     let directory_exists = install_root.is_dir();
     let executable = game.executable.as_deref().unwrap_or("Non configuré");
-    let executable_exists = crate::core_client::can_launch(game);
+    let launch_block_reason = crate::core_client::launch_block_reason(game);
+    let executable_exists = launch_block_reason.is_none();
+    let launch_status = launch_block_reason.as_deref().unwrap_or("Prêt à lancer");
 
     let rows = [
         ("Identifiant Amethys", game.id.as_str()),
@@ -845,13 +847,14 @@ pub fn game_detail_live(
         ("Dossier d'installation", game.install_path.as_str()),
         ("Exécutable configuré", executable),
         ("État du dossier", if directory_exists { "Présent" } else { "Introuvable" }),
-        ("État de l'exécutable", if executable_exists { "Fichier présent" } else if game.executable.is_some() { "Introuvable ou invalide" } else { "À configurer" }),
+        ("Disponibilité", launch_status),
     ];
     let mut row_y = y + 126;
     for (label, value) in rows {
         p.fill(MX + 28, row_y, MW - 56, 1, LINE);
         p.text(MX + 28, row_y + 6, 18, label, 12.0, W::Reg, MUT);
-        p.paragraph(MX + 260, row_y + 6, MW - 288, 18, value, 12.0, W::Med, TXT, 2);
+        let value_color = if label == "Disponibilité" && !executable_exists { AMBER } else { TXT };
+        p.paragraph(MX + 260, row_y + 6, MW - 288, 18, value, 12.0, W::Med, value_color, 2);
         row_y += 40;
     }
 

@@ -102,9 +102,15 @@ fn resolve_launch_executable(game: &IpcGameEntry) -> Result<(std::path::PathBuf,
     Ok((root, resolved))
 }
 
+/// Returns the reason a game cannot currently be launched, using the exact
+/// same validation path as launch_game. None means the executable is ready.
+pub fn launch_block_reason(game: &IpcGameEntry) -> Option<String> {
+    resolve_launch_executable(game).err()
+}
+
 /// Whether the configured executable currently passes the same checks as launch.
 pub fn can_launch(game: &IpcGameEntry) -> bool {
-    resolve_launch_executable(game).is_ok()
+    launch_block_reason(game).is_none()
 }
 
 /// Starts a configured game after validating its executable against the registered installation.

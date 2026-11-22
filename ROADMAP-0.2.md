@@ -28,7 +28,7 @@ Cette feuille de route décrit les critères de sortie de la version 0.2. Elle d
 - [x] Tri réel par nom, plateforme et état de lancement, avec filtres de plateforme et recherche multicritère.
 - [x] Navigation clavier de base (Tab / Maj+Tab / Entrée) et focus visuel des actions visibles.
 - [ ] Compléter les raccourcis de page et le focus accessible des champs.
-- Afficher les erreurs de chemin et les exécutables non configurés sans bloquer l'accès aux détails.
+- [x] Afficher la cause réelle d'indisponibilité du lancement (exécutable absent, chemin invalide, dossier inaccessible ou tentative de sortie du dossier du jeu) sans bloquer l'accès aux détails.
 - [x] Confirmation avant retrait et explication que les fichiers ne sont pas supprimés.
 - [x] Dédupliquer les résultats de détection contre la bibliothèque existante et entre eux (identité plateforme + chemin canonique).
 - [ ] Ajouter une progression détaillée et une annulation réelle du scan (nécessite une API de découverte coopérative).
