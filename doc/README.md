@@ -4,18 +4,21 @@ This directory contains the project's documentation. The repository root is
 kept intentionally small: start with the root [README](../README.md) for the
 project overview and [LICENSE](../LICENSE) for usage and ownership terms.
 
+## Version 0.1.0
+
+- [0.1.0 first public release notes](releases/0.1.0-pre-release-notes.md) —
+  experimental status, included foundations, limitations and future directions.
+- [Builds and releases](technical/RELEASES.md) — Windows/Linux test packages,
+  first-run procedure, validation evidence and release information.
+
 ## Technical documentation
 
 - [IPC protocol and transport](technical/IPC.md) — message format, commands,
   endpoints and security considerations.
 - [Game discovery](technical/game-discovery.md) — supported launchers,
   detection methods, identifier rules and current limitations.
-- [Builds and releases](technical/RELEASES.md) — release targets, archive
-  contents, first-run procedure and publication checklist.
-- [0.1 pre-release checklist](releases/0.1.0-pre-release-checklist.md) — final
-  maintainer checks before publishing the candidate.
-- [0.1 draft release notes](releases/0.1.0-pre-release-notes.md) — candidate
-  scope, included functionality and known limitations.
+- [Launcher discovery coverage](discovery/LAUNCHER-COVERAGE.md) — evidence and
+  real-install validation status for each adapter.
 
 ## Community
 
