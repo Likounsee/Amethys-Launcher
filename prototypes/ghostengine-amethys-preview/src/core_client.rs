@@ -42,3 +42,49 @@ pub fn list_games() -> Result<Vec<IpcGameEntry>, String> {
         }
     })
 }
+
+
+/// Starts a configured game after canonicalizing and constraining its executable
+/// to the registered installation directory, matching the CLI safety boundary.
+pub fn launch_game(game: &IpcGameEntry) -> Result<u32, String> {
+    let executable = game.executable.as_deref()
+        .ok_or_else(|| "Aucun exécutable n'est configuré pour ce jeu.".to_owned())?;
+    let root = std::path::Path::new(&game.install_path)
+        .canonicalize()
+        .map_err(|error| format!("Dossier du jeu indisponible : {error}"))?;
+    if !root.is_dir() {
+        return Err("Le chemin d'installation n'est pas un dossier.".to_owned());
+    }
+
+    let candidate = std::path::Path::new(executable);
+    let candidate = if candidate.is_absolute() {
+        candidate.to_path_buf()
+    } else {
+        let trimmed = executable.trim();
+        let mut components = trimmed.split(['/', '\\']);
+        let Some(first) = components.next() else {
+            return Err("Chemin d'exécutable relatif non sûr.".to_owned());
+        };
+        if trimmed.is_empty() || trimmed.starts_with('/') || trimmed.starts_with('\\')
+            || !components.chain(std::iter::once(first))
+                .all(|component| !component.contains(':') && component != "." && component != "..")
+        {
+            return Err("Chemin d'exécutable relatif non sûr.".to_owned());
+        }
+        root.join(candidate)
+    };
+    let resolved = candidate.canonicalize()
+        .map_err(|error| format!("Exécutable introuvable ou inaccessible : {error}"))?;
+    if !resolved.starts_with(&root) {
+        return Err("L'exécutable se trouve en dehors du dossier du jeu ; démarrage refusé.".to_owned());
+    }
+    if !resolved.is_file() {
+        return Err("Le chemin configuré ne désigne pas un fichier exécutable.".to_owned());
+    }
+
+    std::process::Command::new(&resolved)
+        .current_dir(&root)
+        .spawn()
+        .map(|child| child.id())
+        .map_err(|error| format!("Le système n'a pas pu démarrer le jeu : {error}"))
+}
