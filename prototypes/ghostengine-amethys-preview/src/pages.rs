@@ -105,28 +105,15 @@ pub fn sidebar(p: &mut Painter, active: Active, vh: i32) {
     p.poly(&[(lx + 9.0, ly + 2.0), (lx + 19.0, ly + 10.0), (lx + 9.0, ly + 26.0), (lx - 1.0, ly + 10.0)], VIO);
     p.poly(&[(lx + 9.0, ly + 2.0), (lx + 13.0, ly + 10.0), (lx + 5.0, ly + 10.0)], hex("#E4D9FF"));
     p.text(62, 24, 28, "Amethyst", 20.0, W::Disp, TXT);
-    // main navigation
+    // Navigation limited to pages backed by real functionality.
     nav_item(p, 72, "Boutique", Icon::Gem, active == Active::Store, None, Some(Page::Store));
     nav_item(p, 118, "Bibliothèque", Icon::Books, active == Active::Library, None, Some(Page::Library));
-    nav_item(p, 164, "Liste d'envies", Icon::Heart, false, Some("8"), None);
-    nav_item(p, 210, "Téléchargements", Icon::Download, false, Some("2"), None);
-    // recently played
-    p.text(28, 274, 16, "RÉCEMMENT JOUÉS", 11.0, W::Semi, MUT);
-    let recent = [("Cyberpunk 2077", "Continuer · 42 h"), ("The Witcher 3", "120 h"), ("Elden Ring", "Mise à jour disponible")];
-    for (i, (title, sub)) in recent.iter().enumerate() {
-        let y = 298 + 48 * i as i32;
-        gradient_cover(p, 28, y + 4, 32, 40, 6, title, 160.0, SIDE);
-        p.text(70, y + 6, 18, title, 13.0, W::Med, TXT);
-        p.text(70, y + 24, 16, sub, 12.0, W::Reg, MUT);
-    }
-    // bottom: settings + profile
     nav_item(p, vh - 132, "Paramètres", Icon::Gear, active == Active::Settings, None, Some(Page::Settings));
     p.fill(16, vh - 84, 200, 1, LINE);
     p.circle(46, vh - 54, 18, VIO);
-    let jw = p.width("J", 15.0, W::Bold);
-    p.text(46 - (jw / 2.0).round() as i32, vh - 72, 36, "J", 15.0, W::Bold, VIO_DARK);
-    p.text(70, vh - 72, 18, "Joueur", 13.0, W::Semi, TXT);
-    p.text(70, vh - 54, 16, "Synchronisé", 12.0, W::Reg, MUT);
+    p.text(40, vh - 72, 36, "A", 15.0, W::Bold, VIO_DARK);
+    p.text(70, vh - 72, 18, "Amethys", 13.0, W::Semi, TXT);
+    p.text(70, vh - 54, 16, "Session locale", 12.0, W::Reg, MUT);
 }
 
 fn search_bar(p: &mut Painter, y: i32, placeholder: &str, right_note: Option<&str>) {
@@ -595,4 +582,87 @@ pub fn settings(p: &mut Painter, vh: i32, _st: &State) -> i32 {
     }
     button(p, cx, y2b + 256 + 16, None, "Ajouter un dossier", false);
     y2b + 256 + 16 + 44 + 56
+}
+
+
+/// Real library page backed by entries returned by the Amethys Core IPC service.
+pub fn library_live(
+    p: &mut Painter,
+    _vh: i32,
+    games: &[amethys_ipc::IpcGameEntry],
+    core_error: Option<&str>,
+) -> i32 {
+    p.text(MX, 25, 42, "Bibliothèque", 40.0, W::Disp, TXT);
+    p.text(MX, 74, 22, &format!("{} jeu(x) enregistré(s) dans votre bibliothèque locale", games.len()), 14.0, W::Reg, MUT);
+
+    if let Some(error) = core_error {
+        p.rrect(MX, 122, MW, 112, 14, PANEL);
+        p.rrect_line(MX, 122, MW, 112, 14, LINE);
+        p.text(MX + 22, 140, 24, "Connexion à Amethys Core impossible", 18.0, W::Semi, AMBER);
+        p.paragraph(MX + 22, 174, MW - 44, 18, error, 13.0, W::Reg, MUT, 3);
+        p.text(MX + 22, 282, 24, "Démarrez amethys-agent puis relancez le launcher.", 15.0, W::Med, TXT);
+        return 340;
+    }
+
+    if games.is_empty() {
+        p.rrect(MX, 122, MW, 150, 14, PANEL);
+        p.rrect_line(MX, 122, MW, 150, 14, LINE);
+        p.text(MX + 22, 146, 26, "Votre bibliothèque est vide", 20.0, W::Semi, TXT);
+        p.paragraph(MX + 22, 184, MW - 44, 20,
+            "Aucun jeu n'est encore enregistré dans la base locale Amethys. Importez des jeux avec les outils Amethys existants ; ils apparaîtront ici automatiquement au prochain lancement.",
+            14.0, W::Reg, MUT, 4);
+        return 320;
+    }
+
+    let columns = 4_i32;
+    let gap = 18_i32;
+    let card_w = (MW - gap * (columns - 1)) / columns;
+    let card_h = 174_i32;
+    for (index, game) in games.iter().enumerate() {
+        let col = index as i32 % columns;
+        let row = index as i32 / columns;
+        let x = MX + col * (card_w + gap);
+        let y = 122 + row * (card_h + gap);
+        let exists = std::path::Path::new(&game.install_path).is_dir();
+        p.rrect(x, y, card_w, card_h, 14, PANEL);
+        p.rrect_line(x, y, card_w, card_h, 14, LINE);
+        chip(p, x + 14, y + 14, &game.platform);
+        let title_y = y + 52;
+        p.paragraph(x + 14, title_y, card_w - 28, 22, &game.name, 17.0, W::Semi, TXT, 2);
+        let (status, color) = if exists { ("Dossier présent", GREEN) } else { ("Chemin introuvable", AMBER) };
+        p.text(x + 14, y + 112, 18, status, 12.0, W::Med, color);
+        p.paragraph(x + 14, y + 136, card_w - 28, 16, &game.install_path, 10.0, W::Reg, MUT, 2);
+    }
+
+    let rows = (games.len() as i32 + columns - 1) / columns;
+    122 + rows * (card_h + gap) + 24
+}
+
+/// The catalogue has no connected provider yet; do not invent games or prices.
+pub fn catalogue_unavailable(p: &mut Painter, _vh: i32) -> i32 {
+    p.text(MX, 25, 42, "Boutique", 40.0, W::Disp, TXT);
+    p.rrect(MX, 104, MW, 190, 16, PANEL);
+    p.rrect_line(MX, 104, MW, 190, 16, LINE);
+    p.text(MX + 28, 132, 30, "Catalogue non disponible", 23.0, W::Semi, TXT);
+    p.paragraph(MX + 28, 178, MW - 56, 22,
+        "Amethys ne dispose pas encore d'un service de catalogue connecté aux boutiques. Aucun jeu, prix, promotion ou lien d'achat fictif ne sera affiché ici.",
+        15.0, W::Reg, MUT, 4);
+    340
+}
+
+/// Settings page exposes only the actual local Core connection state for now.
+pub fn settings_local(p: &mut Painter, _vh: i32, core_error: Option<&str>) -> i32 {
+    p.text(MX, 25, 42, "Paramètres", 40.0, W::Disp, TXT);
+    let y = 104;
+    p.rrect(MX, y, MW, 140, 16, PANEL);
+    p.rrect_line(MX, y, MW, 140, 16, LINE);
+    p.text(MX + 24, y + 20, 26, "Amethys Core", 20.0, W::Semi, TXT);
+    if let Some(error) = core_error {
+        p.text(MX + 24, y + 58, 20, "Déconnecté", 14.0, W::Semi, AMBER);
+        p.paragraph(MX + 24, y + 86, MW - 48, 18, error, 12.0, W::Reg, MUT, 2);
+    } else {
+        p.text(MX + 24, y + 62, 20, "Connecté · bibliothèque chargée via IPC local", 14.0, W::Semi, GREEN);
+    }
+    p.text(MX, y + 176, 22, "Les réglages des boutiques, téléchargements et comptes seront ajoutés avec leurs services réels.", 13.0, W::Reg, MUT);
+    360
 }
