@@ -51,6 +51,7 @@ pub struct App {
     pub page: Page,
     pub st: State,
     library_sort: usize,
+    keyboard_focus: Option<usize>,
     pub games: Vec<IpcGameEntry>,
     pub detected_games: Vec<amethys_discovery::DetectedGame>,
     scan_receiver: Option<std::sync::mpsc::Receiver<Vec<amethys_discovery::DetectedGame>>>,
@@ -86,6 +87,7 @@ impl App {
             page: Page::Library,
             st: State::default(),
             library_sort: 0,
+            keyboard_focus: None,
             games,
             detected_games: Vec::new(),
             scan_receiver: None,
@@ -183,6 +185,9 @@ impl App {
         let old = self.scroll.offset();
         self.scroll.set_content_extent(h as u32);
         self.scroll.set_offset(if reset_scroll { 0 } else { old });
+        if self.keyboard_focus.is_some_and(|index| index >= self.hits.len()) {
+            self.keyboard_focus = None;
+        }
         self.inter.clear();
         self.page_ms = t0.elapsed().as_secs_f64() * 1000.0;
     }
@@ -411,6 +416,9 @@ impl App {
         let (bounds, enabled) = self.screen_bounds();
         let events = self.inter.update(pointer, input.left_mouse_pressed, input.left_mouse_released, &enabled, &bounds);
         let hover = self.inter.hovered().map(|i| (bounds[i], self.hits[i].radius, self.inter.is_pressed(i)));
+        let keyboard = self.keyboard_focus
+            .filter(|index| enabled.get(*index).copied().unwrap_or(false))
+            .map(|index| (bounds[index], self.hits[index].radius));
         let clicked = events.clicked.map(|i| self.hits[i].action);
         if let Some(action) = clicked {
             self.apply(action);
@@ -422,6 +430,9 @@ impl App {
             if let Some((r, radius, pressed)) = hover {
                 fill_rounded_rect_aa(fb, r, radius, Color::rgba(185, 162, 255, if pressed { 56 } else { 26 }));
                 draw_rounded_rect_aa(fb, r, radius, Color::rgba(185, 162, 255, 190));
+            } else if let Some((r, radius)) = keyboard {
+                fill_rounded_rect_aa(fb, r, radius, Color::rgba(185, 162, 255, 22));
+                draw_rounded_rect_aa(fb, r, radius, Color::rgba(185, 162, 255, 210));
             }
         }
 
@@ -688,7 +699,39 @@ impl App {
                 return Output { keep_running: false };
             }
         }
+        let had_text_focus = self.search_focused || self.editing_executable;
         self.handle_search_input(input);
+        if !had_text_focus && !self.search_focused && !self.editing_executable && input.tab_pressed {
+            let (_, enabled) = self.screen_bounds();
+            let count = enabled.iter().filter(|is_enabled| **is_enabled).count();
+            if count > 0 {
+                let current = self.keyboard_focus.and_then(|index| enabled.get(index).copied().filter(|value| *value).map(|_| index));
+                let next = if input.shift_down {
+                    current.map_or(count - 1, |index| {
+                        let before = enabled[..index].iter().filter(|value| **value).count();
+                        if before == 0 { count - 1 } else { before - 1 }
+                    })
+                } else {
+                    current.map_or(0, |index| {
+                        let through = enabled[..=index].iter().filter(|value| **value).count();
+                        through % count
+                    })
+                };
+                self.keyboard_focus = enabled.iter().enumerate()
+                    .filter_map(|(index, is_enabled)| is_enabled.then_some(index))
+                    .nth(next);
+            } else {
+                self.keyboard_focus = None;
+            }
+        }
+        if !had_text_focus && !self.search_focused && !self.editing_executable
+            && input.enter_pressed
+        {
+            if let Some(index) = self.keyboard_focus.filter(|index| self.hits.get(*index).is_some()) {
+                let action = self.hits[index].action;
+                self.apply(action);
+            }
+        }
         let ptr = input.mouse_position;
         let over_chip = ptr.is_some_and(|p| self.chip_rect().contains(p));
         let over_panel = self.stats_open && ptr.is_some_and(|p| self.panel_rect().contains(p));

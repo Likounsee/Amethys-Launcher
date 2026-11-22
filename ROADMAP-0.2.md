@@ -18,14 +18,16 @@ Cette feuille de route décrit les critères de sortie de la version 0.2. Elle d
 
 ### P0 — Interface de bureau aboutie
 - [x] Cartes de bibliothèque avec couverture, plateforme, statut réel, chemin et actions.
-- [ ] Finaliser la hiérarchie visuelle, les états de chargement et les interactions clavier.
+- [ ] Finaliser la hiérarchie visuelle et les états de chargement.
+- [x] Ajouter le parcours clavier Tab / Maj+Tab, l'activation Entrée et un indicateur de focus visible.
 - [ ] Adapter la grille et les panneaux à la taille réelle de la fenêtre ; supprimer les hypothèses rigides 1600×900.
 - Rendre les interactions évidentes : focus clavier, retour visuel, raccourcis, navigation et états de chargement.
 - Conserver les données réelles et afficher clairement les fonctionnalités non connectées.
 
 ### P0 — Bibliothèque fiable
 - [x] Tri réel par nom, plateforme et état de lancement, avec filtres de plateforme et recherche multicritère.
-- [ ] Navigation clavier complète et focus visuel cohérent.
+- [x] Navigation clavier de base (Tab / Maj+Tab / Entrée) et focus visuel des actions visibles.
+- [ ] Compléter les raccourcis de page et le focus accessible des champs.
 - Afficher les erreurs de chemin et les exécutables non configurés sans bloquer l'accès aux détails.
 - [x] Confirmation avant retrait et explication que les fichiers ne sont pas supprimés.
 - [x] Dédupliquer les résultats de détection contre la bibliothèque existante et entre eux (identité plateforme + chemin canonique).
