@@ -92,7 +92,7 @@ pub fn sidebar(p: &mut Painter, active: Active, vh: i32) {
     let (lx, ly) = (24.0_f32, 24.0_f32);
     p.poly(&[(lx + 9.0, ly + 2.0), (lx + 19.0, ly + 10.0), (lx + 9.0, ly + 26.0), (lx - 1.0, ly + 10.0)], VIO);
     p.poly(&[(lx + 9.0, ly + 2.0), (lx + 13.0, ly + 10.0), (lx + 5.0, ly + 10.0)], hex("#E4D9FF"));
-    p.text(62, 24, 28, "Amethyst", 20.0, W::Disp, TXT);
+    p.text(62, 24, 28, "Amethys", 20.0, W::Disp, TXT);
     // Navigation limited to pages backed by real functionality.
     nav_item(p, 72, "Boutique", Icon::Gem, active == Active::Store, None, Some(Page::Store));
     nav_item(p, 118, "Bibliothèque", Icon::Books, active == Active::Library, None, Some(Page::Library));
