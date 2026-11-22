@@ -839,7 +839,7 @@ impl Database {
         let external_id = external_id.trim();
         if external_id.is_empty()
             || external_id.len() > MAX_PLATFORM_ID_BYTES
-            || external_id.contains('\\0')
+            || external_id.contains('\0')
         {
             return Err(storage_error("External game ID is invalid."));
         }
