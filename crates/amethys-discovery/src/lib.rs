@@ -1919,10 +1919,16 @@ pub fn discover_all_games_with_progress(
     stages.push(("Steam".to_owned(), Box::new(discover_steam_games)));
 
     for root in epic_manifest_roots() {
-        stages.push(("Epic Games".to_owned(), Box::new(move || scan_epic_manifests(&root))));
+        stages.push((
+            "Epic Games".to_owned(),
+            Box::new(move || scan_epic_manifests(&root)),
+        ));
     }
     for file in heroic_legendary_installed_files() {
-        stages.push(("Heroic".to_owned(), Box::new(move || scan_heroic_legendary_installed(&file))));
+        stages.push((
+            "Heroic".to_owned(),
+            Box::new(move || scan_heroic_legendary_installed(&file)),
+        ));
     }
     for database in gog_galaxy_databases() {
         stages.push(("GOG Galaxy".to_owned(), Box::new(move || scan_gog_galaxy(&database))));

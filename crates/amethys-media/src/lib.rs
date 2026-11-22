@@ -2,12 +2,9 @@
 //!
 //! This crate deliberately does not download remote artwork. It provides safe,
 //! deterministic locations for user-library media and provider catalogue cache.
-//! Network fetching, cache policy and provider authorization belong to later
-//! application services, not to this path/layout layer.
 
 use std::{
-    fs,
-    io,
+    fs, io,
     path::{Component, Path, PathBuf},
 };
 
@@ -41,9 +38,9 @@ impl ProviderKey {
         let value = value.into();
         if value.is_empty()
             || value.len() > 48
-            || !value
-                .bytes()
-                .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+            || !value.bytes().all(|byte| {
+                byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-'
+            })
         {
             return Err(MediaPathError::InvalidProvider);
         }
@@ -57,7 +54,7 @@ impl ProviderKey {
 
 #[derive(Debug, thiserror::Error)]
 pub enum MediaPathError {
-    #[error("provider key must contain 1-48 lowercase ASCII letters, digits or hyphens")]
+    #[error("provider key or game ID is invalid")]
     InvalidProvider,
     #[error("media extension must be png, jpg, jpeg, webp or avif")]
     InvalidExtension,
@@ -101,14 +98,16 @@ impl MediaStore {
         kind: MediaKind,
         extension: &str,
     ) -> Result<PathBuf, MediaPathError> {
-        Ok(self
-            .library_root()
-            .join(game_id)
-            .join(format!("{}.{}", kind.file_stem(), valid_extension(extension)?)))
+        validate_game_id(game_id)?;
+        Ok(self.library_root().join(game_id).join(format!(
+            "{}.{}",
+            kind.file_stem(),
+            valid_extension(extension)?
+        )))
     }
 
     /// Path for a remote catalogue image cached for a provider item.
-    /// External IDs are hex-encoded so they cannot become path components.
+    /// External IDs are hex-encoded so arbitrary provider IDs remain one safe component.
     pub fn catalogue_asset(
         &self,
         provider: &ProviderKey,
@@ -116,8 +115,7 @@ impl MediaStore {
         kind: MediaKind,
         extension: &str,
     ) -> Result<PathBuf, MediaPathError> {
-        validate_path_key(external_id)?;
-        if external_id.len() > 256 {
+        if external_id.is_empty() || external_id.len() > 256 {
             return Err(MediaPathError::InvalidProvider);
         }
         let encoded_id = external_id
@@ -129,13 +127,19 @@ impl MediaStore {
             .catalogue_cache_root()
             .join(provider.as_str())
             .join(encoded_id)
-            .join(format!("{}.{}", kind.file_stem(), valid_extension(extension)?)))
+            .join(format!(
+                "{}.{}",
+                kind.file_stem(),
+                valid_extension(extension)?
+            )))
     }
 
     /// Creates parent directories for a path returned by this store.
     pub fn prepare_asset_path(&self, path: &Path) -> Result<(), MediaPathError> {
         if !path.starts_with(&self.root)
-            || path.components().any(|component| matches!(component, Component::ParentDir))
+            || path
+                .components()
+                .any(|component| matches!(component, Component::ParentDir))
         {
             return Err(MediaPathError::InvalidProvider);
         }
@@ -146,12 +150,12 @@ impl MediaStore {
     }
 }
 
-fn validate_path_key(value: &str) -> Result<(), MediaPathError> {
+fn validate_game_id(value: &str) -> Result<(), MediaPathError> {
     if value.is_empty()
-        || value.len() > 256
-        || value == "."
-        || value == ".."
-        || !value.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+        || value.len() > 128
+        || !value.bytes().all(|byte| {
+            byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.')
+        })
     {
         return Err(MediaPathError::InvalidProvider);
     }
@@ -159,7 +163,11 @@ fn validate_path_key(value: &str) -> Result<(), MediaPathError> {
 }
 
 fn valid_extension(extension: &str) -> Result<&str, MediaPathError> {
-    match extension.trim_start_matches('.').to_ascii_lowercase().as_str() {
+    match extension
+        .trim_start_matches('.')
+        .to_ascii_lowercase()
+        .as_str()
+    {
         "png" => Ok("png"),
         "jpg" => Ok("jpg"),
         "jpeg" => Ok("jpeg"),
@@ -178,7 +186,9 @@ mod tests {
     fn library_assets_are_independent_of_install_paths_and_provider_ids() {
         let store = MediaStore::new("amethys-data");
         assert_eq!(
-            store.library_asset("game-3000", MediaKind::Cover, "png").expect("valid path"),
+            store
+                .library_asset("game-3000", MediaKind::Cover, "png")
+                .expect("valid path"),
             PathBuf::from("amethys-data/media/library/game-3000/cover.png")
         );
     }
@@ -195,15 +205,22 @@ mod tests {
     fn catalogue_external_ids_are_encoded_as_one_safe_component() {
         let store = MediaStore::new("amethys-data");
         let provider = ProviderKey::new("steam").expect("valid provider");
-        let path = store.catalogue_asset(&provider, "../../game/42", MediaKind::Banner, ".webp")
+        let path = store
+            .catalogue_asset(&provider, "../../game/42", MediaKind::Banner, ".webp")
             .expect("external IDs are encoded");
-        assert!(path.to_string_lossy().contains("2e2e2f2e2e2f67616d652f3432"));
+        assert!(
+            path.to_string_lossy()
+                .contains("2e2e2f2e2e2f67616d652f3432")
+        );
         assert!(!path.to_string_lossy().contains("../../game"));
     }
 
     #[test]
     fn invalid_provider_and_extension_are_rejected() {
-        assert!(matches!(ProviderKey::new("../steam"), Err(MediaPathError::InvalidProvider)));
+        assert!(matches!(
+            ProviderKey::new("../steam"),
+            Err(MediaPathError::InvalidProvider)
+        ));
         let store = MediaStore::new("amethys-data");
         let provider = ProviderKey::new("steam").expect("valid provider");
         assert!(matches!(
@@ -214,6 +231,9 @@ mod tests {
 
     #[test]
     fn media_kinds_have_stable_file_names() {
-        assert_eq!(MediaKind::ALL.map(MediaKind::file_stem), ["icon", "logo", "cover", "banner"]);
+        assert_eq!(
+            MediaKind::ALL.map(MediaKind::file_stem),
+            ["icon", "logo", "cover", "banner"]
+        );
     }
 }
