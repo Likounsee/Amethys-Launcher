@@ -622,12 +622,13 @@ pub fn library_live(
         let x = MX + col * (card_w + gap);
         let y = content_y + row * (card_h + gap);
         let exists = std::path::Path::new(&game.install_path).is_dir();
+        let launchable = crate::core_client::can_launch(game);
         p.rrect(x, y, card_w, card_h, 14, PANEL);
         p.rrect_line(x, y, card_w, card_h, 14, LINE);
         chip(p, x + 14, y + 14, &game.platform);
         let title_y = y + 48;
         p.paragraph(x + 14, title_y, card_w - 28, 20, &game.name, 17.0, W::Semi, TXT, 1);
-        let (status, color) = if !exists { ("Chemin introuvable", AMBER) } else if game.executable.is_some() { ("Exécutable configuré", GREEN) } else { ("Exécutable à configurer", AMBER) };
+        let (status, color) = if !exists { ("Chemin introuvable", AMBER) } else if launchable { ("Prêt à lancer", GREEN) } else if game.executable.is_some() { ("Exécutable invalide", AMBER) } else { ("Exécutable à configurer", AMBER) };
         p.text(x + 14, y + 76, 18, status, 12.0, W::Med, color);
         p.paragraph(x + 14, y + 100, card_w - 28, 16, &game.install_path, 10.0, W::Reg, MUT, 2);
         let remove_x = x + card_w - 174;
@@ -635,7 +636,7 @@ pub fn library_live(
         p.rrect_line(remove_x, y + 146, 72, 30, 8, LINE);
         p.text(remove_x + 12, y + 146, 30, "Retirer", 12.0, W::Med, SOFT);
         p.hit(remove_x, y + 146, 72, 30, 8, Action::RemoveGame(index), false);
-        if game.executable.is_some() && exists {
+        if launchable {
             let launch_x = x + card_w - 94;
             p.rrect(launch_x, y + 146, 80, 30, 8, VIO);
             p.text(launch_x + 14, y + 146, 30, "Lancer", 12.0, W::Semi, VIO_DARK);
@@ -702,11 +703,7 @@ pub fn game_detail_live(
     let install_root = std::path::Path::new(&game.install_path);
     let directory_exists = install_root.is_dir();
     let executable = game.executable.as_deref().unwrap_or("Non configuré");
-    let executable_exists = game.executable.as_deref().is_some_and(|value| {
-        let path = std::path::Path::new(value);
-        let candidate = if path.is_absolute() { path.to_path_buf() } else { install_root.join(path) };
-        candidate.is_file()
-    });
+    let executable_exists = crate::core_client::can_launch(game);
 
     let rows = [
         ("Identifiant Amethys", game.id.as_str()),
