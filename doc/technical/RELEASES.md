@@ -57,6 +57,10 @@ Version 0.1.0 is a very small first milestone. It provides a Rust agent, a CLI, 
 
 There is no graphical interface, store/catalogue, game download or installation, account system, cloud save synchronization, backup feature, automatic updater, service installer or polished end-user experience. Discovery is metadata-based and does not guarantee that a game is launchable. The project is still being developed; do not present this release as a complete or production-ready product.
 
+## CI revalidation record
+
+On 2026-11-23, a fresh main-branch CI run was requested for the 0.2.0 release candidate because the preceding GitHub Actions runs reported failure without exposing any job records or artifacts through the available API. This revalidation does not change application source code; release approval still depends on successful Windows and Linux jobs and their generated archives.
+
 ## Validation and test evidence
 
 Keep three evidence levels distinct in release notes and bug reports:
