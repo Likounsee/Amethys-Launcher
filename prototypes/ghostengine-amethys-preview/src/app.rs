@@ -856,7 +856,7 @@ impl App {
     fn draw_scene(&mut self, fb: &mut Framebuffer, real: &InputState, mask: bool, dt: f32) {
         let blank = InputState::default();
         let input = if mask { &blank } else { real };
-        let main = Rect::new(self.lay.side_w as u32, 0, (self.win_w - self.lay.side_w).max(1) as u32, self.win_h as u32);
+        let main = Rect::new(self.side_px() as u32, 0, (self.win_w - self.side_px()).max(1) as u32, self.win_h as u32);
         let pointer = input.mouse_position;
         let in_main = pointer.is_some_and(|p| main.contains(p));
 
