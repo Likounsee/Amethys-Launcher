@@ -10,7 +10,7 @@ La priorité de la 0.2 est une interface de bureau complète, cohérente et soig
 - [x] Recherche, filtres, tri, fiches de jeux, import et lancement sécurisé.
 - [x] Détection en arrière-plan avec progression et annulation.
 - [ ] Finaliser la direction visuelle, la typographie, les espacements et la cohérence des composants.
-- [ ] Refaire les cartes de jeux autour de proportions d'illustrations fixes et de placeholders originaux.
+- [x] Uniformiser les jaquettes des cartes au format portrait 3:4 et signaler explicitement les placeholders originaux temporaires.
 - [ ] Compléter les états vides, chargements, erreurs, confirmations et notifications.
 - [x] Rendre la mise en page adaptative aux dimensions réelles de la fenêtre (mise à l'échelle, sidebar compacte et colonnes entières).
 - [ ] Terminer la navigation clavier et le focus accessible des champs et dialogues.
