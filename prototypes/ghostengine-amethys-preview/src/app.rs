@@ -672,6 +672,7 @@ impl App {
                     scanning: self.scan_in_progress,
                     loading: self.library_loading,
                     refreshing: self.library_refreshing,
+                    mutating: self.mutation_in_progress,
                     progress: self.scan_progress.as_ref(),
                     scan_found: self.scan_found,
                     filter: self.st.lib_filter,
