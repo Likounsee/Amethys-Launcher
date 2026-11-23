@@ -31,7 +31,7 @@ The script runs workspace and desktop checks/tests, builds the agent, CLI and de
 
 This remains an experimental development preview, separate from the public 0.1.0 CLI archive. It is not an installer or a production-ready release.
 
-**Versioning gate:** “desktop preview 0.2” is currently a development milestone, not yet the repository's official Cargo release version. The workspace package version remains `0.1.0`, and `release.yml` rejects a `v0.2.0` tag until the workspace version is deliberately updated. Do not create or publish a `v0.2.0` release tag until the intended release scope, version bump and release artifacts are agreed and checked.
+**Versioning gate:** the workspace crates and desktop preview are now versioned `0.2.0`, and the release workflow accepts a `v0.2.0` tag. The tag has not been created and no release has been published yet. Before publishing, the Windows and Linux release jobs must both pass and produce the two portable desktop archives plus the combined `SHA256SUMS` file. Linux manual testing remains explicitly deferred; the Linux archive is only CI-validated until it is tested on a real Linux machine.
 
 ## First-run notes
 
