@@ -1268,11 +1268,12 @@ impl App {
         self.handle_text_input(input);
         if input.tab_pressed {
             if self.search_focused {
-                // Tab leaves the search field instead of trapping keyboard navigation.
+                // Leave the search field and move focus to the next actionable control
+                // in the same key press, rather than requiring a second Tab.
                 self.search_focused = false;
                 self.render(false);
-            }
-            if !had_text_focus && !self.editing_executable {
+                self.handle_tab(input);
+            } else if !had_text_focus && !self.editing_executable {
                 self.handle_tab(input);
             }
         }
