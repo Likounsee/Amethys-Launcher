@@ -352,7 +352,7 @@ jobs:
           }
           $desktop.Refresh()
           if ($desktop.ExitCode -ne 0) { throw "Packaged desktop application smoke test failed with exit code $($desktop.ExitCode)." }
-          $firstShot = Join-Path $snapshot "w0-boutique.png"
+          $firstShot = Join-Path $snapshot "01-bibliotheque.png"
           if (-not (Test-Path $firstShot -PathType Leaf)) {
             $diagnostic = Join-Path $snapshot "snapshot-error.txt"
             if (Test-Path $diagnostic) { Get-Content $diagnostic | Write-Error }
