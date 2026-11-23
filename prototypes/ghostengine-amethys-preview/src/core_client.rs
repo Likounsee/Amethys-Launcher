@@ -8,10 +8,32 @@ use amethys_ipc::{
 
 /// Reads the real local library through the same IPC protocol used by Amethys clients.
 pub fn list_games() -> Result<Vec<IpcGameEntry>, String> {
-    list_games_with_timeouts(
+    let mut games = list_games_with_timeouts(
         std::time::Duration::from_secs(5),
         std::time::Duration::from_secs(15),
-    )
+    )?;
+
+    // Older imports may have been saved before executable discovery was
+    // available. Resolve only missing paths and persist successful results.
+    for game in &mut games {
+        if game.executable.is_some() {
+            continue;
+        }
+        let Some(executable) = amethys_discovery::resolve_game_executable_for(
+            &game.platform,
+            game.platform_id.as_deref(),
+            std::path::Path::new(&game.install_path),
+            &game.name,
+        ) else {
+            continue;
+        };
+        let executable = executable.to_string_lossy().into_owned();
+        if let Ok(updated) = set_game_executable(&game.id, &executable) {
+            *game = updated;
+        }
+    }
+
+    Ok(games)
 }
 
 fn list_games_with_timeouts(
