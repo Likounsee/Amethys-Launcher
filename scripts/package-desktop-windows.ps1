@@ -16,10 +16,16 @@ try {
     # Packaging is a release-like operation: refuse to produce an archive from
     # a tree that fails formatting, linting or tests.
     cargo fmt --all -- --check
-    if ($LASTEXITCODE -ne 0) { throw "Rust formatting check failed." }
+    if ($LASTEXITCODE -ne 0) { throw "Workspace Rust formatting check failed." }
+
+    cargo fmt --manifest-path $Manifest -- --check
+    if ($LASTEXITCODE -ne 0) { throw "Desktop Rust formatting check failed." }
 
     cargo clippy --workspace --all-targets -- -D warnings
     if ($LASTEXITCODE -ne 0) { throw "Workspace Clippy checks failed." }
+
+    cargo clippy --manifest-path $Manifest --bin amethys-launcher -- -D warnings
+    if ($LASTEXITCODE -ne 0) { throw "Desktop Clippy checks failed." }
 
     cargo test --workspace --all-targets
     if ($LASTEXITCODE -ne 0) { throw "Workspace tests failed." }
