@@ -1032,7 +1032,13 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
 
     // ---- Core status
     let mut y = 118;
-    let core_h = if view.core_error.is_some() { 216 } else if lay.compact() { 222 } else { 178 };
+    let core_h = if view.core_error.is_some() {
+        if lay.compact() { 260 } else { 216 }
+    } else if lay.compact() {
+        222
+    } else {
+        178
+    };
     panel(p, mx, y, mw, core_h, 20);
     let (ic, fg, bg, state) = if view.core_error.is_some() {
         (Icon::Alert, AMBER, AMBER_DARK, "Déconnecté")
