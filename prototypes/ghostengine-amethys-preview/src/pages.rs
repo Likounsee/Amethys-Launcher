@@ -602,11 +602,19 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
         if narrow_error {
             p.text(mx + 76, y + 16, 24, "Core indisponible", 15.0, W::Semi, TXT);
             p.paragraph(mx + 20, y + 72, msg_w, 19, error, 12.5, W::Reg, MUT, 3);
-            button(p, mx + 20, y + h - 20 - BTN_H, Some(120), "Réessayer", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::RefreshLibrary));
+            if view.loading {
+                button_disabled(p, mx + 20, y + h - 20 - BTN_H, "Réessayer", Some(Icon::Refresh));
+            } else {
+                button(p, mx + 20, y + h - 20 - BTN_H, Some(120), "Réessayer", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::RefreshLibrary));
+            }
         } else {
             p.text(mx + 80, y + 16, 24, "Connexion à Amethys Core impossible", 16.0, W::Semi, TXT);
             p.paragraph(mx + 80, y + 44, mw - 240, 19, error, 12.5, W::Reg, MUT, 3);
-            button(p, mx + mw - 20 - 120, y + (h - BTN_H) / 2, Some(120), "Réessayer", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::RefreshLibrary));
+            if view.loading {
+                button_disabled(p, mx + mw - 20 - 120, y + (h - BTN_H) / 2, "Réessayer", Some(Icon::Refresh));
+            } else {
+                button(p, mx + mw - 20 - 120, y + (h - BTN_H) / 2, Some(120), "Réessayer", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::RefreshLibrary));
+            }
         }
         y += h + GAP;
     }
