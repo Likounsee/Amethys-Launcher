@@ -43,6 +43,7 @@ const PANEL_W: i32 = 520;
 const PANEL_H: i32 = 500;
 /// Cards added each time "Afficher plus" is used.
 const PAGE_SIZE: usize = 48;
+const DESKTOP_PREFERENCES_FILE: &str = "launcher-preferences-v1";
 /// Target frame time while something is animating (about 60 images/s).
 const FRAME_BUDGET: Duration = Duration::from_millis(16);
 const PAGE_FADE_S: f32 = 0.22;
@@ -134,6 +135,52 @@ fn inset(r: Rect, d: u32) -> Rect {
     } else {
         r
     }
+}
+
+/// Loads the user's persisted desktop preferences. Unknown or malformed values
+/// safely fall back to the default sort order.
+fn load_library_sort(path: &std::path::Path) -> usize {
+    let Ok(contents) = std::fs::read_to_string(path) else {
+        return 0;
+    };
+    let mut schema = None;
+    let mut sort = None;
+    for line in contents.lines() {
+        if let Some(value) = line.strip_prefix("schema=") {
+            schema = value.parse::<u32>().ok();
+        } else if let Some(value) = line.strip_prefix("library_sort=") {
+            sort = value.parse::<usize>().ok();
+        }
+    }
+    if schema == Some(1) {
+        sort.filter(|value| *value < 3).unwrap_or(0)
+    } else {
+        0
+    }
+}
+
+/// Saves preferences through a synced sibling file before replacing the old one.
+fn save_library_sort(path: &std::path::Path, sort: usize) -> std::io::Result<()> {
+    use std::io::Write as _;
+    let parent = path.parent().filter(|parent| !parent.as_os_str().is_empty())
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "preference path has no parent"))?;
+    std::fs::create_dir_all(parent)?;
+    let temporary = path.with_extension(format!("{}.tmp", std::process::id()));
+    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&temporary)?;
+    let contents = format!("schema=1\nlibrary_sort={}\n", sort.min(2));
+    if let Err(error) = file.write_all(contents.as_bytes()).and_then(|()| file.sync_all()) {
+        drop(file);
+        let _ = std::fs::remove_file(&temporary);
+        return Err(error);
+    }
+    drop(file);
+    if let Err(error) = std::fs::rename(&temporary, path) {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(error);
+    }
+    #[cfg(unix)]
+    std::fs::File::open(parent)?.sync_all()?;
+    Ok(())
 }
 
 /// Produces a stable path key for comparing discovered and registered installs.
@@ -231,13 +278,16 @@ impl App {
             Err(error) => (Vec::new(), Some(error)),
         };
         let statuses = status::statuses_of(&games);
+        let library_sort = media_store
+            .map(|store| load_library_sort(&store.root().join(DESKTOP_PREFERENCES_FILE)))
+            .unwrap_or(0);
         let mut app = Self {
             fonts,
             covers,
             media_store,
             page: Page::Library,
             st: State::default(),
-            library_sort: 0,
+            library_sort,
             library_limit: PAGE_SIZE,
             keyboard_focus: None,
             games,
@@ -482,6 +532,16 @@ impl App {
             }
             Action::SetLibrarySort(i) => {
                 self.library_sort = i % 3;
+                if let Some(store) = self.media_store {
+                    let path = store.root().join(DESKTOP_PREFERENCES_FILE);
+                    if let Err(error) = save_library_sort(&path, self.library_sort) {
+                        self.notify(ToastKind::Error, format!("Préférence de tri non enregistrée : {error}"));
+                    } else {
+                        self.notify(ToastKind::Success, "Ordre de tri enregistré sur cet appareil.");
+                    }
+                } else {
+                    self.notify(ToastKind::Error, "Stockage des préférences indisponible : le tri ne sera pas conservé.");
+                }
                 self.render(false);
             }
             Action::ShowMoreGames => {
@@ -1365,6 +1425,31 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn desktop_preferences_default_and_reject_unknown_values() {
+        let root = std::env::temp_dir().join(format!("amethys-prefs-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let path = root.join("preferences");
+        assert_eq!(load_library_sort(&path), 0);
+        std::fs::create_dir_all(&root).expect("test directory");
+        std::fs::write(&path, "schema=2\\nlibrary_sort=2\\n").expect("future schema");
+        assert_eq!(load_library_sort(&path), 0);
+        std::fs::write(&path, "schema=1\\nlibrary_sort=9\\n").expect("invalid sort");
+        assert_eq!(load_library_sort(&path), 0);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn desktop_preferences_round_trip_atomically() {
+        let root = std::env::temp_dir().join(format!("amethys-prefs-{}", uuid::Uuid::new_v4()));
+        let path = root.join("launcher-preferences-v1");
+        save_library_sort(&path, 2).expect("preferences save");
+        assert_eq!(load_library_sort(&path), 2);
+        save_library_sort(&path, 1).expect("preferences replacement");
+        assert_eq!(load_library_sort(&path), 1);
+        let _ = std::fs::remove_dir_all(root);
+    }
 
     #[test]
     fn easing_is_monotonic_and_bounded() {
