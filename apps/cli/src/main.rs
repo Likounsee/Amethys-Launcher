@@ -770,8 +770,7 @@ async fn verify_saved_games(json_output: bool) -> Result<(), Box<dyn Error>> {
 }
 
 fn inferred_executable(game: &amethys_discovery::DetectedGame) -> Option<String> {
-    amethys_discovery::resolve_game_executable(game)
-        .map(|path| path.to_string_lossy().into_owned())
+    amethys_discovery::resolve_game_executable(game).map(|path| path.to_string_lossy().into_owned())
 }
 async fn import_detected_game(platform: &str, platform_id: &str) -> Result<(), Box<dyn Error>> {
     let game = amethys_discovery::discover_all_games()
