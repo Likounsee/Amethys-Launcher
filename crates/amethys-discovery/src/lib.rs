@@ -2425,6 +2425,34 @@ mod tests {
     }
 
     #[test]
+    fn generic_executable_resolver_searches_deep_and_matches_game_name_in_ancestor_folders() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-executable-deep-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        let game_bin = root.join("The Finals/Client/Win64/Binaries/Shipping/Release/x64");
+        std::fs::create_dir_all(&game_bin).unwrap();
+        std::fs::create_dir_all(root.join("Support/Tools")).unwrap();
+        std::fs::write(game_bin.join("DiscoveryRuntime.exe"), b"game").unwrap();
+        std::fs::write(root.join("Support/Tools/Telemetry.exe"), b"support").unwrap();
+
+        let detected = super::DetectedGame {
+            platform_id: None,
+            name: "The Finals".to_owned(),
+            install_path: root.clone(),
+            platform: "Unknown Store",
+        };
+        assert_eq!(
+            super::resolve_game_executable(&detected),
+            Some(std::path::PathBuf::from(
+                "The Finals/Client/Win64/Binaries/Shipping/Release/x64/DiscoveryRuntime.exe"
+            ))
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn generic_executable_resolver_rejects_a_launcher_as_the_only_candidate() {
         let root = std::env::temp_dir().join(format!(
             "amethys-executable-launcher-{}-{}",
