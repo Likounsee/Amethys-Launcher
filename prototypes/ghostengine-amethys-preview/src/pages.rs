@@ -1443,7 +1443,9 @@ mod tests {
         assert_eq!(visible.len(), 256);
         assert_eq!(games[visible[0]].name, "Game 000");
         assert_eq!(games[*visible.last().expect("non-empty library")].name, "Game 255");
-        assert_eq!(visible_games(&view(&games, &statuses, 0, 0, "game 25")).len(), 6);
+        // Search is intentionally substring-based, so it also matches
+        // names such as "Game 025" and "Game 125".
+        assert_eq!(visible_games(&view(&games, &statuses, 0, 0, "game 25")).len(), 9);
     }
 
     #[test]
