@@ -1032,7 +1032,7 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
 
     // ---- Core status
     let mut y = 118;
-    let core_h = if view.core_error.is_some() { 216 } else { 178 };
+    let core_h = if view.core_error.is_some() { 216 } else if lay.compact() { 222 } else { 178 };
     panel(p, mx, y, mw, core_h, 20);
     let (ic, fg, bg, state) = if view.core_error.is_some() {
         (Icon::Alert, AMBER, AMBER_DARK, "Déconnecté")
@@ -1048,18 +1048,22 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
     } else {
         p.text(mx + 88, y + 76, 20, "La bibliothèque est chargée depuis le service local, par IPC.", 12.5, W::Reg, MUT);
     }
-    let by = y + core_h - 24 - BTN_H;
-    let rw = button(p, mx + 24, by, None, "Actualiser la bibliothèque", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::RefreshLibrary));
-    let sx = mx + 24 + rw + 12;
+    let compact = lay.compact();
+    let first_button_y = if compact { y + core_h - 24 - BTN_H * 2 - 8 } else { y + core_h - 24 - BTN_H };
+    let rw = button(p, mx + 24, first_button_y, None, "Actualiser la bibliothèque", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::RefreshLibrary));
+    let sx = if compact { mx + 24 } else { mx + 24 + rw + 12 };
+    let second_button_y = if compact { first_button_y + BTN_H + 8 } else { first_button_y };
     if view.scanning {
         let progress = view
             .progress
             .map(|v| format!("{} / {} · {}", v.completed, v.total, v.source))
             .unwrap_or_else(|| "Analyse en préparation…".to_owned());
-        let cw = button(p, sx, by, None, "Annuler la détection", Some(Icon::Close), Btn::Secondary, PANEL, Some(Action::CancelScan));
-        p.text_fit(sx + cw + 16, by, BTN_H, &progress, 12.0, W::Med, VIO_HI, (mx + mw - 24) - (sx + cw + 16));
+        let cw = button(p, sx, second_button_y, None, "Annuler la détection", Some(Icon::Close), Btn::Secondary, PANEL, Some(Action::CancelScan));
+        if !compact {
+            p.text_fit(sx + cw + 16, second_button_y, BTN_H, &progress, 12.0, W::Med, VIO_HI, (mx + mw - 24) - (sx + cw + 16));
+        }
     } else {
-        button(p, sx, by, None, "Détecter les jeux installés", Some(Icon::Search), Btn::Primary, PANEL, Some(Action::ScanGames));
+        button(p, sx, second_button_y, None, "Détecter les jeux installés", Some(Icon::Search), Btn::Primary, PANEL, Some(Action::ScanGames));
     }
     y += core_h + GAP;
 
@@ -1093,6 +1097,7 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
         ("Tab · Maj+Tab", "Parcourir les éléments"),
         ("Entrée", "Activer l'élément sélectionné"),
         ("Échap", "Annuler, fermer, puis quitter"),
+        ("F11", "Activer ou quitter le plein écran"),
         ("Ctrl+V", "Coller dans un champ de texte"),
     ];
     let sh = 70 + shortcuts.len() as i32 * 38;
