@@ -313,7 +313,8 @@ pub fn sidebar(p: &mut Painter, lay: &Layout, active: Active, info: &SidebarInfo
             p.icon(icon, (sw - 20) / 2, y + 10, 20, if active == item { VIO_HI } else { MUT }, bg);
             p.hit_with(x, y, w, 40, 12, Action::Go(page), true, Hover::Soft);
         }
-        p.circle(sw / 2, vh - 24, 4, if info.core_ok { GREEN } else { AMBER });
+        let status_color = if info.core_loading { VIO_HI } else if info.core_ok { GREEN } else { AMBER };
+        p.circle(sw / 2, vh - 24, 4, status_color);
         return;
     }
 
@@ -328,7 +329,9 @@ pub fn sidebar(p: &mut Painter, lay: &Layout, active: Active, info: &SidebarInfo
     let (fx, fy, fw, fh) = (14, vh - 84, sw - 28, 62);
     p.rrect(fx, fy, fw, fh, 14, PANEL);
     p.rrect_line(fx, fy, fw, fh, 14, alpha(Color::WHITE, 15));
-    let (dot, title, sub) = if info.core_ok {
+    let (dot, title, sub) = if info.core_loading {
+        (VIO_HI, "Connexion à Core", "Chargement de la bibliothèque…".to_owned())
+    } else if info.core_ok {
         (GREEN, "Core connecté", format!("{} en local", plural(info.game_count, "jeu", "jeux")))
     } else {
         (AMBER, "Core hors ligne", "Connexion impossible".to_owned())
@@ -547,7 +550,11 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
     let actions_x = if stack_actions { mx } else if compact { mx + mw - refresh_w - 12 - scan_w } else { tx + search_w + 12 };
     let actions_y = if compact { ty + BTN_H + 12 } else { ty };
     let scan_y = actions_y + if stack_actions { BTN_H + 8 } else { 0 };
-    button(p, actions_x, actions_y, Some(refresh_w), "Actualiser", Some(Icon::Refresh), Btn::Secondary, BG, Some(Action::RefreshLibrary));
+    if view.loading {
+        button_disabled(p, actions_x, actions_y, "Actualiser", Some(Icon::Refresh));
+    } else {
+        button(p, actions_x, actions_y, Some(refresh_w), "Actualiser", Some(Icon::Refresh), Btn::Secondary, BG, Some(Action::RefreshLibrary));
+    }
     if view.scanning {
         button(p, if stack_actions { mx } else { actions_x + refresh_w + 12 }, scan_y, Some(scan_w), scan_label, Some(scan_icon), Btn::Secondary, BG, Some(Action::CancelScan));
     } else {
@@ -1195,7 +1202,11 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
     let first_button_y = if compact { y + core_h - 24 - BTN_H * 2 - 8 } else { y + core_h - 24 - BTN_H };
     let refresh_label = if mw < 340 { "Actualiser" } else { "Actualiser la bibliothèque" };
     let scan_button_label = if mw < 340 { "Détecter" } else { "Détecter les jeux installés" };
-    let rw = button(p, mx + 24, first_button_y, None, refresh_label, Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::RefreshLibrary));
+    let rw = if view.core_loading {
+        button_disabled(p, mx + 24, first_button_y, refresh_label, Some(Icon::Refresh))
+    } else {
+        button(p, mx + 24, first_button_y, None, refresh_label, Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::RefreshLibrary))
+    };
     let sx = if compact { mx + 24 } else { mx + 24 + rw + 12 };
     let second_button_y = if compact { first_button_y + BTN_H + 8 } else { first_button_y };
     if view.scanning {
