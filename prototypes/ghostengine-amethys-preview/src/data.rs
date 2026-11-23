@@ -12,6 +12,8 @@ pub struct Game {
     pub when: &'static str,
 }
 
+/// Compact constructor mirrors the fields of the mockup-only Game record.
+#[allow(clippy::too_many_arguments)]
 const fn g(title: &'static str, store: &'static str, price: &'static str, old: &'static str, off: &'static str, mat: &'static str, why: &'static str, when: &'static str) -> Game {
     Game { title, store, price, old, off, mat, why, when }
 }
