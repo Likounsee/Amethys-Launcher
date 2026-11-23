@@ -4,7 +4,7 @@
 //! create licenses, or imply that a provider supports direct installation.
 
 use amethys_storage::Database;
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -467,10 +467,11 @@ fn validate_offer(offer: &CatalogOffer, provider: &ProviderCapabilities) -> Cata
 fn validate_https_reference(value: &str, label: &str) -> CatalogResult<()> {
     validate_text(value, 2048, label)?;
     let lower = value.to_ascii_lowercase();
+    let authority = value.get(8..).unwrap_or("").split(['/', '?', '#']).next().unwrap_or("");
     if !lower.starts_with("https://")
-        || value[8..].is_empty()
+        || authority.is_empty()
+        || authority.contains('@')
         || value.chars().any(char::is_whitespace)
-        || value.contains('@') && value.split('/').nth(2).is_some_and(|host| host.contains('@'))
     {
         return Err(CatalogError::InvalidDocument(format!(
             "{label} must be an absolute HTTPS URL without whitespace or credentials"
@@ -654,6 +655,23 @@ impl CatalogRepository {
         let catalog_version = i64::try_from(document.catalog_version)
             .map_err(|_| CatalogError::InvalidDocument("catalogue version exceeds SQLite range".into()))?;
         let transaction = database.connection().unchecked_transaction().map_err(db_error)?;
+        let existing: Option<(i64, String)> = transaction.query_row(
+            "SELECT catalog_version, content_sha256 FROM catalog_sources WHERE source_id = ?1",
+            [&descriptor.id],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).optional().map_err(db_error)?;
+        if let Some((previous_version, previous_hash)) = existing {
+            if catalog_version < previous_version {
+                return Err(CatalogError::InvalidDocument(
+                    "catalogue version cannot move backwards".into(),
+                ));
+            }
+            if catalog_version == previous_version && content_sha256 != previous_hash {
+                return Err(CatalogError::InvalidDocument(
+                    "catalogue content changed without incrementing its version".into(),
+                ));
+            }
+        }
         transaction.execute(
             "INSERT INTO catalog_sources (
                 source_id, display_name, source_kind, schema_version, catalog_version, content_sha256, last_synced_at
@@ -792,7 +810,9 @@ impl CatalogRepository {
             })?;
             let distribution = parse_distribution(&mode).map_err(|error| {
                 rusqlite::Error::FromSqlConversionFailure(
-                    6, rusqlite::types::Type::Text, Box::new(error)
+                    6,
+                    rusqlite::types::Type::Text,
+                    Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, error)),
                 )
             })?;
             Ok(CachedCatalogOffer {
@@ -824,6 +844,7 @@ impl CatalogService {
         let descriptor = source.descriptor();
         validate_identifier(&descriptor.id, "catalogue source ID")?;
         validate_text(&descriptor.display_name, 256, "catalogue source name")?;
+        validate_text(&descriptor.kind, 64, "catalogue source kind")?;
         let bytes = source.load_document()?;
         let document = parse_and_validate(&bytes, providers)?;
         if document.catalog_id != descriptor.id {
@@ -1030,6 +1051,39 @@ mod tests {
         let invalid = MemorySource { bytes: b"{invalid".to_vec() };
         assert!(CatalogService::synchronize(&database, &invalid, &providers).is_err());
         assert_eq!(CatalogRepository::search_games(&database, "example", 10).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn catalogue_versions_are_monotonic_and_immutable() {
+        let (_directory, database) = database();
+        let providers = ProviderRegistry::with_baseline_providers();
+        let original = valid_document();
+        let source = MemorySource {
+            bytes: serde_json::to_vec(&original).unwrap(),
+        };
+        CatalogService::synchronize(&database, &source, &providers).unwrap();
+
+        let mut changed_same_version = valid_document();
+        changed_same_version.games[0].title = "Changed without version bump".into();
+        let changed_source = MemorySource {
+            bytes: serde_json::to_vec(&changed_same_version).unwrap(),
+        };
+        assert!(CatalogService::synchronize(&database, &changed_source, &providers).is_err());
+        assert_eq!(
+            CatalogRepository::search_games(&database, "example", 10).unwrap().len(),
+            1
+        );
+
+        let mut next_version = changed_same_version;
+        next_version.catalog_version = 2;
+        let next_source = MemorySource {
+            bytes: serde_json::to_vec(&next_version).unwrap(),
+        };
+        CatalogService::synchronize(&database, &next_source, &providers).unwrap();
+        assert_eq!(
+            CatalogRepository::search_games(&database, "changed", 10).unwrap().len(),
+            1
+        );
     }
 
     #[test]
