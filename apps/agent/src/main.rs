@@ -197,6 +197,93 @@ where
     Ok(())
 }
 
+/// Retries executable discovery for every library entry that still has no configured path.
+///
+/// The filesystem scan runs on Tokio's blocking pool and never holds the
+/// database mutex. Successful results are persisted only if the entry is
+/// still present and still has no executable when the scan completes.
+async fn resolve_missing_game_executables_on_startup(database: Arc<Mutex<Database>>) {
+    let missing_games = {
+        let database = database.lock().await;
+        match database.list_games() {
+            Ok(games) => games
+                .into_iter()
+                .filter(|game| game.executable.is_none())
+                .map(|game| {
+                    (
+                        game.id,
+                        game.name,
+                        game.platform,
+                        game.platform_id,
+                        game.install_path,
+                    )
+                })
+                .collect::<Vec<_>>(),
+            Err(error) => {
+                tracing::warn!(%error, "Unable to list games for startup executable discovery");
+                return;
+            }
+        }
+    };
+
+    if missing_games.is_empty() {
+        tracing::debug!("Startup executable discovery skipped: every game already has an executable");
+        return;
+    }
+
+    let scanned = tokio::task::spawn_blocking(move || {
+        missing_games
+            .into_iter()
+            .filter_map(|(id, name, platform, platform_id, install_path)| {
+                let executable = amethys_discovery::resolve_game_executable_for(
+                    &platform,
+                    platform_id.as_deref(),
+                    std::path::Path::new(&install_path),
+                    &name,
+                )?;
+                Some((id, executable.to_string_lossy().into_owned()))
+            })
+            .collect::<Vec<_>>()
+    })
+    .await;
+
+    let resolved = match scanned {
+        Ok(resolved) => resolved,
+        Err(error) => {
+            tracing::warn!(%error, "Background executable discovery task failed");
+            return;
+        }
+    };
+
+    let mut saved = 0usize;
+    for (id, executable) in resolved {
+        let database = database.lock().await;
+        match database.get_game(&id) {
+            Ok(Some(game)) if game.executable.is_none() => {
+                match database.set_game_executable(&id, &executable) {
+                    Ok(Some(_)) => saved += 1,
+                    Ok(None) => tracing::debug!(game_id = %id, "Game disappeared before executable could be saved"),
+                    Err(error) => tracing::warn!(game_id = %id, %error, "Unable to save discovered game executable"),
+                }
+            }
+            Ok(Some(_)) => {
+                // Preserve a path configured manually while discovery was running.
+            }
+            Ok(None) => {
+                // The game was removed while discovery was running.
+            }
+            Err(error) => {
+                tracing::warn!(game_id = %id, %error, "Unable to recheck game before saving executable");
+            }
+        }
+    }
+
+    tracing::info!(
+        resolved = saved,
+        "Background executable discovery completed"
+    );
+}
+
 /// Maps discovery platform names to stable catalogue provider keys.
 /// Heroic is intentionally excluded: its app names can refer to several stores.
 fn catalogue_provider_key(platform: &str) -> Option<&'static str> {
@@ -331,6 +418,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     #[cfg(not(any(unix, windows)))]
     return Err("Amethys Core IPC is not supported on this platform.".into());
+
+    // Start the retry scan without delaying Core startup or IPC availability.
+    tokio::spawn(resolve_missing_game_executables_on_startup(Arc::clone(&database)));
 
     tracing::info!("Amethys Core is running and waiting for local requests");
 
