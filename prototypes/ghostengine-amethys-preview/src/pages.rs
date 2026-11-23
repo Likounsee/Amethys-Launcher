@@ -1,15 +1,56 @@
-//! The four Amethyst Launcher pages, drawn with GhostEngine primitives only.
-//! Coordinates are absolute pixels of a 1600x900 (16:9) launcher window.
+//! The Amethys Launcher pages, drawn with GhostEngine primitives only.
+//!
+//! Every page adapts to the real window width through [`Layout`]. All text
+//! shown here comes from Amethys Core, the local filesystem or the discovery
+//! service: nothing is invented. Features that do not exist yet are shown as
+//! unavailable instead of being simulated.
 
-use crate::data::*;
 use crate::gfx::*;
+use crate::status::{GameStatus, StatusKind};
+use amethys_ipc::IpcGameEntry;
+use ghostengine::Color;
 
-pub const SIDE_W: i32 = 232;
-pub const MX: i32 = SIDE_W + 40; // main column x
-pub const MW: i32 = 1600 - MX - 40; // main column width (1288)
-const COL: i32 = 196; // 6-column card grid
+pub const SIDE_W: i32 = 240;
+const GAP: i32 = 18;
+const BTN_H: i32 = 40;
+const MIN_CARD_W: i32 = 188;
+const FOOTER_H: i32 = 58;
+/// How many installations discovered by a scan are listed at once.
+const DETECTED_LIMIT: usize = 24;
 
-pub type PageFn = fn(&mut Painter, i32, &State) -> i32;
+// ------------------------------------------------------------------ layout
+/// Geometry of the current window: sidebar on the left, one content column.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Layout {
+    pub w: i32,
+    pub h: i32,
+    /// Left edge of the content column.
+    pub mx: i32,
+    /// Width of the content column.
+    pub mw: i32,
+}
+
+impl Layout {
+    pub fn new(w: i32, h: i32) -> Self {
+        let mx = SIDE_W + 40;
+        Self { w, h, mx, mw: (w - mx - 40).max(520) }
+    }
+
+    /// Narrow windows stack toolbars and columns instead of placing them side by side.
+    pub fn compact(&self) -> bool {
+        self.mw < 1000
+    }
+
+    /// Number of game-card columns for the current width.
+    pub fn columns(&self) -> i32 {
+        ((self.mw + GAP) / (MIN_CARD_W + GAP)).clamp(2, 8)
+    }
+
+    pub fn card_width(&self) -> i32 {
+        let cols = self.columns();
+        (self.mw - GAP * (cols - 1)) / cols
+    }
+}
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum Active {
@@ -18,590 +59,308 @@ pub enum Active {
     Settings,
 }
 
-// ---------------------------------------------------------------- icons
-#[derive(Clone, Copy)]
-enum Icon {
-    Gem,
-    Books,
-    Gear,
-    Search,
+pub struct SidebarInfo {
+    pub core_ok: bool,
+    pub game_count: usize,
 }
 
-fn icon(p: &mut Painter, ic: Icon, x: i32, y: i32, c: ghostengine::Color, bg: ghostengine::Color) {
-    let (xf, yf) = (x as f32, y as f32);
-    match ic {
-        Icon::Gem => p.poly(&[(xf + 5.0, yf + 2.5), (xf + 15.0, yf + 2.5), (xf + 17.5, yf + 7.5), (xf + 10.0, yf + 17.5), (xf + 2.5, yf + 7.5)], c),
-        Icon::Books => {
-            p.rrect(x + 2, y + 3, 4, 14, 1, c);
-            p.rrect(x + 8, y + 3, 4, 14, 1, c);
-            p.poly(&[(xf + 14.0, yf + 4.0), (xf + 18.0, yf + 5.0), (xf + 15.5, yf + 17.5), (xf + 11.5, yf + 16.5)], c);
+// ------------------------------------------------------------- small helpers
+fn plural(n: usize, one: &str, many: &str) -> String {
+    format!("{n} {}", if n > 1 { many } else { one })
+}
+
+fn tone(kind: StatusKind) -> (Color, Color) {
+    match kind {
+        StatusKind::Ready => (GREEN, GREEN_DARK),
+        StatusKind::NeedsExecutable | StatusKind::InvalidExecutable => (AMBER, AMBER_DARK),
+        StatusKind::FolderMissing => (RED, RED_DARK),
+    }
+}
+
+/// Keeps the end of `s` visible (used for text being typed).
+fn tail_fit(p: &mut Painter, s: &str, size: f32, w: W, max_w: i32) -> String {
+    if p.width(s, size, w) <= max_w as f32 {
+        return s.to_owned();
+    }
+    let chars: Vec<char> = s.chars().collect();
+    let mut start = 0;
+    while start < chars.len() {
+        let candidate = format!("…{}", chars[start..].iter().collect::<String>());
+        if p.width(&candidate, size, w) <= max_w as f32 {
+            return candidate;
         }
-        Icon::Gear => {
-            p.rrect(x + 8, y, 4, 3, 1, c);
-            p.rrect(x + 8, y + 17, 4, 3, 1, c);
-            p.rrect(x, y + 8, 3, 4, 1, c);
-            p.rrect(x + 17, y + 8, 3, 4, 1, c);
-            p.circle(x + 10, y + 10, 7, c);
-            p.circle(x + 10, y + 10, 3, bg);
-        }
-        Icon::Search => {
-            p.circle(x + 8, y + 8, 7, c);
-            p.circle(x + 8, y + 8, 5, bg);
-            p.poly(&[(xf + 12.5, yf + 14.0), (xf + 14.0, yf + 12.5), (xf + 19.0, yf + 17.5), (xf + 17.5, yf + 19.0)], c);
-        }
+        start += 1;
     }
+    "…".to_owned()
 }
 
-// ------------------------------------------------------------ components
-fn nav_item(p: &mut Painter, y: i32, label: &str, ic: Icon, active: bool, badge: Option<&str>, go: Option<Page>) {
-    let x = 16;
-    if let Some(pg) = go {
-        p.hit(x, y, 200, 44, 10, Action::Go(pg), true);
-    }
-    let (fg, bg) = if active { (ACT_TXT, ACT) } else { (MUT, SIDE) };
-    if active {
-        p.rrect(x, y, 200, 44, 10, ACT);
-    }
-    icon(p, ic, x + 12, y + 12, fg, bg);
-    p.text(x + 44, y, 44, label, 14.0, W::Med, fg);
-    if let Some(b) = badge {
-        let tw = p.width(b, 11.0, W::Bold).round() as i32;
-        let bw = tw + 16;
-        p.rrect(x + 200 - 12 - bw, y + 12, bw, 20, 10, ACT);
-        p.text(x + 200 - 12 - bw + 8, y + 12, 20, b, 11.0, W::Bold, ACT_TXT);
-    }
+/// Soft violet light at the top of every page.
+fn backdrop(p: &mut Painter, lay: &Layout) {
+    let (x, w) = (SIDE_W, lay.w - SIDE_W);
+    p.glow(x + w / 3, 0, 640, Color::rgba(122, 92, 232, 40), x, 0, w, 460);
+    p.glow(x + w - 120, 60, 420, Color::rgba(70, 120, 235, 16), x, 0, w, 420);
 }
 
-fn gradient_cover(p: &mut Painter, x: i32, y: i32, w: i32, h: i32, r: i32, title: &str, angle: f32, bg: ghostengine::Color) {
-    if p.draw_cover(title, x, y, w, h) {
-        if h >= 100 {
-            p.scrim(x, y, w, h);
-        }
-    } else {
-        let (a, b) = cover(title);
-        p.gradient(x, y, w, h, angle, &[(0.0, hex(a)), (1.0, hex(b))]);
-    }
-    p.round_corners(x, y, w, h, r, bg);
-    p.rrect_line(x, y, w, h, r, ghostengine::Color::rgba(255, 255, 255, 22));
+fn panel(p: &mut Painter, x: i32, y: i32, w: i32, h: i32, r: i32) {
+    p.shadow(x, y, w, h, r, 10, 34);
+    p.rrect(x, y, w, h, r, PANEL);
+    p.rrect_line(x, y, w, h, r, alpha(Color::WHITE, 15));
 }
 
-pub fn sidebar(p: &mut Painter, active: Active, vh: i32) {
-    p.fill(0, 0, SIDE_W, vh, SIDE);
-    p.fill(SIDE_W - 1, 0, 1, vh, LINE);
-    // logo
-    let (lx, ly) = (24.0_f32, 24.0_f32);
-    p.poly(&[(lx + 9.0, ly + 2.0), (lx + 19.0, ly + 10.0), (lx + 9.0, ly + 26.0), (lx - 1.0, ly + 10.0)], VIO);
-    p.poly(&[(lx + 9.0, ly + 2.0), (lx + 13.0, ly + 10.0), (lx + 5.0, ly + 10.0)], hex("#E4D9FF"));
-    p.text(62, 24, 28, "Amethys", 20.0, W::Disp, TXT);
-    // Navigation limited to pages backed by real functionality.
-    nav_item(p, 72, "Boutique", Icon::Gem, active == Active::Store, None, Some(Page::Store));
-    nav_item(p, 118, "Bibliothèque", Icon::Books, active == Active::Library, None, Some(Page::Library));
-    nav_item(p, vh - 132, "Paramètres", Icon::Gear, active == Active::Settings, None, Some(Page::Settings));
-    p.fill(16, vh - 84, 200, 1, LINE);
-    p.circle(46, vh - 54, 18, VIO);
-    p.text(40, vh - 72, 36, "A", 15.0, W::Bold, VIO_DARK);
-    p.text(70, vh - 72, 18, "Amethys", 13.0, W::Semi, TXT);
-    p.text(70, vh - 54, 16, "Session locale", 12.0, W::Reg, MUT);
-}
-
-fn search_bar(p: &mut Painter, y: i32, placeholder: &str, right_note: Option<&str>) {
-    p.rrect(MX, y, 520, 44, 12, PANEL);
-    p.rrect_line(MX, y, 520, 44, 12, LINE);
-    icon(p, Icon::Search, MX + 14, y + 13, MUT, PANEL);
-    p.text(MX + 42, y, 44, placeholder, 14.0, W::Reg, MUT);
-    if let Some(n) = right_note {
-        p.text_right(MX + MW, y, 44, n, 13.0, W::Reg, MUT);
-    }
-}
-
-/// Returns the pill's width.
-fn pill(p: &mut Painter, x: i32, y: i32, label: &str, on: bool, act: Option<Action>) -> i32 {
-    let w = p.width(label, 13.0, if on { W::Semi } else { W::Med }).round() as i32 + 32;
-    if let Some(a) = act {
-        p.hit(x, y, w, 36, 18, a, false);
-    }
-    if on {
-        p.rrect(x, y, w, 36, 18, VIO);
-        p.text(x + 16, y, 36, label, 13.0, W::Semi, VIO_DARK);
-    } else {
-        p.rrect(x, y, w, 36, 18, PANEL);
-        p.rrect_line(x, y, w, 36, 18, LINE);
-        p.text(x + 16, y, 36, label, 13.0, W::Med, SOFT);
-    }
-    w
-}
-
-fn pills_width(p: &mut Painter, label: &str, items: &[(&str, bool)]) -> i32 {
-    let mut w = p.width(label, 13.0, W::Reg).round() as i32 + 14;
-    for (i, (s, on)) in items.iter().enumerate() {
-        w += p.width(s, 13.0, if *on { W::Semi } else { W::Med }).round() as i32 + 32;
-        if i + 1 < items.len() {
-            w += 10;
-        }
-    }
-    w
-}
-
-fn pills_row(p: &mut Painter, x: i32, y: i32, label: &str, items: &[(&str, bool)], act: Option<fn(usize) -> Action>) {
-    let lw = p.text(x, y, 36, label, 13.0, W::Reg, MUT).round() as i32;
-    let mut cx = x + lw + 14;
-    for (i, (s, on)) in items.iter().enumerate() {
-        cx += pill(p, cx, y, s, *on, act.map(|f| f(i))) + 10;
-    }
-}
-
-fn button(p: &mut Painter, x: i32, y: i32, w: Option<i32>, label: &str, primary: bool) -> i32 {
-    let tw = p.width(label, 14.0, W::Semi).round() as i32;
-    let w = w.unwrap_or(tw + 40);
-    if primary {
-        p.rrect(x, y, w, 44, 12, VIO);
-    } else {
-        p.rrect(x, y, w, 44, 12, ghostengine::Color::rgba(14, 12, 19, 140));
-        p.rrect_line(x, y, w, 44, 12, BTN_LINE);
-    }
-    let c = if primary { VIO_DARK } else { TXT };
-    p.text(x + (w - tw) / 2, y, 44, label, 14.0, W::Semi, c);
-    w
-}
-
-fn section_header(p: &mut Painter, x: i32, w: i32, y: i32, title: &str, sub: &str) -> i32 {
-    p.text(x, y, 32, title, 24.0, W::Disp, TXT);
-    p.text_right(x + w, y, 32, sub, 13.0, W::Reg, MUT);
-    y + 48
-}
-
-fn chip(p: &mut Painter, x: i32, y: i32, label: &str) {
-    let w = p.width(label, 11.0, W::Semi).round() as i32 + 16;
-    p.rrect(x, y, w, 22, 11, ghostengine::Color::rgba(10, 8, 16, 200));
-    p.text(x + 8, y, 22, label, 11.0, W::Semi, ghostengine::Color::WHITE);
-}
-
-fn badge_right(p: &mut Painter, right: i32, y: i32, label: &str, bg: ghostengine::Color, fg: ghostengine::Color) {
-    let w = p.width(label, 11.0, W::Bold).round() as i32 + 16;
-    p.rrect(right - w, y, w, 22, 11, bg);
-    p.text(right - w + 8, y, 22, label, 11.0, W::Bold, fg);
-}
-
-fn cover_title(p: &mut Painter, x: i32, y: i32, w: i32, h: i32, title: &str, size: f32) {
-    let lh = (size * 1.1).round() as i32;
-    let lines = p.wrap(title, size, W::Disp, w - 28);
-    let n = lines.len().min(3) as i32;
-    let top = y + h - 14 - n * lh;
-    for (i, l) in lines.iter().take(3).enumerate() {
-        p.text(x + 14, top + i as i32 * lh, lh, l, size, W::Disp, ghostengine::Color::WHITE);
-    }
-}
-
-fn price_row(p: &mut Painter, x: i32, y: i32, g: &Game) {
-    let mut cx = x;
-    if !g.off.is_empty() {
-        let w = p.width(g.off, 12.0, W::Bold).round() as i32 + 12;
-        p.rrect(cx, y, w, 20, 6, GREEN);
-        p.text(cx + 6, y, 20, g.off, 12.0, W::Bold, GREEN_DARK);
-        cx += w + 8;
-    }
-    let pw = p.text(cx, y, 20, g.price, 14.0, W::Semi, TXT).round() as i32;
-    cx += pw + 8;
-    if !g.old.is_empty() {
-        let ow = p.text(cx, y, 20, g.old, 12.0, W::Reg, MUT).round() as i32;
-        p.fill(cx, y + 10, ow, 1, MUT);
-    } else if !g.when.is_empty() {
-        p.text(cx, y, 20, g.when, 13.0, W::Reg, MUT);
-    }
-}
-
+// ---------------------------------------------------------------- components
 #[derive(Clone, Copy, PartialEq)]
-enum Kind {
-    Pick,
-    Deal,
-    Fresh,
-    Explore,
-    Simple,
+enum Btn {
+    Primary,
+    Secondary,
+    Ghost,
+    Danger,
 }
 
-/// Draws one store card at (x, y) with width `w`; returns its height.
-fn card(p: &mut Painter, x: i32, y: i32, w: i32, g: &Game, kind: Kind) -> i32 {
-    let h = w * 4 / 3;
-    gradient_cover(p, x, y, w, h, 14, g.title, 160.0, BG);
-    chip(p, x + 10, y + 10, g.store);
-    if matches!(kind, Kind::Pick | Kind::Deal | Kind::Fresh) {
-        badge_right(p, x + w - 10, y + 10, g.mat, VIO, VIO_DARK);
-    }
-    cover_title(p, x, y, w, h, g.title, 20.0);
-    price_row(p, x, y + h + 10, g);
-    let mut total = h + 10 + 20;
-    if matches!(kind, Kind::Pick | Kind::Explore) {
-        total += 10 + p.paragraph(x, y + total + 10, w, 17, g.why, 12.0, W::Reg, MUT, 3);
-    }
-    p.hit(x, y, w, total, 14, Action::Go(Page::Product), false);
-    total
+fn button_width(p: &mut Painter, label: &str, icon: Option<Icon>) -> i32 {
+    p.width(label, 13.5, W::Semi).round() as i32 + 36 + if icon.is_some() { 24 } else { 0 }
 }
 
-fn card_row(p: &mut Painter, y: i32, games: &[Game], kind: Kind) -> i32 {
-    let mut max_h = 0;
-    for (i, g) in games.iter().enumerate() {
-        let x = MX + i as i32 * (COL + 22);
-        max_h = max_h.max(card(p, x, y, COL, g, kind));
-    }
-    max_h
-}
-
-fn kv_rows(p: &mut Painter, x: i32, y: i32, w: i32, rows: &[(&str, &str)]) -> i32 {
-    for (i, (k, v)) in rows.iter().enumerate() {
-        let ry = y + i as i32 * 41;
-        p.fill(x, ry, w, 1, LINE);
-        p.text(x, ry + 1, 40, k, 14.0, W::Reg, MUT);
-        p.text_right(x + w, ry + 1, 40, v, 14.0, W::Reg, TXT);
-    }
-    rows.len() as i32 * 41
-}
-
-// ------------------------------------------------------------------ pages
-/// Store: the launcher's home page, personalised to the player's tastes.
-pub fn store(p: &mut Painter, vh: i32, _st: &State) -> i32 {
-    let _ = vh;
-    search_bar(p, 24, "Boutique indisponible en version 0.2", Some("Aucun fournisseur connecté"));
-
-    let y = 104;
-    p.rrect(MX, y, MW, 360, 20, PANEL);
-    p.rrect_line(MX, y, MW, 360, 20, LINE);
-    p.gradient(
-        MX + 1,
-        y + 1,
-        MW - 2,
-        5,
-        0.0,
-        &[(0.0, VIO), (1.0, hex("#3b1a5e"))],
-    );
-    p.round_corners(MX, y, MW, 360, 20, PANEL);
-
-    let x = MX + 36;
-    p.text(x, y + 36, 32, "La boutique arrive en version 0.3", 27.0, W::Disp, TXT);
-    p.paragraph(
-        x,
-        y + 88,
-        MW - 72,
-        24,
-        "La version 0.2 se concentre sur votre bibliothèque, vos jeux installés et une interface complète. Les catalogues, prix, promotions et achats ne sont pas encore connectés.",
-        15.0,
-        W::Reg,
-        SOFT,
-        3,
-    );
-
-    let info_y = y + 176;
-    for (index, (title, description)) in [
-        (
-            "Catalogue fiable",
-            "Les jeux et les offres viendront de fournisseurs réels, jamais de produits ou de prix inventés.",
-        ),
-        (
-            "Personnalisation locale",
-            "Vos recommandations seront calculées sur votre PC à partir de votre bibliothèque et de vos préférences.",
-        ),
-        (
-            "Sans serveur payant obligatoire",
-            "Le catalogue public pourra être distribué sous forme de fichiers statiques ; vos données personnelles resteront locales.",
-        ),
-    ]
-    .iter()
-    .enumerate()
-    {
-        let row_y = info_y + index as i32 * 54;
-        p.circle(x + 5, row_y + 9, 4, VIO);
-        p.text(x + 20, row_y, 20, title, 14.0, W::Semi, TXT);
-        p.paragraph(
-            x + 20,
-            row_y + 20,
-            MW - 112,
-            17,
-            description,
-            12.0,
-            W::Reg,
-            MUT,
-            2,
-        );
-    }
-
-    p.text(
-        x,
-        y + 326,
-        18,
-        "Aucun achat, prix ou téléchargement n'est simulé dans cette version.",
-        12.0,
-        W::Med,
-        MUT,
-    );
-    y + 392
-}
-
-/// Library: detected games, status, and the selected game's detail panel.
-pub fn library(p: &mut Painter, vh: i32, st: &State) -> i32 {
-    let _ = vh;
-    p.text(MX, 25, 42, "Bibliothèque", 40.0, W::Disp, TXT);
-    let sx = MX + MW - 520;
-    p.rrect(sx, 24, 520, 44, 12, PANEL);
-    p.rrect_line(sx, 24, 520, 44, 12, LINE);
-    icon(p, Icon::Search, sx + 14, 37, MUT, PANEL);
-    p.text(sx + 42, 24, 44, "Filtrer ma bibliothèque", 14.0, W::Reg, MUT);
-
-    // stats
-    let sw = (MW - 48) / 4;
-    for (i, (n, label)) in [("12", "jeux détectés"), ("4", "boutiques liées"), ("7", "installés"), ("2", "mises à jour")].iter().enumerate() {
-        let x = MX + i as i32 * (sw + 16);
-        p.rrect(x, 96, sw, 86, 14, PANEL);
-        p.rrect_line(x, 96, sw, 86, 14, LINE);
-        p.text(x + 18, 112, 34, n, 28.0, W::Disp, TXT);
-        p.text(x + 18, 150, 16, label, 13.0, W::Reg, MUT);
-    }
-
-    // filters
-    let fy = 210;
-    let mut x = MX;
-    for (i, f) in ["Tous", "Installés", "Favoris", "Steam", "Epic Games", "GOG", "Xbox"].iter().enumerate() {
-        x += pill(p, x, fy, f, i == st.lib_filter, Some(Action::LibFilter(i))) + 10;
-    }
-    p.text_right(MX + MW, fy, 36, "Trier par : dernière session", 13.0, W::Reg, MUT);
-
-    // grid (5 columns) + detail panel
-    let gy = 274;
-    let cw = 172;
-    let items: Vec<&(&str, &str, u8, &str)> = LIBRARY.iter().filter(|e| lib_matches(st.lib_filter, e)).collect();
-    for (i, (title, store, state, played)) in items.iter().map(|e| **e).enumerate() {
-        let (col, row) = (i as i32 % 5, i as i32 / 5);
-        let (x, y) = (MX + col * (cw + 20), gy + row * (254 + 20));
-        let h = cw * 4 / 3;
-        gradient_cover(p, x, y, cw, h, 14, title, 160.0, BG);
-        chip(p, x + 10, y + 10, if store == "Epic Games" { "Epic" } else { store });
-        let (label, bg, fg) = match state {
-            0 => ("Installé", GREEN, GREEN_DARK),
-            1 => ("Mise à jour", AMBER, AMBER_DARK),
-            _ => ("Non installé", ghostengine::Color::rgba(10, 8, 16, 200), ghostengine::Color::WHITE),
-        };
-        badge_right(p, x + cw - 10, y + 10, label, bg, fg);
-        cover_title(p, x, y, cw, h, title, 19.0);
-        if i == 0 {
-            p.rrect_line(x, y, cw, h, 14, VIO);
-            p.rrect_line(x + 1, y + 1, cw - 2, h - 2, 13, VIO);
+/// Draws a button and, when `action` is given, registers its hit region.
+/// Returns the button width.
+#[allow(clippy::too_many_arguments)]
+fn button(p: &mut Painter, x: i32, y: i32, w: Option<i32>, label: &str, icon: Option<Icon>, kind: Btn, bg: Color, action: Option<Action>) -> i32 {
+    let bw = w.unwrap_or_else(|| button_width(p, label, icon));
+    let (ink, icon_bg, hover) = match kind {
+        Btn::Primary => {
+            p.gradient_rrect(x, y, bw, BTN_H, 12, 180.0, &[(0.0, VIO_HI), (1.0, VIO)], bg);
+            (VIO_DARK, VIO, Hover::Glow)
         }
-        p.text(x, y + h + 8, 17, played, 13.0, W::Reg, MUT);
-        p.hit(x, y, cw, h + 25, 14, Action::Go(Page::Product), false);
-    }
-    let rows = ((items.len() as i32 + 4) / 5).max(1);
-    let grid_bottom = gy + rows * (254 + 20) - 20;
-
-    // detail panel: shows the first game of the current filter
-    let (title, store, _, played) = *items[0];
-    let (hours, last) = match played.split_once(" · ") {
-        Some((h, l)) => {
-            let mut c = l.chars();
-            (h.to_string(), c.next().map(|f| f.to_uppercase().collect::<String>() + c.as_str()).unwrap_or_default())
+        Btn::Secondary => {
+            p.rrect(x, y, bw, BTN_H, 12, PANEL_HI);
+            p.rrect_line(x, y, bw, BTN_H, 12, alpha(Color::WHITE, 28));
+            (TXT, PANEL_HI, Hover::Glow)
         }
-        None => ("0 h".to_string(), "Jamais".to_string()),
+        Btn::Ghost => {
+            p.rrect_line(x, y, bw, BTN_H, 12, alpha(Color::WHITE, 30));
+            (SOFT, bg, Hover::Soft)
+        }
+        Btn::Danger => {
+            p.rrect(x, y, bw, BTN_H, 12, RED_DARK);
+            p.rrect_line(x, y, bw, BTN_H, 12, alpha(RED, 110));
+            (RED, RED_DARK, Hover::Danger)
+        }
     };
-    let folder = format!("D:\\Jeux\\{title}");
-    let (px, pw) = (MX + 940 + 28, 320);
-    p.rrect(px, gy, pw, 496, 18, PANEL);
-    p.rrect_line(px, gy, pw, 496, 18, LINE);
-    gradient_cover(p, px + 20, gy + 20, 280, 175, 14, title, 160.0, PANEL);
-    chip(p, px + 30, gy + 30, store);
-    p.text(px + 34, gy + 20 + 175 - 14 - 26, 26, title, 24.0, W::Disp, ghostengine::Color::WHITE);
-    let fy2 = gy + 20 + 175 + 16;
-    let fiche = p.width("Fiche", 14.0, W::Semi).round() as i32 + 40;
-    button(p, px + 20, fy2, Some(280 - 10 - fiche), "Jouer", true);
-    button(p, px + 20 + 280 - fiche, fy2, Some(fiche), "Fiche", false);
-    p.hit(px + 20 + 280 - fiche, fy2, fiche, 44, 12, Action::Go(Page::Product), false);
-    kv_rows(
-        p,
-        px + 20,
-        fy2 + 44 + 16,
-        280,
-        &[("Temps de jeu", hours.as_str()), ("Dernière session", last.as_str()), ("Boutique", store), ("Dossier", folder.as_str()), ("Espace disque", "—")],
-    );
-    grid_bottom.max(gy + 496) + 56
+    let tw = p.width(label, 13.5, W::Semi).round() as i32;
+    let content = tw + if icon.is_some() { 24 } else { 0 };
+    let mut cx = x + (bw - content) / 2;
+    if let Some(ic) = icon {
+        p.icon(ic, cx, y + (BTN_H - 16) / 2, 16, ink, icon_bg);
+        cx += 24;
+    }
+    p.text(cx, y, BTN_H, label, 13.5, W::Semi, ink);
+    if let Some(a) = action {
+        p.hit_with(x, y, bw, BTN_H, 12, a, false, hover);
+    }
+    bw
 }
 
-fn lib_matches(filter: usize, e: &(&str, &str, u8, &str)) -> bool {
-    match filter {
-        0 => true,
-        1 => e.2 < 2,
-        2 => ["Cyberpunk 2077", "The Witcher 3", "Hades", "Celeste"].contains(&e.0),
-        3 => e.1 == "Steam",
-        4 => e.1 == "Epic Games",
-        5 => e.1 == "GOG",
-        _ => e.1 == "Xbox",
+/// A button that cannot be used right now (no hit region).
+fn button_disabled(p: &mut Painter, x: i32, y: i32, label: &str, icon: Option<Icon>) -> i32 {
+    let bw = button_width(p, label, icon);
+    p.rrect(x, y, bw, BTN_H, 12, PANEL_HI);
+    let tw = p.width(label, 13.5, W::Semi).round() as i32;
+    let content = tw + if icon.is_some() { 24 } else { 0 };
+    let mut cx = x + (bw - content) / 2;
+    if let Some(ic) = icon {
+        p.icon(ic, cx, y + (BTN_H - 16) / 2, 16, FAINT, PANEL_HI);
+        cx += 24;
+    }
+    p.text(cx, y, BTN_H, label, 13.5, W::Semi, FAINT);
+    bw
+}
+
+/// Filter pill with an optional count. Returns its width.
+fn pill(p: &mut Painter, x: i32, y: i32, label: &str, count: Option<usize>, on: bool, action: Action) -> i32 {
+    let wt = if on { W::Semi } else { W::Med };
+    let tw = p.width(label, 13.0, wt).round() as i32;
+    let count_text = count.map(|c| c.to_string());
+    let cw = count_text.as_deref().map_or(0, |t| p.width(t, 11.5, W::Semi).round() as i32 + 8);
+    let w = 32 + tw + cw;
+    if on {
+        p.rrect(x, y, w, 34, 17, ACT);
+        p.rrect_line(x, y, w, 34, 17, alpha(VIO, 150));
+    } else {
+        p.rrect(x, y, w, 34, 17, PANEL);
+        p.rrect_line(x, y, w, 34, 17, alpha(Color::WHITE, 22));
+    }
+    p.text(x + 16, y, 34, label, 13.0, wt, if on { VIO_HI } else { SOFT });
+    if let Some(t) = count_text.as_deref() {
+        p.text(x + 16 + tw + 8, y, 34, t, 11.5, W::Semi, if on { alpha(VIO_HI, 190) } else { FAINT });
+    }
+    p.hit(x, y, w, 34, 17, action, false);
+    w
+}
+
+/// Dark translucent label drawn on top of artwork.
+fn chip(p: &mut Painter, x: i32, y: i32, label: &str, max_w: i32) {
+    let text = p.ellipsize(label, 11.0, W::Semi, max_w - 18);
+    let w = p.width(&text, 11.0, W::Semi).round() as i32 + 18;
+    p.rrect(x, y, w, 22, 11, Color::rgba(8, 6, 14, 175));
+    p.text(x + 9, y, 22, &text, 11.0, W::Semi, Color::WHITE);
+}
+
+/// Tinted status pill with a dot. Returns its width.
+fn status_badge(p: &mut Painter, x: i32, y: i32, kind: StatusKind) -> i32 {
+    let (fg, bg) = tone(kind);
+    let label = kind.label();
+    let w = p.width(label, 12.0, W::Semi).round() as i32 + 34;
+    p.rrect(x, y, w, 26, 13, bg);
+    p.rrect_line(x, y, w, 26, 13, alpha(fg, 70));
+    p.circle(x + 14, y + 13, 3, fg);
+    p.text(x + 24, y, 26, label, 12.0, W::Semi, fg);
+    w
+}
+
+fn icon_badge(p: &mut Painter, x: i32, y: i32, size: i32, ic: Icon, fg: Color, bg: Color) {
+    p.rrect(x, y, size, size, size / 3, bg);
+    p.icon(ic, x + size / 4, y + size / 4, size / 2, fg, bg);
+}
+
+/// Big empty state with an optional call to action. Returns the height used.
+#[allow(clippy::too_many_arguments)]
+fn empty_state(p: &mut Painter, x: i32, y: i32, w: i32, ic: Icon, title: &str, description: &str, cta: Option<(&str, Action, Btn)>) -> i32 {
+    let h = if cta.is_some() { 286 } else { 226 };
+    panel(p, x, y, w, h, 20);
+    p.glow(x + w / 2, y + 40, 260, Color::rgba(122, 92, 232, 40), x + 1, y + 1, w - 2, h / 2);
+    p.round_corners(x, y, w, h, 20, BG);
+    let cx = x + w / 2;
+    p.gradient_rrect(cx - 30, y + 32, 60, 60, 20, 135.0, &[(0.0, ACT), (1.0, hex("#1B1432"))], PANEL);
+    p.rrect_line(cx - 30, y + 32, 60, 60, 20, alpha(VIO, 90));
+    p.icon(ic, cx - 14, y + 48, 28, VIO_HI, ACT);
+    p.text_center(x, w, y + 106, 30, title, 20.0, W::Disp, TXT);
+    let dh = p.paragraph_height(w.min(560) - 40, 21, description, 13.5, W::Reg, 3);
+    let lines = p.wrap(description, 13.5, W::Reg, w.min(560) - 40);
+    for (i, line) in lines.iter().take(3).enumerate() {
+        p.text_center(x, w, y + 142 + i as i32 * 21, 21, line, 13.5, W::Reg, MUT);
+    }
+    if let Some((label, action, kind)) = cta {
+        let bw = button_width(p, label, None) + 16;
+        button(p, cx - bw / 2, y + 142 + dh + 18, Some(bw), label, None, kind, PANEL, Some(action));
+    }
+    h
+}
+
+// ------------------------------------------------------------------ sidebar
+#[allow(clippy::too_many_arguments)]
+fn nav_item(p: &mut Painter, y: i32, label: &str, ic: Icon, active: bool, badge: Option<(&str, bool)>, page: Page) {
+    let (x, w, h) = (14, SIDE_W - 28, 44);
+    if active {
+        p.rrect(x, y, w, h, 12, ACT);
+        p.rrect(x, y + 12, 3, 20, 2, VIO);
+    }
+    let bg = if active { ACT } else { SIDE };
+    p.icon(ic, x + 16, y + 12, 20, if active { VIO_HI } else { MUT }, bg);
+    p.text(x + 48, y, h, label, 14.0, if active { W::Semi } else { W::Med }, if active { TXT } else { MUT });
+    if let Some((text, strong)) = badge {
+        let tw = p.width(text, 11.0, W::Semi).round() as i32;
+        let bw = tw + 16;
+        let bx = x + w - 12 - bw;
+        if strong {
+            p.rrect(bx, y + 12, bw, 20, 10, alpha(Color::WHITE, 16));
+            p.text(bx + 8, y + 12, 20, text, 11.0, W::Semi, SOFT);
+        } else {
+            p.rrect_line(bx, y + 12, bw, 20, 10, alpha(Color::WHITE, 36));
+            p.text(bx + 8, y + 12, 20, text, 11.0, W::Semi, FAINT);
+        }
+    }
+    p.hit_with(x, y, w, h, 12, Action::Go(page), true, Hover::Soft);
+}
+
+pub fn sidebar(p: &mut Painter, lay: &Layout, active: Active, info: &SidebarInfo) {
+    let vh = lay.h;
+    p.fill(0, 0, SIDE_W, vh, SIDE);
+    p.fill(SIDE_W - 1, 0, 1, vh, alpha(Color::WHITE, 14));
+    p.glow(0, 0, 260, Color::rgba(122, 92, 232, 38), 0, 0, SIDE_W - 1, 220);
+    p.icon(Icon::Gem, 24, 24, 30, VIO, SIDE);
+    p.text(64, 24, 30, "Amethys", 21.0, W::Disp, TXT);
+
+    p.text(28, 84, 16, "NAVIGATION", 10.5, W::Semi, FAINT);
+    let count = info.game_count.to_string();
+    nav_item(p, 106, "Bibliothèque", Icon::Library, active == Active::Library, Some((&count, true)), Page::Library);
+    nav_item(p, 156, "Boutique", Icon::Gem, active == Active::Store, Some(("Bientôt", false)), Page::Store);
+    nav_item(p, vh - 144, "Paramètres", Icon::Gear, active == Active::Settings, None, Page::Settings);
+
+    let (fx, fy, fw, fh) = (14, vh - 84, SIDE_W - 28, 62);
+    p.rrect(fx, fy, fw, fh, 14, PANEL);
+    p.rrect_line(fx, fy, fw, fh, 14, alpha(Color::WHITE, 15));
+    let (dot, title, sub) = if info.core_ok {
+        (GREEN, "Core connecté", format!("{} en local", plural(info.game_count, "jeu", "jeux")))
+    } else {
+        (AMBER, "Core hors ligne", "Connexion impossible".to_owned())
+    };
+    p.circle(fx + 20, fy + 22, 5, alpha(dot, 70));
+    p.circle(fx + 20, fy + 22, 3, dot);
+    p.text(fx + 34, fy + 11, 22, title, 13.0, W::Semi, TXT);
+    p.text(fx + 34, fy + 33, 18, &sub, 12.0, W::Reg, MUT);
+}
+
+// ---------------------------------------------------------------- toolbar bits
+fn search_field(p: &mut Painter, x: i32, y: i32, w: i32, query: &str, focused: bool) {
+    p.rrect(x, y, w, BTN_H, 12, PANEL_HI);
+    if focused {
+        p.rrect_line(x, y, w, BTN_H, 12, VIO);
+        p.rrect_line(x + 1, y + 1, w - 2, BTN_H - 2, 11, alpha(VIO, 120));
+    } else {
+        p.rrect_line(x, y, w, BTN_H, 12, alpha(Color::WHITE, 24));
+    }
+    p.icon(Icon::Search, x + 14, y + 12, 16, if focused { VIO_HI } else { MUT }, PANEL_HI);
+    let reserve = if query.is_empty() { 0 } else { 34 };
+    let max_w = w - 44 - 14 - reserve;
+    if query.is_empty() {
+        p.text(x + 42, y, BTN_H, "Rechercher un jeu…", 13.5, W::Reg, FAINT);
+        if focused {
+            p.rrect(x + 42, y + 11, 2, 18, 1, VIO_HI);
+        }
+    } else {
+        let shown = tail_fit(p, query, 13.5, W::Reg, max_w);
+        let tw = p.text(x + 42, y, BTN_H, &shown, 13.5, W::Reg, TXT).round() as i32;
+        if focused {
+            p.rrect(x + 43 + tw, y + 11, 2, 18, 1, VIO_HI);
+        }
+    }
+    p.hit_with(x, y, w, BTN_H, 12, Action::FocusLibrarySearch, false, Hover::Soft);
+    if !query.is_empty() {
+        p.icon(Icon::Close, x + w - 30, y + 12, 16, MUT, PANEL_HI);
+        p.hit_with(x + w - 36, y + 6, 28, 28, 14, Action::ClearSearch, false, Hover::Glow);
     }
 }
 
-/// Product page for Cyberpunk 2077: price comparison across linked stores.
-pub fn product(p: &mut Painter, vh: i32, _st: &State) -> i32 {
-    let _ = vh;
-    let bw = p.text(MX, 24, 17, "Boutique", 13.0, W::Reg, SOFT).round() as i32;
-    p.hit(MX, 22, bw, 21, 4, Action::Go(Page::Store), false);
-    p.text(MX + bw, 24, 17, "  /  RPG  /  Cyberpunk 2077", 13.0, W::Reg, MUT);
-
-    // hero
-    let hy = 77;
-    gradient_cover(p, MX, hy, 300, 400, 14, "Cyberpunk 2077", 160.0, BG);
-    chip(p, MX + 10, hy + 10, "Steam · GOG · Epic Games");
-    cover_title(p, MX, hy, 300, 400, "Cyberpunk 2077", 30.0);
-    let rx = MX + 300 + 36;
-    p.text(rx, hy, 17, "CD PROJEKT RED · Sorti le 10 décembre 2020", 13.0, W::Semi, ACT_TXT);
-    p.text(rx, hy + 25, 53, "Cyberpunk 2077", 52.0, W::Disp, ghostengine::Color::WHITE);
-    let mut tx = rx;
-    for t in ["RPG", "Monde ouvert", "Science-fiction", "Solo", "Narratif"] {
-        let w = p.width(t, 13.0, W::Med).round() as i32 + 28;
-        p.rrect(tx, hy + 96, w, 32, 16, PANEL);
-        p.rrect_line(tx, hy + 96, w, 32, 16, LINE);
-        p.text(tx + 14, hy + 96, 32, t, 13.0, W::Med, SOFT);
-        tx += w + 8;
-    }
-    let desc = "Dans Night City, mégalopole saturée de technologie et de pouvoir, vous incarnez V, mercenaire en quête d'un implant qui détient la clé de l'immortalité. Monde ouvert, combats au choix (armes, piratage, mêlée) et un récit qui réagit à vos décisions.";
-    let dh = p.paragraph(rx, hy + 146, 640, 26, desc, 16.0, W::Reg, PALE, 6);
-    let by = hy + 146 + dh + 18;
-    let w1 = button(p, rx, by, None, "Acheter chez GOG · 29,99 €", true);
-    button(p, rx + w1 + 12, by, None, "Ajouter à la liste d'envies", false);
-    let oy = by + 44 + 18;
-    p.rrect(rx, oy, 56, 20, 6, GREEN);
-    p.text(rx + 6, oy, 20, "-50 %", 12.0, W::Bold, GREEN_DARK);
-    p.text(rx + 68, oy, 20, "Meilleur prix actuel parmi les boutiques comparées", 13.0, W::Reg, MUT);
-
-    // price comparison
-    let cy = hy + 400 + 36;
-    p.rrect(MX, cy, MW, 312, 18, PANEL);
-    p.rrect_line(MX, cy, MW, 312, 18, LINE);
-    section_header(p, MX + 24, MW - 48, cy + 24, "Comparer les prix", "Prix d'exemple, à brancher sur les API des boutiques");
-    let offers = [
-        ("GOG", "Sans DRM · meilleur prix", "29,99 €", "59,99 €", "-50 %", true),
-        ("Steam", "Clé liée à votre compte Steam", "35,99 €", "59,99 €", "-40 %", false),
-        ("Epic Games", "Boutique Epic", "41,99 €", "59,99 €", "-30 %", false),
-    ];
-    for (i, (store, note, price, old, off, best)) in offers.iter().enumerate() {
-        let ry = cy + 24 + 32 + 16 + i as i32 * 72;
-        if i > 0 {
-            p.fill(MX + 24, ry, MW - 48, 1, LINE);
+fn sort_control(p: &mut Painter, right: i32, y: i32, active: usize) {
+    let labels = ["Nom", "Plateforme", "État"];
+    let widths: Vec<i32> = labels.iter().map(|l| p.width(l, 12.5, W::Semi).round() as i32 + 26).collect();
+    let total: i32 = widths.iter().sum::<i32>() + 8;
+    let x0 = right - total;
+    let cap_w = p.width("Trier par", 12.5, W::Reg).round() as i32;
+    p.text(x0 - cap_w - 12, y, 34, "Trier par", 12.5, W::Reg, FAINT);
+    p.rrect(x0, y, total, 34, 17, PANEL);
+    p.rrect_line(x0, y, total, 34, 17, alpha(Color::WHITE, 18));
+    let mut sx = x0 + 4;
+    for (i, label) in labels.iter().enumerate() {
+        let sw = widths[i];
+        if i == active {
+            p.rrect(sx, y + 4, sw, 26, 13, ACT);
+            p.rrect_line(sx, y + 4, sw, 26, 13, alpha(VIO, 90));
         }
-        let y = ry + 14;
-        p.text(MX + 24, y + 4, 18, store, 15.0, W::Bold, TXT);
-        p.text(MX + 24, y + 24, 16, note, 13.0, W::Reg, MUT);
-        let btw = p.width("Acheter", 14.0, W::Semi).round() as i32 + 40;
-        let bx = MX + MW - 24 - btw;
-        button(p, bx, y, Some(btw), "Acheter", *best);
-        let px = bx - 16 - 190;
-        p.rrect(px, y + 12, 56, 20, 6, GREEN);
-        p.text(px + 6, y + 12, 20, off, 12.0, W::Bold, GREEN_DARK);
-        let pw = p.text(px + 64, y + 10, 24, price, 18.0, W::Semi, TXT).round() as i32;
-        let ow = p.text(px + 64 + pw + 8, y + 12, 20, old, 12.0, W::Reg, MUT).round() as i32;
-        p.fill(px + 64 + pw + 8, y + 22, ow, 1, MUT);
+        p.text(sx + 13, y + 4, 26, label, 12.5, W::Semi, if i == active { VIO_HI } else { MUT });
+        p.hit_with(sx, y + 4, sw, 26, 13, Action::SetLibrarySort(i), false, Hover::Soft);
+        sx += sw;
     }
-
-    // screenshots + info
-    let sy = cy + 312 + 36;
-    section_header(p, MX, 960, sy, "Aperçus", "Emplacements pour les captures officielles");
-    for i in 0..4 {
-        let x = MX + i * (228 + 16);
-        let y = sy + 48;
-        let shades = [("#3b0f4a", "#0a1f3d"), ("#0a1f3d", "#6b1d7a"), ("#1d2a5a", "#3b0f4a"), ("#4a1d6b", "#0b1b3a")];
-        p.gradient(x, y, 228, 128, 135.0, &[(0.0, hex(shades[i as usize].0)), (1.0, hex(shades[i as usize].1))]);
-        p.round_corners(x, y, 228, 128, 14, BG);
-        p.rrect_line(x, y, 228, 128, 14, ghostengine::Color::rgba(255, 255, 255, 22));
-        p.text(x + 12, y + 128 - 12 - 16, 16, &format!("Capture {}", i + 1), 12.0, W::Reg, hex("#E6DEF5"));
-    }
-    let ax = MX + 960 + 28;
-    p.rrect(ax, sy, 300, 285, 18, PANEL);
-    p.rrect_line(ax, sy, 300, 285, 18, LINE);
-    p.text(ax + 24, sy + 24, 24, "Informations", 20.0, W::Disp, TXT);
-    kv_rows(
-        p,
-        ax + 24,
-        sy + 24 + 24 + 8,
-        252,
-        &[("Développeur", "CD PROJEKT RED"), ("Genre", "RPG d'action"), ("Plateformes", "PC"), ("Langues", "Interface en français"), ("Extension", "Phantom Liberty")],
-    );
-
-    // similar
-    let my = sy + 285 + 36;
-    let y = section_header(p, MX, MW, my, "Dans le même esprit", "Selon vos goûts");
-    let h = card_row(p, y, &similar(), Kind::Simple);
-    y + h + 56
 }
 
-/// Settings: linked stores moved here from the sidebar, plus local detection.
-pub fn settings(p: &mut Painter, vh: i32, _st: &State) -> i32 {
-    let _ = vh;
-    p.text(MX, 32, 42, "Paramètres", 40.0, W::Disp, TXT);
-    // sub navigation
-    for (i, s) in ["Général", "Boutiques liées", "Détection des jeux", "Goûts et recommandations", "Apparence", "À propos"].iter().enumerate() {
-        let y = 102 + i as i32 * 46;
-        let on = i == 1;
-        if on {
-            p.rrect(MX, y, 220, 44, 10, ACT);
-        }
-        p.text(MX + 14, y, 44, s, 14.0, W::Med, if on { ACT_TXT } else { MUT });
-    }
-    let cx = MX + 220 + 36;
-    let cw = MW - 256;
-
-    // linked stores
-    let y = section_header(p, cx, cw, 102, "Boutiques liées", "Leurs jeux alimentent la boutique et la bibliothèque");
-    p.rrect(cx, y, cw, 400, 18, PANEL);
-    p.rrect_line(cx, y, cw, 400, 18, LINE);
-    let stores = [
-        ("Steam", "S", "Dernière synchro il y a 4 min · 5 jeux"),
-        ("Epic Games", "E", "Dernière synchro il y a 4 min · 3 jeux"),
-        ("GOG", "G", "Dernière synchro il y a 4 min · 3 jeux"),
-        ("Xbox", "X", "Dernière synchro il y a 4 min · 2 jeux"),
-    ];
-    for (i, (name, letter, sync)) in stores.iter().enumerate() {
-        let ry = y + 8 + i as i32 * 96;
-        if i > 0 {
-            p.fill(cx + 24, ry, cw - 48, 1, LINE);
-        }
-        let mid = ry + 48;
-        p.rrect(cx + 24, mid - 22, 44, 44, 12, ACT);
-        let lw = p.width(letter, 18.0, W::Disp).round() as i32;
-        p.text(cx + 24 + (44 - lw) / 2, mid - 22, 44, letter, 18.0, W::Disp, ACT_TXT);
-        let tx = cx + 24 + 44 + 16;
-        p.text(tx, mid - 34, 20, name, 16.0, W::Semi, TXT);
-        p.circle(tx + 4, mid - 4, 4, GREEN);
-        p.text(tx + 14, mid - 12, 16, "Connecté", 12.0, W::Semi, GREEN);
-        p.text(tx, mid + 8, 17, sync, 13.0, W::Reg, MUT);
-        let dw = p.width("Déconnecter", 14.0, W::Semi).round() as i32 + 40;
-        let rw = p.width("Resynchroniser", 14.0, W::Semi).round() as i32 + 40;
-        let dx = cx + cw - 24 - dw;
-        button(p, dx, mid - 22, Some(dw), "Déconnecter", false);
-        button(p, dx - 16 - rw, mid - 22, Some(rw), "Resynchroniser", false);
-    }
-    button(p, cx, y + 400 + 16, None, "Lier une boutique", true);
-
-    // local detection
-    let y2 = y + 400 + 16 + 44 + 32;
-    let y2b = section_header(p, cx, cw, y2, "Détection locale", "Dossiers analysés pour trouver les jeux installés");
-    p.rrect(cx, y2b, cw, 256, 18, PANEL);
-    p.rrect_line(cx, y2b, cw, 256, 18, LINE);
-    let folders = [
-        ("D:\\Jeux", "Analysé automatiquement au démarrage"),
-        ("C:\\Program Files (x86)\\Steam\\steamapps", "Dossier détecté via la boutique liée"),
-        ("C:\\Games\\GOG Galaxy", "Dossier détecté via la boutique liée"),
-    ];
-    for (i, (path, note)) in folders.iter().enumerate() {
-        let ry = y2b + 8 + i as i32 * 80;
-        if i > 0 {
-            p.fill(cx + 24, ry, cw - 48, 1, LINE);
-        }
-        let mid = ry + 40;
-        p.text(cx + 24, mid - 20, 18, path, 15.0, W::Semi, TXT);
-        p.text(cx + 24, mid + 2, 17, note, 13.0, W::Reg, MUT);
-        let rw = p.width("Retirer", 14.0, W::Semi).round() as i32 + 40;
-        button(p, cx + cw - 24 - rw, mid - 22, Some(rw), "Retirer", false);
-    }
-    button(p, cx, y2b + 256 + 16, None, "Ajouter un dossier", false);
-    y2b + 256 + 16 + 44 + 56
+fn sort_width(p: &mut Painter) -> i32 {
+    let labels = ["Nom", "Plateforme", "État"];
+    let inner: i32 = labels.iter().map(|l| p.width(l, 12.5, W::Semi).round() as i32 + 26).sum();
+    inner + 8 + p.width("Trier par", 12.5, W::Reg).round() as i32 + 12
 }
 
-
+// ------------------------------------------------------------- library data
 /// Matches every search term against the actual metadata stored for a game.
-fn library_matches_query(game: &amethys_ipc::IpcGameEntry, query: &str) -> bool {
+pub fn library_matches_query(game: &IpcGameEntry, query: &str) -> bool {
     let terms = query.split_whitespace().map(str::to_lowercase).collect::<Vec<_>>();
     if terms.is_empty() {
         return true;
@@ -619,7 +378,7 @@ fn library_matches_query(game: &amethys_ipc::IpcGameEntry, query: &str) -> bool 
 }
 
 /// Returns distinct, non-empty platform names in case-insensitive display order.
-fn library_platforms(games: &[amethys_ipc::IpcGameEntry]) -> Vec<String> {
+pub fn library_platforms(games: &[IpcGameEntry]) -> Vec<String> {
     let mut platforms = Vec::new();
     for platform in games.iter().map(|game| game.platform.trim()).filter(|value| !value.is_empty()) {
         if !platforms.iter().any(|known: &String| known.eq_ignore_ascii_case(platform)) {
@@ -630,562 +389,789 @@ fn library_platforms(games: &[amethys_ipc::IpcGameEntry]) -> Vec<String> {
     platforms
 }
 
-/// Real library page backed by entries returned by the Amethys Core IPC service.
-/// Real library page backed by entries returned by the Amethys Core IPC service.
-pub fn library_live(
-    p: &mut Painter,
-    _vh: i32,
-    games: &[amethys_ipc::IpcGameEntry],
-    detected: &[amethys_discovery::DetectedGame],
-    scan_in_progress: bool,
-    scan_progress: Option<&amethys_discovery::DiscoveryProgress>,
-    selected_filter: usize,
-    sort_mode: usize,
-    search_query: &str,
-    search_focused: bool,
-    core_error: Option<&str>,
-    notice: Option<&str>,
-) -> i32 {
-    p.text(MX, 25, 42, "Bibliothèque", 40.0, W::Disp, TXT);
-    let search_x = MX + MW - 500;
-    p.rrect(search_x, 24, 330, 44, 12, PANEL);
-    p.rrect_line(search_x, 24, 330, 44, 12, if search_focused { VIO } else { LINE });
-    let platforms = library_platforms(games);
-    let active_filter = if selected_filter <= platforms.len() { selected_filter } else { 0 };
-    let selected_platform = active_filter.checked_sub(1)
-        .and_then(|index| platforms.get(index)).map(String::as_str);
-    let mut visible = games.iter().enumerate()
-        .filter(|(_, game)| selected_platform.is_none_or(|platform| game.platform.trim().eq_ignore_ascii_case(platform)))
-        .filter(|(_, game)| library_matches_query(game, search_query))
-        .collect::<Vec<_>>();
-    visible.sort_by(|(_, left), (_, right)| {
-        let ordering = match sort_mode % 3 {
-            0 => left.name.to_lowercase().cmp(&right.name.to_lowercase()),
-            1 => left.platform.to_lowercase().cmp(&right.platform.to_lowercase()),
-            _ => crate::core_client::can_launch(right).cmp(&crate::core_client::can_launch(left)),
+pub struct LibraryView<'a> {
+    pub games: &'a [IpcGameEntry],
+    pub statuses: &'a [GameStatus],
+    pub detected: &'a [amethys_discovery::DetectedGame],
+    pub scanning: bool,
+    pub progress: Option<&'a amethys_discovery::DiscoveryProgress>,
+    /// `Some(n)` once a scan has finished: n installations were found.
+    pub scan_found: Option<usize>,
+    pub filter: usize,
+    pub sort: usize,
+    pub query: &'a str,
+    pub search_focused: bool,
+    pub core_error: Option<&'a str>,
+    /// Maximum number of cards drawn before "Afficher plus".
+    pub limit: usize,
+}
+
+/// Indices of the games to show, filtered then sorted. Pure and testable.
+pub fn visible_games(view: &LibraryView) -> Vec<usize> {
+    let platforms = library_platforms(view.games);
+    let active = if view.filter <= platforms.len() { view.filter } else { 0 };
+    let selected = active.checked_sub(1).and_then(|i| platforms.get(i)).map(String::as_str);
+    let rank = |i: usize| view.statuses.get(i).map_or(9, |s| s.kind.rank());
+    let mut visible: Vec<usize> = (0..view.games.len())
+        .filter(|&i| selected.is_none_or(|pl| view.games[i].platform.trim().eq_ignore_ascii_case(pl)))
+        .filter(|&i| library_matches_query(&view.games[i], view.query))
+        .collect();
+    visible.sort_by(|&a, &b| {
+        let (ga, gb) = (&view.games[a], &view.games[b]);
+        let ordering = match view.sort % 3 {
+            0 => ga.name.to_lowercase().cmp(&gb.name.to_lowercase()),
+            1 => ga.platform.to_lowercase().cmp(&gb.platform.to_lowercase()),
+            _ => rank(a).cmp(&rank(b)),
         };
-        ordering.then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+        ordering.then_with(|| ga.name.to_lowercase().cmp(&gb.name.to_lowercase()))
     });
+    visible
+}
 
-    p.circle(search_x + 23, 46, 7, MUT);
-    p.circle(search_x + 23, 46, 5, PANEL);
-    p.rrect(search_x + 28, 51, 10, 3, 1, MUT);
-    let display_query = search_query.chars().take(30).collect::<String>();
-    let search_label = if display_query.is_empty() { "Rechercher un jeu…" } else { display_query.as_str() };
-    p.text(search_x + 44, 24, 44, search_label, 13.0, W::Reg, if search_query.is_empty() { MUT } else { TXT });
-    p.hit(search_x, 24, 330, 44, 12, Action::FocusLibrarySearch, false);
-    let refresh_x = MX + MW - 156;
-    button(p, refresh_x, 24, Some(156), "Actualiser", false);
-    p.hit(refresh_x, 24, 156, 44, 12, Action::RefreshLibrary, false);
+// -------------------------------------------------------------- game card
+fn game_card(p: &mut Painter, x: i32, y: i32, cw: i32, ch: i32, index: usize, game: &IpcGameEntry, status: Option<&GameStatus>) {
+    let total_h = ch + FOOTER_H;
+    let kind = status.map_or(StatusKind::NeedsExecutable, |s| s.kind);
+    p.shadow(x, y, cw, total_h, 14, 9, 40);
+    p.fill(x, y, cw, total_h, PANEL);
+    let artwork_id = game.catalogue_game_id.as_deref().unwrap_or(&game.id);
+    p.cover_or_placeholder(artwork_id, &game.id, &game.name, x, y, cw, ch);
+    p.scrim(x, y, cw, ch, 0.62, 225);
 
-    p.text(MX, 76, 22, &format!("{} jeu(x) affiché(s) · {} au total", visible.len(), games.len()), 14.0, W::Reg, MUT);
-    let scan_x = MX + MW - 180;
-    if scan_in_progress {
-        let progress_label = scan_progress.map(|progress| format!("{} / {} · {}", progress.completed, progress.total, progress.source))
-            .unwrap_or_else(|| "Préparation de l'analyse…".to_owned());
-        p.text(MX, 102, 20, &progress_label, 11.0, W::Med, VIO);
-        let cancel_x = scan_x + 8;
-        button(p, cancel_x, 68, Some(164), "Annuler", false);
-        p.hit(cancel_x, 68, 164, 44, 12, Action::CancelScan, false);
+    chip(p, x + 10, y + 10, &game.platform, cw - 60);
+    if kind != StatusKind::Ready {
+        let (fg, _) = tone(kind);
+        p.circle(x + cw - 21, y + 21, 11, Color::rgba(8, 6, 14, 200));
+        p.icon(Icon::Alert, x + cw - 27, y + 15, 12, fg, Color::rgba(8, 6, 14, 255));
+    }
+    let lh = 20;
+    let lines = p.paragraph_height(cw - 28, lh, &game.name, 16.0, W::Disp, 2);
+    p.paragraph(x + 14, y + ch - 14 - lines, cw - 28, lh, &game.name, 16.0, W::Disp, Color::WHITE, 2);
+
+    let (fg, _) = tone(kind);
+    let fy = y + ch;
+    p.circle(x + 18, fy + 22, 4, fg);
+    p.text(x + 29, fy + 12, 20, kind.label(), 12.5, W::Semi, fg);
+    let path = p.ellipsize_path(&game.install_path, 11.0, W::Reg, cw - 32 - 44);
+    p.text(x + 16, fy + 35, 16, &path, 11.0, W::Reg, FAINT);
+
+    p.round_corners(x, y, cw, total_h, 14, BG);
+    p.rrect_line(x, y, cw, total_h, 14, alpha(Color::WHITE, 20));
+    p.hit_with(x, y, cw, total_h, 14, Action::SelectGame(index), false, Hover::Card);
+    if kind == StatusKind::Ready {
+        let (bx, by) = (x + cw - 14 - 32, fy + 10);
+        p.circle(bx + 16, by + 16, 16, VIO);
+        p.icon(Icon::Play, bx + 9, by + 9, 14, VIO_DARK, VIO);
+        p.hit_with(bx - 2, by - 2, 36, 36, 18, Action::LaunchGame(index), false, Hover::Glow);
+    }
+}
+
+// ----------------------------------------------------------------- library
+pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
+    backdrop(p, lay);
+    let (mx, mw) = (lay.mx, lay.mw);
+    let compact = lay.compact();
+    let games = view.games;
+    let ready = view.statuses.iter().filter(|s| s.kind == StatusKind::Ready).count();
+
+    // ---- header
+    p.text(mx, 28, 42, "Bibliothèque", 34.0, W::Disp, TXT);
+    let subtitle = if games.is_empty() {
+        "Aucun jeu enregistré pour le moment".to_owned()
     } else {
-        button(p, scan_x, 68, Some(180), "Détecter les jeux", true);
-        p.hit(scan_x, 68, 180, 44, 12, Action::ScanGames, false);
-    }
+        format!("{} · {}", plural(games.len(), "jeu", "jeux"), format!("{} {}", ready, if ready > 1 { "prêts à lancer" } else { "prêt à lancer" }))
+    };
+    p.text(mx, 72, 22, &subtitle, 13.5, W::Reg, MUT);
 
-    let mut filter_x = MX;
-    let mut filter_y = 128;
-    let all_width = p.width("Tous", 13.0, W::Semi).round() as i32 + 32;
-    let _ = pill(p, filter_x, filter_y, "Tous", active_filter == 0, Some(Action::LibFilter(0)));
-    filter_x += all_width + 8;
-    for (index, platform) in platforms.iter().enumerate() {
-        let width = p.width(platform, 13.0, if active_filter == index + 1 { W::Semi } else { W::Med }).round() as i32 + 32;
-        if filter_x + width > MX + MW {
-            filter_x = MX;
-            filter_y += 42;
-        }
-        let _ = pill(p, filter_x, filter_y, platform, active_filter == index + 1, Some(Action::LibFilter(index + 1)));
-        filter_x += width + 8;
+    // ---- toolbar: search, refresh, detect
+    let refresh_w = button_width(p, "Actualiser", Some(Icon::Refresh));
+    let scan_label = if view.scanning { "Annuler" } else { "Détecter les jeux" };
+    let scan_icon = if view.scanning { Icon::Close } else { Icon::Search };
+    let scan_w = button_width(p, scan_label, Some(scan_icon));
+    let search_w = if compact { (mw - refresh_w - scan_w - 24).max(200) } else { 300 };
+    let toolbar_w = search_w + 12 + refresh_w + 12 + scan_w;
+    let (tx, ty) = if compact { (mx, 108) } else { (mx + mw - toolbar_w, 30) };
+    search_field(p, tx, ty, search_w, view.query, view.search_focused);
+    button(p, tx + search_w + 12, ty, Some(refresh_w), "Actualiser", Some(Icon::Refresh), Btn::Secondary, BG, Some(Action::RefreshLibrary));
+    if view.scanning {
+        button(p, tx + search_w + 12 + refresh_w + 12, ty, Some(scan_w), scan_label, Some(scan_icon), Btn::Secondary, BG, Some(Action::CancelScan));
+    } else {
+        button(p, tx + search_w + 12 + refresh_w + 12, ty, Some(scan_w), scan_label, Some(scan_icon), Btn::Primary, BG, Some(Action::ScanGames));
     }
-    let sort_labels = ["Nom", "Plateforme", "État"];
-    let sort_label = sort_labels[sort_mode % sort_labels.len()];
-    let sort_x = MX + MW - 184;
-    p.text_right(MX + MW - 42, filter_y + 4, 28, &format!("Trier : {sort_label}  ↻"), 12.0, W::Med, SOFT);
-    p.hit(sort_x, filter_y, 184, 34, 8, Action::CycleLibrarySort, false);
-    let content_y = filter_y + 50;
-    if let Some(error) = core_error {
-        p.rrect(MX, content_y, MW, 100, 14, PANEL);
-        p.rrect_line(MX, content_y, MW, 100, 14, LINE);
-        p.text(MX + 22, content_y + 14, 24, "Connexion à Amethys Core impossible", 18.0, W::Semi, AMBER);
-        p.paragraph(MX + 22, content_y + 46, MW - 44, 18, error, 13.0, W::Reg, MUT, 2);
-    }
+    let mut y = if compact { ty + BTN_H + 22 } else { 118 };
 
-    let mut y = content_y + if core_error.is_some() { 116 } else { 0 };
-    if visible.is_empty() {
-        p.rrect(MX, y, MW, 116, 14, PANEL);
-        p.rrect_line(MX, y, MW, 116, 14, LINE);
-        let title = if games.is_empty() { "Votre bibliothèque est vide" }
-            else if !search_query.trim().is_empty() { "Aucun résultat" }
-            else { "Aucun jeu pour ce filtre" };
-        p.text(MX + 22, y + 16, 26, title, 20.0, W::Semi, TXT);
-        let description = if games.is_empty() {
-            "Lancez la détection pour rechercher les jeux installés sur vos plateformes prises en charge."
-        } else if !search_query.trim().is_empty() {
-            "Aucun jeu ne correspond à votre recherche. Essayez un autre nom ou une autre plateforme."
-        } else {
-            "Aucun jeu enregistré ne correspond à cette plateforme. Choisissez « Tous » pour tout afficher."
+    // ---- scan progress
+    if view.scanning {
+        panel(p, mx, y, mw, 78, 16);
+        p.text(mx + 22, y + 14, 22, "Détection des jeux installés", 14.0, W::Semi, TXT);
+        let (label, ratio) = match view.progress {
+            Some(pr) => (
+                format!("{} · {}/{} sources · {} trouvé(s)", pr.source, pr.completed, pr.total, pr.found),
+                if pr.total > 0 { pr.completed as f32 / pr.total as f32 } else { 0.0 },
+            ),
+            None => ("Préparation de l'analyse…".to_owned(), 0.0),
         };
-        p.paragraph(MX + 22, y + 52, MW - 44, 18, description, 13.0, W::Reg, MUT, 3);
-        if let Some(message) = notice {
-            p.paragraph(MX + 22, y + 88, MW - 44, 16, message, 11.0, W::Med, if message.starts_with("Import impossible") || message.starts_with("Échec") { AMBER } else { GREEN }, 2);
+        let label = p.ellipsize(&label, 12.0, W::Reg, mw - 44);
+        p.text(mx + 22, y + 36, 18, &label, 12.0, W::Reg, MUT);
+        let bar_w = mw - 44;
+        p.rrect(mx + 22, y + 60, bar_w, 6, 3, alpha(Color::WHITE, 18));
+        let fill = ((bar_w as f32 * ratio.clamp(0.0, 1.0)) as i32).max(if view.progress.is_some() { 10 } else { 0 });
+        if fill > 0 {
+            p.gradient_rrect(mx + 22, y + 60, fill, 6, 3, 90.0, &[(0.0, VIO_LO), (1.0, VIO_HI)], PANEL);
         }
-        y += 136;
-    } else {
-        if let Some(message) = notice {
-            let color = if message.starts_with("Échec") || message.starts_with("Impossible") || message.starts_with("Import impossible") { AMBER } else { GREEN };
-            p.paragraph(MX, y, MW, 18, message, 12.0, W::Med, color, 2);
-            y += 30;
-        }
-        let columns = 4_i32;
-        let gap = 18_i32;
-        let card_w = (MW - gap * (columns - 1)) / columns;
-        let card_h = 276_i32;
-        for (visible_index, (index, game)) in visible.iter().copied().enumerate() {
-            let col = visible_index as i32 % columns;
-            let row = visible_index as i32 / columns;
-            let x = MX + col * (card_w + gap);
-            let cy = y + row * (card_h + gap);
-            let exists = std::path::Path::new(&game.install_path).is_dir();
-            let launchable = crate::core_client::can_launch(game);
-            // Artwork-first library card, matching the visual language of the
-            // original concept while keeping every label backed by Core data.
-            p.rrect(x, cy, card_w, card_h, 14, PANEL);
-            let artwork_id = game.catalogue_game_id.as_deref().unwrap_or(&game.id);
-            if !p.draw_cover_for_game(artwork_id, &game.id, &game.name, x, cy, card_w, 150) {
-                let (top, bottom) = cover(&game.name);
-                p.gradient(x, cy, card_w, 150, 160.0, &[(0.0, hex(top)), (1.0, hex(bottom))]);
-            }
-            p.round_corners(x, cy, card_w, 150, 14, PANEL);
-            p.rrect_line(x, cy, card_w, 150, 14, ghostengine::Color::rgba(255, 255, 255, 22));
-            chip(p, x + 12, cy + 12, &game.platform);
-            let (status, color, status_bg) = if !exists {
-                ("Dossier introuvable", AMBER, AMBER_DARK)
-            } else if launchable {
-                ("Prêt à lancer", GREEN, GREEN_DARK)
-            } else if game.executable.is_some() {
-                ("Exécutable invalide", AMBER, AMBER_DARK)
-            } else {
-                ("À configurer", AMBER, AMBER_DARK)
-            };
-            badge_right(p, x + card_w - 12, cy + 12, status, status_bg, color);
-            cover_title(p, x + 2, cy, card_w - 4, 150, &game.name, 19.0);
-            p.fill(x + 1, cy + 150, card_w - 2, card_h - 151, PANEL);
-            p.paragraph(x + 14, cy + 158, card_w - 28, 16, &game.install_path, 10.0, W::Reg, MUT, 2);
-            p.hit(x, cy, card_w, 150, 14, Action::SelectGame(index), false);
-            let remove_x = x + card_w - 174;
-            p.rrect(remove_x, cy + 226, 72, 30, 8, ACT);
-            p.rrect_line(remove_x, cy + 226, 72, 30, 8, LINE);
-            p.text(remove_x + 12, cy + 226, 30, "Retirer", 12.0, W::Med, SOFT);
-            p.hit(remove_x, cy + 226, 72, 30, 8, Action::RemoveGame(index), false);
-            if launchable {
-                let launch_x = x + card_w - 94;
-                p.rrect(launch_x, cy + 226, 80, 30, 8, VIO);
-                p.text(launch_x + 14, cy + 226, 30, "Lancer", 12.0, W::Semi, VIO_DARK);
-                p.hit(launch_x, cy + 226, 80, 30, 8, Action::LaunchGame(index), false);
-            }
-            p.rrect_line(x, cy, card_w, card_h, 14, LINE);
-        }
-        let rows = (visible.len() as i32 + columns - 1) / columns;
-        y += rows * (card_h + gap) + 24;
+        y += 78 + GAP;
     }
 
-    if !detected.is_empty() {
-        p.text(MX, y + 8, 28, "Installations détectées", 22.0, W::Disp, TXT);
-        p.text_right(MX + MW, y + 8, 28, &format!("{} à importer", detected.len()), 13.0, W::Reg, MUT);
-        y += 48;
-        for (index, game) in detected.iter().take(24).enumerate() {
-            p.rrect(MX, y, MW, 72, 12, PANEL);
-            p.rrect_line(MX, y, MW, 72, 12, LINE);
-            p.text(MX + 16, y + 8, 22, &game.name, 15.0, W::Semi, TXT);
-            p.text(MX + 16, y + 34, 18, game.platform, 12.0, W::Med, VIO);
-            p.paragraph(MX + 160, y + 32, MW - 320, 18, &game.install_path.to_string_lossy(), 11.0, W::Reg, MUT, 1);
-            let import_x = MX + MW - 132;
-            button(p, import_x, y + 14, Some(116), "Importer", true);
-            p.hit(import_x, y + 14, 116, 44, 12, Action::ImportDetectedGame(index), false);
-            y += 82;
-        }
-        if detected.len() > 24 {
-            p.text(MX, y + 2, 20, &format!("24 premières installations affichées sur {}. Importez-les pour faire apparaître les suivantes.", detected.len()), 12.0, W::Reg, MUT);
-            y += 26;
-        }
-    } else if notice.is_some_and(|message| message.contains("détectée(s) à importer")) {
-        p.rrect(MX, y + 8, MW, 76, 12, PANEL);
-        p.text(MX + 18, y + 8, 76, "Aucune nouvelle installation à importer.", 14.0, W::Med, GREEN);
-        y += 96;
+    // ---- Core error
+    if let Some(error) = view.core_error {
+        let msg_h = p.paragraph_height(mw - 200, 19, error, 12.5, W::Reg, 3);
+        let h = (msg_h + 62).max(92);
+        panel(p, mx, y, mw, h, 16);
+        icon_badge(p, mx + 20, y + 20, 44, Icon::Alert, AMBER, AMBER_DARK);
+        p.text(mx + 80, y + 16, 24, "Connexion à Amethys Core impossible", 16.0, W::Semi, TXT);
+        p.paragraph(mx + 80, y + 44, mw - 240, 19, error, 12.5, W::Reg, MUT, 3);
+        button(p, mx + mw - 20 - 120, y + (h - BTN_H) / 2, Some(120), "Réessayer", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::RefreshLibrary));
+        y += h + GAP;
     }
-    y + 24
+
+    // ---- stat tiles
+    if !games.is_empty() {
+        let count = |kinds: &[StatusKind]| view.statuses.iter().filter(|s| kinds.contains(&s.kind)).count();
+        let tiles = [
+            ("Jeux", games.len(), VIO),
+            ("Prêts à lancer", ready, GREEN),
+            ("À configurer", count(&[StatusKind::NeedsExecutable, StatusKind::InvalidExecutable]), AMBER),
+            ("Dossiers introuvables", count(&[StatusKind::FolderMissing]), RED),
+        ];
+        let per_row = if compact { 2 } else { 4 };
+        let tw = (mw - GAP * (per_row - 1)) / per_row;
+        for (i, (label, n, color)) in tiles.iter().enumerate() {
+            let (col, row) = (i as i32 % per_row, i as i32 / per_row);
+            let (x, ty) = (mx + col * (tw + GAP), y + row * (78 + 12));
+            panel(p, x, ty, tw, 78, 16);
+            p.circle(x + 22, ty + 22, 4, *color);
+            p.text(x + 34, ty + 12, 20, label, 12.5, W::Med, MUT);
+            p.text(x + 20, ty + 34, 38, &n.to_string(), 28.0, W::Disp, TXT);
+        }
+        let rows = (tiles.len() as i32 + per_row - 1) / per_row;
+        y += rows * 78 + (rows - 1) * 12 + 24;
+    }
+
+    // ---- filters and sort
+    if !games.is_empty() {
+        let platforms = library_platforms(games);
+        let active = if view.filter <= platforms.len() { view.filter } else { 0 };
+        let sort_w = sort_width(p);
+        let avail = if compact { mw } else { mw - sort_w - 24 };
+        let (mut fx, mut fy) = (mx, y);
+        let w_all = pill(p, fx, fy, "Tous", Some(games.len()), active == 0, Action::LibFilter(0));
+        fx += w_all + 8;
+        for (i, platform) in platforms.iter().enumerate() {
+            let n = games.iter().filter(|g| g.platform.trim().eq_ignore_ascii_case(platform)).count();
+            let est = p.width(platform, 13.0, W::Semi).round() as i32 + 32 + p.width(&n.to_string(), 11.5, W::Semi).round() as i32 + 8;
+            if fx + est > mx + avail && fx > mx {
+                fx = mx;
+                fy += 42;
+            }
+            fx += pill(p, fx, fy, platform, Some(n), active == i + 1, Action::LibFilter(i + 1)) + 8;
+        }
+        if compact {
+            fy += 46;
+        }
+        sort_control(p, mx + mw, if compact { fy } else { y }, view.sort % 3);
+        y = fy + 34 + if compact { 0 } else { 22 };
+        if compact {
+            y += 8;
+        }
+    }
+
+    // ---- grid or empty states
+    let visible = visible_games(view);
+    if games.is_empty() && view.core_error.is_none() {
+        let cta = if view.scanning { None } else { Some(("Détecter les jeux", Action::ScanGames, Btn::Primary)) };
+        y += empty_state(p, mx, y, mw, Icon::Gem, "Votre bibliothèque est vide", "Lancez la détection pour retrouver les jeux déjà installés sur vos plateformes prises en charge. Rien n'est modifié sur votre disque.", cta) + GAP;
+    } else if !games.is_empty() && visible.is_empty() {
+        let (title, desc, cta) = if !view.query.trim().is_empty() {
+            ("Aucun résultat", "Aucun jeu ne correspond à votre recherche. Essayez un autre nom ou une autre plateforme.", ("Effacer la recherche", Action::ClearSearch))
+        } else {
+            ("Aucun jeu pour ce filtre", "Aucun jeu enregistré ne correspond à cette plateforme.", ("Afficher tous les jeux", Action::LibFilter(0)))
+        };
+        y += empty_state(p, mx, y, mw, Icon::Search, title, desc, Some((cta.0, cta.1, Btn::Secondary))) + GAP;
+    } else if !visible.is_empty() {
+        if visible.len() != games.len() {
+            p.text(mx, y - 8, 22, &format!("{} sur {} affichés", visible.len(), plural(games.len(), "jeu", "jeux")), 12.5, W::Reg, MUT);
+            y += 22;
+        }
+        let cols = lay.columns();
+        let cw = lay.card_width();
+        let ch = cw * 4 / 3;
+        let row_h = ch + FOOTER_H + GAP;
+        let shown = visible.len().min(view.limit.max(1));
+        for (n, &index) in visible.iter().take(shown).enumerate() {
+            let (col, row) = (n as i32 % cols, n as i32 / cols);
+            game_card(p, mx + col * (cw + GAP), y + row * row_h, cw, ch, index, &games[index], view.statuses.get(index));
+        }
+        let rows = (shown as i32 + cols - 1) / cols;
+        y += rows * row_h + 6;
+        if visible.len() > shown {
+            let more = (visible.len() - shown).min(48);
+            let label = format!("Afficher {} de plus", plural(more, "jeu", "jeux"));
+            let bw = button_width(p, &label, None) + 24;
+            button(p, mx + (mw - bw) / 2, y, Some(bw), &label, None, Btn::Secondary, BG, Some(Action::ShowMoreGames));
+            p.text_center(mx, mw, y + BTN_H + 8, 18, &format!("{shown} affichés sur {}", visible.len()), 12.0, W::Reg, FAINT);
+            y += BTN_H + 40;
+        }
+    }
+
+    // ---- detected installations
+    if !view.detected.is_empty() {
+        y += 14;
+        p.text(mx, y, 30, "Installations détectées", 22.0, W::Disp, TXT);
+        p.text_right(mx + mw, y, 30, &format!("{} à importer", view.detected.len()), 13.0, W::Reg, MUT);
+        y += 46;
+        for (index, game) in view.detected.iter().take(DETECTED_LIMIT).enumerate() {
+            panel(p, mx, y, mw, 66, 14);
+            let pw = p.width(game.platform, 11.5, W::Semi).round() as i32 + 20;
+            p.rrect(mx + 18, y + 22, pw, 22, 11, ACT);
+            p.text(mx + 28, y + 22, 22, game.platform, 11.5, W::Semi, VIO_HI);
+            let text_x = mx + 18 + pw + 16;
+            let max_w = mw - (text_x - mx) - 150;
+            p.text_fit(text_x, y + 10, 24, &game.name, 14.5, W::Semi, TXT, max_w);
+            let path = p.ellipsize_path(&game.install_path.to_string_lossy(), 11.5, W::Reg, max_w);
+            p.text(text_x, y + 34, 18, &path, 11.5, W::Reg, FAINT);
+            button(p, mx + mw - 18 - 112, y + 13, Some(112), "Importer", None, Btn::Primary, PANEL, Some(Action::ImportDetectedGame(index)));
+            y += 66 + 10;
+        }
+        if view.detected.len() > DETECTED_LIMIT {
+            p.text(mx, y + 2, 20, &format!("{DETECTED_LIMIT} premières installations affichées sur {}. Importez-les pour faire apparaître les suivantes.", view.detected.len()), 12.0, W::Reg, MUT);
+            y += 28;
+        }
+    } else if view.scan_found == Some(0) {
+        y += 8;
+        panel(p, mx, y, mw, 72, 16);
+        icon_badge(p, mx + 18, y + 16, 40, Icon::Check, GREEN, GREEN_DARK);
+        p.text(mx + 72, y, 72, "Aucune nouvelle installation à importer.", 14.0, W::Med, TXT);
+        y += 72 + GAP;
+    }
+    y + 40
 }
 
-/// The catalogue has no connected provider yet; do not invent games or prices.
-pub fn catalogue_unavailable(p: &mut Painter, _vh: i32) -> i32 {
-    p.text(MX, 25, 42, "Boutique", 40.0, W::Disp, TXT);
-    p.rrect(MX, 104, MW, 190, 16, PANEL);
-    p.rrect_line(MX, 104, MW, 190, 16, LINE);
-    p.text(MX + 28, 132, 30, "Catalogue non disponible", 23.0, W::Semi, TXT);
-    p.paragraph(MX + 28, 178, MW - 56, 22,
-        "Amethys ne dispose pas encore d'un service de catalogue connecté aux boutiques. Aucun jeu, prix, promotion ou lien d'achat fictif ne sera affiché ici.",
-        15.0, W::Reg, MUT, 4);
-    340
+// ------------------------------------------------------------- game detail
+pub struct DetailView<'a> {
+    pub game: Option<&'a IpcGameEntry>,
+    pub index: usize,
+    pub status: Option<&'a GameStatus>,
+    pub executable_draft: &'a str,
+    pub editing_executable: bool,
 }
 
-/// Settings page reports the actual local Core and media-storage state.
-pub fn settings_local(
-    p: &mut Painter,
-    _vh: i32,
-    core_error: Option<&str>,
-    game_count: usize,
-    media_root: Option<&std::path::Path>,
-    scan_in_progress: bool,
-    scan_progress: Option<&amethys_discovery::DiscoveryProgress>,
-) -> i32 {
-    p.text(MX, 25, 42, "Paramètres", 40.0, W::Disp, TXT);
-    p.text(MX, 72, 20, "Configuration locale d'Amethys", 13.0, W::Reg, MUT);
+/// One label / value row of an information panel. Returns the row height.
+fn info_row(p: &mut Painter, x: i32, y: i32, w: i32, first: bool, label: &str, value: &str, color: Color, ic: Option<Icon>) -> i32 {
+    if !first {
+        p.fill(x, y, w, 1, alpha(Color::WHITE, 12));
+    }
+    let label_w = 150.min(w / 3);
+    p.text(x, y + 12, 20, label, 12.5, W::Reg, MUT);
+    let vx = x + label_w + 12;
+    let vw = w - label_w - 12;
+    let mut text_x = vx;
+    if let Some(i) = ic {
+        p.icon(i, vx, y + 12, 16, color, PANEL);
+        text_x += 24;
+    }
+    let shown = if value.contains('/') || value.contains('\\') { p.ellipsize_path(value, 13.0, W::Med, vw - (text_x - vx)) } else { value.to_owned() };
+    let lh = 20;
+    let h = p.paragraph_height(vw - (text_x - vx), lh, &shown, 13.0, W::Med, 3);
+    p.paragraph(text_x, y + 12, vw - (text_x - vx), lh, &shown, 13.0, W::Med, color, 3);
+    h.max(20) + 24
+}
 
-    let y = 112;
-    p.rrect(MX, y, MW, 140, 16, PANEL);
-    p.rrect_line(MX, y, MW, 140, 16, LINE);
-    p.text(MX + 24, y + 18, 26, "Amethys Core", 20.0, W::Semi, TXT);
-    if let Some(error) = core_error {
-        p.text(MX + 24, y + 52, 20, "Déconnecté", 14.0, W::Semi, AMBER);
-        p.paragraph(MX + 24, y + 78, MW - 48, 18, error, 12.0, W::Reg, MUT, 2);
-    } else {
-        p.text(MX + 24, y + 58, 20, "Connecté · bibliothèque chargée via IPC local", 14.0, W::Semi, GREEN);
+pub fn game_detail(p: &mut Painter, lay: &Layout, view: &DetailView) -> i32 {
+    backdrop(p, lay);
+    let (mx, mw) = (lay.mx, lay.mw);
+    button(p, mx, 26, None, "Bibliothèque", Some(Icon::Back), Btn::Ghost, BG, Some(Action::Go(Page::Library)));
+
+    let Some(game) = view.game else {
+        empty_state(p, mx, 100, mw, Icon::Info, "Aucun jeu sélectionné", "Retournez à la bibliothèque pour choisir un jeu.", Some(("Retour à la bibliothèque", Action::Go(Page::Library), Btn::Secondary)));
+        return 420;
+    };
+    let status = view.status.cloned().unwrap_or_else(|| crate::status::classify(false, game.executable.is_some(), None));
+    let ready = status.is_ready();
+
+    // ---- hero geometry
+    let hero_y = 84;
+    let (poster_w, poster_h, pad) = (200, 267, 32);
+    let compact = lay.compact();
+    let cx0 = mx + pad + poster_w + 36;
+    let cw = mx + mw - pad - cx0;
+
+    // actions flow (wraps when the hero is narrow)
+    struct Act<'a> {
+        label: &'a str,
+        icon: Icon,
+        kind: Btn,
+        action: Option<Action>,
+    }
+    let acts = [
+        if ready {
+            Act { label: "Lancer", icon: Icon::Play, kind: Btn::Primary, action: Some(Action::LaunchGame(view.index)) }
+        } else {
+            Act { label: "Lancer indisponible", icon: Icon::Play, kind: Btn::Secondary, action: None }
+        },
+        Act { label: "Exécutable", icon: Icon::Edit, kind: Btn::Secondary, action: Some(Action::EditExecutable) },
+        Act { label: "Jaquette", icon: Icon::Image, kind: Btn::Ghost, action: Some(Action::ChangeGameCover) },
+        Act { label: "Par défaut", icon: Icon::Refresh, kind: Btn::Ghost, action: Some(Action::ResetGameCover) },
+        Act { label: "Retirer", icon: Icon::Trash, kind: Btn::Danger, action: Some(Action::RemoveGame(view.index)) },
+    ];
+    let widths: Vec<i32> = acts.iter().map(|a| button_width(p, a.label, Some(a.icon))).collect();
+    let mut placements = Vec::new();
+    let (mut bx, mut brow) = (0, 0);
+    for w in &widths {
+        if bx > 0 && bx + w > cw {
+            bx = 0;
+            brow += 1;
+        }
+        placements.push((bx, brow));
+        bx += w + 10;
+    }
+    let rows = brow + 1;
+
+    // text stack above the buttons
+    let title_lines = p.wrap(&game.name, 38.0, W::Disp, cw).len().clamp(1, 2) as i32;
+    let metadata = game.catalogue_metadata.as_ref();
+    let subtitle = metadata.map(|m| {
+        [m.developer.as_deref(), m.publisher.as_deref()]
+            .iter()
+            .flatten()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>()
+            .join(" · ")
+    }).filter(|s| !s.is_empty());
+    let top_h = 28 + 12 + title_lines * 44 + 8 + if subtitle.is_some() { 30 } else { 0 };
+    let hero_h = (poster_h + 2 * pad).max(pad + top_h + 20 + rows * (BTN_H + 10) - 10 + pad);
+
+    // ---- hero background: blurred artwork, darkened
+    let artwork_id = game.catalogue_game_id.as_deref().unwrap_or(&game.id);
+    p.blurred_cover_banner(artwork_id, &game.id, &game.name, mx, hero_y, mw, hero_h);
+    p.gradient(mx, hero_y, mw, hero_h, 90.0, &[(0.0, Color::rgba(11, 10, 17, 170)), (1.0, Color::rgba(11, 10, 17, 120))]);
+    p.gradient(mx, hero_y, mw, hero_h, 180.0, &[(0.0, Color::rgba(11, 10, 17, 0)), (1.0, Color::rgba(11, 10, 17, 190))]);
+    p.round_corners(mx, hero_y, mw, hero_h, 22, BG);
+    p.rrect_line(mx, hero_y, mw, hero_h, 22, alpha(Color::WHITE, 24));
+
+    // poster
+    let (px, py) = (mx + pad, hero_y + (hero_h - poster_h) / 2);
+    p.shadow(px, py, poster_w, poster_h, 16, 14, 90);
+    p.cover_or_placeholder(artwork_id, &game.id, &game.name, px, py, poster_w, poster_h);
+    p.round_corners(px, py, poster_w, poster_h, 16, Color::rgb(0x0F, 0x0D, 0x16));
+    p.rrect_line(px, py, poster_w, poster_h, 16, alpha(Color::WHITE, 40));
+
+    // chips, title, subtitle
+    let mut ty = hero_y + pad;
+    let mut chip_x = cx0;
+    let platform = p.ellipsize(&game.platform, 12.0, W::Semi, cw / 2);
+    let pw = p.width(&platform, 12.0, W::Semi).round() as i32 + 22;
+    p.rrect(chip_x, ty, pw, 26, 13, Color::rgba(8, 6, 14, 190));
+    p.rrect_line(chip_x, ty, pw, 26, 13, alpha(Color::WHITE, 26));
+    p.text(chip_x + 11, ty, 26, &platform, 12.0, W::Semi, Color::WHITE);
+    chip_x += pw + 8;
+    status_badge(p, chip_x, ty, status.kind);
+    ty += 28 + 12;
+    p.paragraph(cx0, ty, cw, 44, &game.name, 38.0, W::Disp, Color::WHITE, 2);
+    ty += title_lines * 44 + 8;
+    if let Some(sub) = &subtitle {
+        p.text_fit(cx0, ty, 22, sub, 14.0, W::Med, SOFT, cw);
     }
 
-    let card_y = y + 164;
-    let gap = 16;
-    let card_w = (MW - gap) / 2;
-    p.rrect(MX, card_y, card_w, 154, 16, PANEL);
-    p.rrect_line(MX, card_y, card_w, 154, 16, LINE);
-    p.text(MX + 20, card_y + 16, 22, "Bibliothèque locale", 17.0, W::Semi, TXT);
-    p.text(MX + 20, card_y + 54, 34, &game_count.to_string(), 28.0, W::Bold, VIO);
-    p.text(MX + 20, card_y + 94, 20, "jeux enregistrés sur cet appareil", 12.0, W::Reg, MUT);
-
-    let storage_x = MX + card_w + gap;
-    p.rrect(storage_x, card_y, card_w, 154, 16, PANEL);
-    p.rrect_line(storage_x, card_y, card_w, 154, 16, LINE);
-    p.text(storage_x + 20, card_y + 16, 22, "Stockage des médias", 17.0, W::Semi, TXT);
-    if let Some(root) = media_root {
-        let path = root.to_string_lossy();
-        p.paragraph(storage_x + 20, card_y + 52, card_w - 40, 18, &path, 12.0, W::Reg, SOFT, 3);
-        p.text(storage_x + 20, card_y + 112, 18, "Images conservées sur cet appareil", 11.0, W::Reg, MUT);
-    } else {
-        p.text(storage_x + 20, card_y + 58, 20, "Indisponible", 13.0, W::Semi, AMBER);
-        p.text(storage_x + 20, card_y + 88, 18, "Le stockage local n'a pas été initialisé.", 11.0, W::Reg, MUT);
+    // buttons, anchored at the bottom of the hero
+    let by0 = hero_y + hero_h - pad - (rows * (BTN_H + 10) - 10);
+    for (i, act) in acts.iter().enumerate() {
+        let (x_off, row) = placements[i];
+        let (x, y) = (cx0 + x_off, by0 + row * (BTN_H + 10));
+        if act.action.is_none() {
+            button_disabled(p, x, y, act.label, Some(act.icon));
+        } else {
+            button(p, x, y, Some(widths[i]), act.label, Some(act.icon), act.kind, Color::rgb(0x12, 0x10, 0x1A), act.action);
+        }
     }
 
-    let info_y = card_y + 174;
-    p.rrect(MX, info_y, MW, 112, 16, PANEL);
-    p.rrect_line(MX, info_y, MW, 112, 16, LINE);
-    p.text(MX + 20, info_y + 14, 22, "Confidentialité et fonctionnement", 17.0, W::Semi, TXT);
+    // ---- below the hero
+    let mut y = hero_y + hero_h + GAP + 4;
+
+    if view.editing_executable {
+        let h = 168;
+        panel(p, mx, y, mw, h, 18);
+        p.text(mx + 24, y + 18, 24, "Configurer l'exécutable", 16.0, W::Semi, TXT);
+        p.text_fit(mx + 24, y + 44, 20, "Chemin relatif au dossier du jeu (ex. bin/game.exe), ou chemin absolu situé dans ce dossier.", 12.5, W::Reg, MUT, mw - 48);
+        let (fx, fy, fw) = (mx + 24, y + 74, mw - 48);
+        p.rrect(fx, fy, fw, BTN_H, 12, PANEL_HI);
+        p.rrect_line(fx, fy, fw, BTN_H, 12, VIO);
+        p.rrect_line(fx + 1, fy + 1, fw - 2, BTN_H - 2, 11, alpha(VIO, 110));
+        if view.executable_draft.is_empty() {
+            p.text(fx + 14, fy, BTN_H, "bin/game.exe", 13.5, W::Reg, FAINT);
+            p.rrect(fx + 14, fy + 11, 2, 18, 1, VIO_HI);
+        } else {
+            let shown = tail_fit(p, view.executable_draft, 13.5, W::Reg, fw - 40);
+            let tw = p.text(fx + 14, fy, BTN_H, &shown, 13.5, W::Reg, TXT).round() as i32;
+            p.rrect(fx + 15 + tw, fy + 11, 2, 18, 1, VIO_HI);
+        }
+        let bw = 130;
+        button(p, mx + mw - 24 - bw, y + 74 + BTN_H + 14, Some(bw), "Enregistrer", Some(Icon::Check), Btn::Primary, PANEL, Some(Action::SaveExecutable));
+        button(p, mx + mw - 24 - bw - 10 - 110, y + 74 + BTN_H + 14, Some(110), "Annuler", None, Btn::Ghost, PANEL, Some(Action::CancelExecutableEdit));
+        y += h + GAP;
+    }
+
+    // columns: information on the left, technical details on the right
+    let tech_w = if compact { mw } else { 360 };
+    let main_w = if compact { mw } else { mw - tech_w - GAP };
+    let (lx, rx) = (mx, if compact { mx } else { mx + main_w + GAP });
+    let mut ly = y;
+
+    // installation
+    {
+        let inner = main_w - 48;
+        let (exec_text, exec_color) = match game.executable.as_deref() {
+            Some(e) => (e.to_owned(), TXT),
+            None => ("Non configuré".to_owned(), AMBER),
+        };
+        let (avail_text, avail_color, avail_icon) = match &status.block_reason {
+            None => ("Prêt à lancer".to_owned(), GREEN, Icon::Check),
+            Some(reason) => (reason.clone(), AMBER, Icon::Alert),
+        };
+        let (dir_text, dir_color, dir_icon) = if status.directory_exists { ("Présent sur le disque", GREEN, Icon::Check) } else { ("Introuvable sur le disque", RED, Icon::Alert) };
+        // Measure first so the panel fits its rows.
+        let start = p.hits.len();
+        let mut probe = 62;
+        let mut tmp_y = 0;
+        let _ = (&mut probe, &mut tmp_y);
+        let _ = start;
+        let rows_h = measure_rows(p, inner, &[
+            (game.install_path.as_str(), false),
+            (dir_text, true),
+            (exec_text.as_str(), false),
+            (avail_text.as_str(), true),
+        ]);
+        let h = 58 + rows_h + 8;
+        panel(p, lx, ly, main_w, h, 18);
+        p.text(lx + 24, ly + 18, 24, "Installation", 16.0, W::Semi, TXT);
+        let mut ry = ly + 54;
+        ry += info_row(p, lx + 24, ry, inner, true, "Dossier d'installation", &game.install_path, TXT, Some(Icon::Folder));
+        ry += info_row(p, lx + 24, ry, inner, false, "État du dossier", dir_text, dir_color, Some(dir_icon));
+        ry += info_row(p, lx + 24, ry, inner, false, "Exécutable configuré", &exec_text, exec_color, None);
+        info_row(p, lx + 24, ry, inner, false, "Disponibilité", &avail_text, avail_color, Some(avail_icon));
+        ly += h + GAP;
+    }
+
+    // about
+    {
+        let inner = main_w - 48;
+        let genres: Vec<&str> = metadata.map(|m| m.genres.iter().map(String::as_str).collect()).unwrap_or_default();
+        let description = metadata.and_then(|m| m.description.as_deref()).filter(|d| !d.trim().is_empty());
+        let mut h = 58;
+        if metadata.is_some() {
+            h += 3 * 44 - 8;
+            if !genres.is_empty() {
+                h += 50;
+            }
+            if let Some(d) = description {
+                h += 22 + p.paragraph_height(inner, 22, d, 13.0, W::Reg, 12) + 8;
+            }
+            h += 12;
+        } else {
+            h += 56;
+        }
+        panel(p, lx, ly, main_w, h, 18);
+        p.text(lx + 24, ly + 18, 24, "À propos", 16.0, W::Semi, TXT);
+        let mut ay = ly + 54;
+        if let Some(m) = metadata {
+            ay += info_row(p, lx + 24, ay, inner, true, "Développeur", m.developer.as_deref().unwrap_or("Non renseigné"), if m.developer.is_some() { TXT } else { FAINT }, None).max(44);
+            ay += info_row(p, lx + 24, ay, inner, false, "Éditeur", m.publisher.as_deref().unwrap_or("Non renseigné"), if m.publisher.is_some() { TXT } else { FAINT }, None).max(44);
+            ay += info_row(p, lx + 24, ay, inner, false, "Date de sortie", m.release_date.as_deref().unwrap_or("Non renseignée"), if m.release_date.is_some() { TXT } else { FAINT }, None).max(44);
+            if !genres.is_empty() {
+                ay += 10;
+                let mut gx = lx + 24;
+                for genre in genres.iter().take(8) {
+                    let gw = p.width(genre, 12.0, W::Med).round() as i32 + 24;
+                    if gx + gw > lx + 24 + inner {
+                        break;
+                    }
+                    p.rrect(gx, ay, gw, 28, 14, ACT);
+                    p.rrect_line(gx, ay, gw, 28, 14, alpha(VIO, 70));
+                    p.text(gx + 12, ay, 28, genre, 12.0, W::Med, VIO_HI);
+                    gx += gw + 8;
+                }
+                ay += 40;
+            }
+            if let Some(d) = description {
+                ay += 12;
+                p.paragraph(lx + 24, ay, inner, 22, d, 13.0, W::Reg, SOFT, 12);
+            }
+        } else {
+            p.icon(Icon::Info, lx + 24, ay + 6, 18, FAINT, PANEL);
+            p.text_fit(lx + 52, ay, 30, "Aucune métadonnée catalogue n'est encore associée à ce jeu.", 13.0, W::Reg, MUT, inner - 28);
+        }
+        ly += h + GAP;
+    }
+
+    // technical details
+    let mut ry = if compact { ly } else { y };
+    {
+        let inner = tech_w - 48;
+        let rows: [(&str, String); 3] = [
+            ("Game ID Amethys", game.catalogue_game_id.clone().unwrap_or_else(|| "Non attribué".to_owned())),
+            ("ID d'installation locale", game.id.clone()),
+            ("Identifiant de plateforme", game.platform_id.clone().unwrap_or_else(|| "Non fourni".to_owned())),
+        ];
+        let h = 80 + rows.len() as i32 * 54 + 10;
+        panel(p, rx, ry, tech_w, h, 18);
+        p.text(rx + 24, ry + 18, 24, "Détails techniques", 16.0, W::Semi, TXT);
+        p.text_fit(rx + 24, ry + 42, 18, "Pour le diagnostic et le support", 12.0, W::Reg, FAINT, inner);
+        let mut ty = ry + 76;
+        for (i, (label, value)) in rows.iter().enumerate() {
+            if i > 0 {
+                p.fill(rx + 24, ty - 6, inner, 1, alpha(Color::WHITE, 12));
+            }
+            p.text(rx + 24, ty, 18, label, 11.5, W::Reg, FAINT);
+            p.text_fit(rx + 24, ty + 20, 20, value, 12.5, W::Med, SOFT, inner);
+            ty += 54;
+        }
+        ry += h + GAP;
+    }
+    ly.max(ry) + 30
+}
+
+/// Height of the rows `info_row` would draw, without drawing them.
+fn measure_rows(p: &mut Painter, inner: i32, rows: &[(&str, bool)]) -> i32 {
+    let label_w = 150.min(inner / 3);
+    let vw = inner - label_w - 12;
+    rows.iter()
+        .map(|(value, has_icon)| {
+            let width = vw - if *has_icon || value.contains('/') || value.contains('\\') { 24 } else { 0 };
+            let shown = if value.contains('/') || value.contains('\\') { p.ellipsize_path(value, 13.0, W::Med, width) } else { (*value).to_owned() };
+            p.paragraph_height(width, 20, &shown, 13.0, W::Med, 3).max(20) + 24
+        })
+        .sum()
+}
+
+// ------------------------------------------------------------------- store
+/// The catalogue has no connected provider yet; nothing is invented here.
+pub fn store(p: &mut Painter, lay: &Layout) -> i32 {
+    backdrop(p, lay);
+    let (mx, mw) = (lay.mx, lay.mw);
+    p.text(mx, 28, 42, "Boutique", 34.0, W::Disp, TXT);
+    p.text(mx, 72, 22, "Le catalogue n'est pas encore connecté", 13.5, W::Reg, MUT);
+
+    let y = 118;
+    let h = 252;
+    panel(p, mx, y, mw, h, 22);
+    p.glow(mx + 160, y + 40, 420, Color::rgba(122, 92, 232, 55), mx + 1, y + 1, mw - 2, h - 2);
+    p.round_corners(mx, y, mw, h, 22, BG);
+    p.rrect_line(mx, y, mw, h, 22, alpha(Color::WHITE, 18));
+    p.gradient_rrect(mx + 32, y + 32, 64, 64, 22, 135.0, &[(0.0, ACT), (1.0, hex("#1B1432"))], PANEL);
+    p.rrect_line(mx + 32, y + 32, 64, 64, 22, alpha(VIO, 100));
+    p.icon(Icon::Gem, mx + 48, y + 48, 32, VIO_HI, ACT);
+    p.rrect(mx + 120, y + 34, 78, 24, 12, ACT);
+    p.rrect_line(mx + 120, y + 34, 78, 24, 12, alpha(VIO, 120));
+    p.text(mx + 120, y + 34, 24, "  Version 0.3", 12.0, W::Semi, VIO_HI);
+    p.text(mx + 120, y + 62, 40, "La boutique arrive avec la version 0.3", 26.0, W::Disp, TXT);
     p.paragraph(
-        MX + 20,
-        info_y + 48,
-        MW - 40,
-        18,
+        mx + 120,
+        y + 112,
+        mw - 152,
+        23,
+        "La version 0.2 se concentre sur votre bibliothèque locale. Les catalogues, prix, promotions et achats ne sont pas encore connectés : rien de tout cela n'est simulé.",
+        14.5,
+        W::Reg,
+        SOFT,
+        3,
+    );
+    button(p, mx + 120, y + h - 32 - BTN_H, None, "Ouvrir la bibliothèque", Some(Icon::Library), Btn::Secondary, PANEL, Some(Action::Go(Page::Library)));
+
+    let items = [
+        ("Catalogue fiable", "Les jeux et les offres viendront de fournisseurs réels, jamais de produits ou de prix inventés."),
+        ("Personnalisation locale", "Vos recommandations seront calculées sur votre PC à partir de votre bibliothèque et de vos préférences."),
+        ("Sans serveur payant obligatoire", "Le catalogue public pourra être distribué sous forme de fichiers statiques ; vos données personnelles resteront locales."),
+    ];
+    let per_row = if lay.compact() { 1 } else { 3 };
+    let tw = (mw - GAP * (per_row - 1)) / per_row;
+    let top = y + h + GAP + 6;
+    let card_h = 132;
+    for (i, (title, text)) in items.iter().enumerate() {
+        let (col, row) = (i as i32 % per_row, i as i32 / per_row);
+        let (x, cy) = (mx + col * (tw + GAP), top + row * (card_h + GAP));
+        panel(p, x, cy, tw, card_h, 18);
+        p.circle(x + 28, cy + 30, 4, VIO);
+        p.text(x + 42, cy + 18, 24, title, 15.0, W::Semi, TXT);
+        p.paragraph(x + 24, cy + 52, tw - 48, 20, text, 12.5, W::Reg, MUT, 4);
+    }
+    let rows = (items.len() as i32 + per_row - 1) / per_row;
+    top + rows * (card_h + GAP) + 30
+}
+
+// ---------------------------------------------------------------- settings
+pub struct SettingsView<'a> {
+    pub core_error: Option<&'a str>,
+    pub game_count: usize,
+    pub ready_count: usize,
+    pub media_root: Option<&'a std::path::Path>,
+    pub scanning: bool,
+    pub progress: Option<&'a amethys_discovery::DiscoveryProgress>,
+}
+
+pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
+    backdrop(p, lay);
+    let (mx, mw) = (lay.mx, lay.mw);
+    p.text(mx, 28, 42, "Paramètres", 34.0, W::Disp, TXT);
+    p.text(mx, 72, 22, "Configuration locale d'Amethys", 13.5, W::Reg, MUT);
+
+    // ---- Core status
+    let mut y = 118;
+    let core_h = if view.core_error.is_some() { 216 } else { 178 };
+    panel(p, mx, y, mw, core_h, 20);
+    let (ic, fg, bg, state) = if view.core_error.is_some() {
+        (Icon::Alert, AMBER, AMBER_DARK, "Déconnecté")
+    } else {
+        (Icon::Check, GREEN, GREEN_DARK, "Connecté")
+    };
+    icon_badge(p, mx + 24, y + 24, 48, ic, fg, bg);
+    p.text(mx + 88, y + 20, 26, "Amethys Core", 18.0, W::Semi, TXT);
+    p.circle(mx + 90, y + 58, 4, fg);
+    p.text(mx + 102, y + 48, 22, state, 13.0, W::Semi, fg);
+    if let Some(error) = view.core_error {
+        p.paragraph(mx + 88, y + 76, mw - 112, 19, error, 12.5, W::Reg, MUT, 3);
+    } else {
+        p.text(mx + 88, y + 76, 20, "La bibliothèque est chargée depuis le service local, par IPC.", 12.5, W::Reg, MUT);
+    }
+    let by = y + core_h - 24 - BTN_H;
+    let rw = button(p, mx + 24, by, None, "Actualiser la bibliothèque", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::RefreshLibrary));
+    let sx = mx + 24 + rw + 12;
+    if view.scanning {
+        let progress = view
+            .progress
+            .map(|v| format!("{} / {} · {}", v.completed, v.total, v.source))
+            .unwrap_or_else(|| "Analyse en préparation…".to_owned());
+        let cw = button(p, sx, by, None, "Annuler la détection", Some(Icon::Close), Btn::Secondary, PANEL, Some(Action::CancelScan));
+        p.text_fit(sx + cw + 16, by, BTN_H, &progress, 12.0, W::Med, VIO_HI, (mx + mw - 24) - (sx + cw + 16));
+    } else {
+        button(p, sx, by, None, "Détecter les jeux installés", Some(Icon::Search), Btn::Primary, PANEL, Some(Action::ScanGames));
+    }
+    y += core_h + GAP;
+
+    // ---- two-column cards
+    let two = !lay.compact();
+    let cw = if two { (mw - GAP) / 2 } else { mw };
+    let h = 156;
+    let (x1, y1, x2, y2) = if two { (mx, y, mx + cw + GAP, y) } else { (mx, y, mx, y + h + GAP) };
+
+    panel(p, x1, y1, cw, h, 18);
+    p.text(x1 + 24, y1 + 18, 24, "Bibliothèque locale", 16.0, W::Semi, TXT);
+    p.text(x1 + 24, y1 + 52, 44, &view.game_count.to_string(), 34.0, W::Disp, VIO_HI);
+    p.text(x1 + 24, y1 + 100, 20, &format!("{} enregistrés sur cet appareil", if view.game_count > 1 { "jeux" } else { "jeu" }), 12.5, W::Reg, MUT);
+    p.text(x1 + 24, y1 + 122, 20, &format!("dont {} prêts à lancer", view.ready_count), 12.5, W::Reg, FAINT);
+
+    panel(p, x2, y2, cw, h, 18);
+    p.text(x2 + 24, y2 + 18, 24, "Stockage des médias", 16.0, W::Semi, TXT);
+    if let Some(root) = view.media_root {
+        p.icon(Icon::Folder, x2 + 24, y2 + 56, 18, VIO_HI, PANEL);
+        let path = root.to_string_lossy();
+        p.paragraph(x2 + 52, y2 + 54, cw - 76, 20, &path, 12.5, W::Reg, SOFT, 3);
+        p.text(x2 + 24, y2 + 124, 20, "Jaquettes personnalisées conservées sur cet appareil", 12.0, W::Reg, FAINT);
+    } else {
+        p.text(x2 + 24, y2 + 56, 22, "Indisponible", 14.0, W::Semi, AMBER);
+        p.text(x2 + 24, y2 + 84, 20, "Le stockage local n'a pas été initialisé.", 12.5, W::Reg, MUT);
+    }
+    y = if two { y1 + h + GAP } else { y2 + h + GAP };
+
+    // ---- keyboard shortcuts
+    let shortcuts = [
+        ("Tab · Maj+Tab", "Parcourir les éléments"),
+        ("Entrée", "Activer l'élément sélectionné"),
+        ("Échap", "Annuler, fermer, puis quitter"),
+        ("Ctrl+V", "Coller dans un champ de texte"),
+    ];
+    let sh = 70 + shortcuts.len() as i32 * 38;
+    panel(p, mx, y, mw, sh, 18);
+    p.text(mx + 24, y + 18, 24, "Raccourcis clavier", 16.0, W::Semi, TXT);
+    for (i, (keys, what)) in shortcuts.iter().enumerate() {
+        let ry = y + 56 + i as i32 * 38;
+        let kw = p.width(keys, 12.0, W::Semi).round() as i32 + 22;
+        p.rrect(mx + 24, ry + 5, kw, 26, 8, PANEL_HI);
+        p.rrect_line(mx + 24, ry + 5, kw, 26, 8, alpha(Color::WHITE, 28));
+        p.text(mx + 35, ry + 5, 26, keys, 12.0, W::Semi, SOFT);
+        p.text(mx + 24 + 150, ry, 36, what, 13.0, W::Reg, MUT);
+    }
+    y += sh + GAP;
+
+    // ---- privacy and about
+    let ph = 132;
+    panel(p, mx, y, mw, ph, 18);
+    p.text(mx + 24, y + 18, 24, "Confidentialité et fonctionnement", 16.0, W::Semi, TXT);
+    p.paragraph(
+        mx + 24,
+        y + 52,
+        mw - 48,
+        21,
         "La bibliothèque et les images personnalisées sont stockées localement. Aucun serveur Amethys payant n'est nécessaire pour utiliser ces fonctions. Les comptes et boutiques connectées arriveront avec leurs services dédiés.",
-        12.0,
+        13.0,
+        W::Reg,
+        MUT,
+        4,
+    );
+    y += ph + GAP;
+
+    let ah = 92;
+    panel(p, mx, y, mw, ah, 18);
+    p.icon(Icon::Gem, mx + 24, y + 22, 24, VIO, PANEL);
+    p.text(mx + 60, y + 16, 24, "Amethys Launcher 0.2 · version de développement", 14.0, W::Semi, TXT);
+    p.text_fit(mx + 60, y + 44, 20, "Interface rendue par GhostEngine (CPU). Le backend de fenêtre est expérimental et temporaire.", 12.5, W::Reg, MUT, mw - 84);
+    y + ah + 40
+}
+
+// ------------------------------------------------------------------ dialog
+/// Confirmation dialog for removing a library entry, drawn at the current
+/// scroll offset so it always appears in the visible part of the window.
+pub fn remove_dialog(p: &mut Painter, lay: &Layout, game_name: &str, offset: i32) {
+    // The sidebar is painted once at the top of the page; the content scrolls.
+    p.fill(0, 0, SIDE_W, lay.h, Color::rgba(0, 0, 0, 150));
+    p.fill(SIDE_W, offset, lay.w - SIDE_W, lay.h, Color::rgba(0, 0, 0, 150));
+    let mw = 500.min(lay.w - SIDE_W - 60);
+    let mh = 252;
+    let mx = SIDE_W + (lay.w - SIDE_W - mw) / 2;
+    let my = offset + (lay.h - mh) / 2;
+    p.shadow(mx, my, mw, mh, 20, 28, 160);
+    p.rrect(mx, my, mw, mh, 20, Color::rgb(0x17, 0x14, 0x21));
+    p.rrect_line(mx, my, mw, mh, 20, alpha(Color::WHITE, 34));
+    icon_badge(p, mx + 24, my + 24, 44, Icon::Trash, RED, RED_DARK);
+    p.text(mx + 84, my + 24, 24, "Retirer de la bibliothèque ?", 17.0, W::Semi, TXT);
+    let name = p.ellipsize(game_name, 13.5, W::Med, mw - 108);
+    p.text(mx + 84, my + 50, 20, &name, 13.5, W::Med, VIO_HI);
+    p.paragraph(
+        mx + 24,
+        my + 88,
+        mw - 48,
+        20,
+        "Seule l'entrée Amethys est retirée. Les fichiers du jeu sur le disque ne sont pas supprimés.",
+        13.0,
         W::Reg,
         MUT,
         3,
     );
-    let actions_y = info_y + 156;
-    p.rrect(MX, actions_y, MW, 112, 16, PANEL);
-    p.rrect_line(MX, actions_y, MW, 112, 16, LINE);
-    p.text(MX + 20, actions_y + 12, 22, "Actions rapides", 17.0, W::Semi, TXT);
-
-    let refresh_x = MX + 20;
-    let refresh_y = actions_y + 54;
-    button(p, refresh_x, refresh_y, Some(220), "Actualiser la bibliothèque", false);
-    p.hit(refresh_x, refresh_y, 220, 44, 10, Action::RefreshLibrary, false);
-
-    let scan_x = refresh_x + 236;
-    if scan_in_progress {
-        let progress = scan_progress
-            .map(|value| format!("{} / {} · {}", value.completed, value.total, value.source))
-            .unwrap_or_else(|| "Analyse en préparation…".to_owned());
-        p.text(scan_x, actions_y + 34, 18, &progress, 11.0, W::Med, VIO);
-        button(p, scan_x, refresh_y, Some(220), "Annuler la détection", false);
-        p.hit(scan_x, refresh_y, 220, 44, 10, Action::CancelScan, false);
-    } else {
-        button(p, scan_x, refresh_y, Some(220), "Détecter les jeux installés", true);
-        p.hit(scan_x, refresh_y, 220, 44, 10, Action::ScanGames, false);
-    }
-    actions_y + 128
-}
-
-/// Game details populated only from the selected real Amethys library entry.
-pub fn game_detail_live(
-    p: &mut Painter,
-    game: Option<&amethys_ipc::IpcGameEntry>,
-    index: usize,
-    executable_draft: &str,
-    editing_executable: bool,
-    notice: Option<&str>,
-) -> i32 {
-    let back_width = button(p, MX, 24, None, "Retour à la bibliothèque", false);
-    p.hit(MX, 24, back_width, 44, 12, Action::Go(Page::Library), false);
-
-    let Some(game) = game else {
-        p.text(MX, 104, 28, "Aucun jeu sélectionné", 22.0, W::Semi, TXT);
-        return 180;
-    };
-
-    let y = 96;
-    const SUMMARY_HEIGHT: i32 = 480;
-    p.rrect(MX, y, MW, SUMMARY_HEIGHT, 18, PANEL);
-    p.rrect_line(MX, y, MW, SUMMARY_HEIGHT, 18, LINE);
-    let artwork_id = game.catalogue_game_id.as_deref().unwrap_or(&game.id);
-    if !p.draw_cover_for_game(artwork_id, &game.id, &game.name, MX + MW - 330, y + 20, 290, 250) {
-        let (top, bottom) = cover(&game.name);
-        p.gradient(
-            MX + MW - 330,
-            y + 20,
-            290,
-            250,
-            160.0,
-            &[(0.0, hex(top)), (1.0, hex(bottom))],
-        );
-    }
-    p.round_corners(MX + MW - 330, y + 20, 290, 250, 14, PANEL);
-    p.text(MX + 28, y + 24, 38, &game.name, 30.0, W::Disp, TXT);
-    chip(p, MX + 28, y + 78, &game.platform);
-
-    let install_root = std::path::Path::new(&game.install_path);
-    let directory_exists = install_root.is_dir();
-    let executable = game.executable.as_deref().unwrap_or("Non configuré");
-    let launch_block_reason = crate::core_client::launch_block_reason(game);
-    let executable_exists = launch_block_reason.is_none();
-    let launch_status = launch_block_reason.as_deref().unwrap_or("Prêt à lancer");
-
-    let rows = [
-        (
-            "Game ID Amethys",
-            game.catalogue_game_id.as_deref().unwrap_or("Non attribué"),
-        ),
-        ("ID installation locale", game.id.as_str()),
-        ("Identifiant plateforme", game.platform_id.as_deref().unwrap_or("Non fourni")),
-        ("Dossier d'installation", game.install_path.as_str()),
-        ("Exécutable configuré", executable),
-        ("État du dossier", if directory_exists { "Présent" } else { "Introuvable" }),
-        ("Disponibilité", launch_status),
-    ];
-    let mut row_y = y + 126;
-    for (label, value) in rows {
-        p.fill(MX + 28, row_y, MW - 56, 1, LINE);
-        p.text(MX + 28, row_y + 6, 18, label, 12.0, W::Reg, MUT);
-        let value_color = if label == "Disponibilité" && !executable_exists { AMBER } else { TXT };
-        p.paragraph(MX + 260, row_y + 6, MW - 288, 18, value, 12.0, W::Med, value_color, 2);
-        row_y += 40;
-    }
-
-    if let Some(message) = notice {
-        let color = if message.starts_with("Échec") || message.starts_with("Impossible") {
-            AMBER
-        } else {
-            GREEN
-        };
-        p.paragraph(MX + 28, y + 394, MW - 56, 18, message, 12.0, W::Med, color, 2);
-    }
-
-    let cover_x = MX + MW - 560;
-    p.rrect(cover_x, y + 430, 120, 30, 8, ACT);
-    p.rrect_line(cover_x, y + 430, 120, 30, 8, LINE);
-    p.text(cover_x + 10, y + 430, 30, "Changer la jaquette", 11.0, W::Med, SOFT);
-    p.hit(cover_x, y + 430, 120, 30, 8, Action::ChangeGameCover, false);
-
-    let reset_x = cover_x + 130;
-    p.rrect(reset_x, y + 430, 120, 30, 8, PANEL);
-    p.rrect_line(reset_x, y + 430, 120, 30, 8, LINE);
-    p.text(reset_x + 12, y + 430, 30, "Image par défaut", 11.0, W::Med, SOFT);
-    p.hit(reset_x, y + 430, 120, 30, 8, Action::ResetGameCover, false);
-
-    let configure_x = MX + MW - 300;
-    p.rrect(configure_x, y + 430, 116, 30, 8, PANEL);
-    p.rrect_line(configure_x, y + 430, 116, 30, 8, LINE);
-    p.text(configure_x + 12, y + 430, 30, "Configurer", 12.0, W::Med, SOFT);
-    p.hit(configure_x, y + 430, 116, 30, 8, Action::EditExecutable, false);
-
-    let remove_x = MX + MW - 176;
-    p.rrect(remove_x, y + 430, 72, 30, 8, ACT);
-    p.rrect_line(remove_x, y + 430, 72, 30, 8, LINE);
-    p.text(remove_x + 12, y + 430, 30, "Retirer", 12.0, W::Med, SOFT);
-    p.hit(remove_x, y + 430, 72, 30, 8, Action::RemoveGame(index), false);
-
-    if directory_exists && executable_exists {
-        let launch_x = MX + MW - 94;
-        p.rrect(launch_x, y + 430, 80, 30, 8, VIO);
-        p.text(launch_x + 14, y + 430, 30, "Lancer", 12.0, W::Semi, VIO_DARK);
-        p.hit(launch_x, y + 430, 80, 30, 8, Action::LaunchGame(index), false);
-    }
-
-    let metadata_y = y + SUMMARY_HEIGHT + 16;
-    let mut metadata_height = 112;
-    let mut genres_text = None;
-    let mut genres_lines = 0usize;
-    let mut description_lines = 0usize;
-
-    if let Some(metadata) = game.catalogue_metadata.as_ref() {
-        if !metadata.genres.is_empty() {
-            let genres = format!("Genres : {}", metadata.genres.join(" · "));
-            genres_lines = p.wrap(&genres, 12.0, W::Reg, MW - 44).len().clamp(1, 3);
-            genres_text = Some(genres);
-            metadata_height += genres_lines as i32 * 18 + 8;
-        }
-        if let Some(description) = metadata
-            .description
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-        {
-            description_lines = p.wrap(description, 12.0, W::Reg, MW - 44).len();
-            metadata_height += description_lines.min(14) as i32 * 18 + 8;
-            if description_lines > 14 {
-                metadata_height += 18;
-            }
-        }
-    }
-
-    p.rrect(MX, metadata_y, MW, metadata_height, 16, PANEL);
-    p.rrect_line(MX, metadata_y, MW, metadata_height, 16, LINE);
-    p.text(MX + 22, metadata_y + 10, 24, "À propos", 17.0, W::Semi, TXT);
-
-    if let Some(metadata) = game.catalogue_metadata.as_ref() {
-        let developer = metadata.developer.as_deref().unwrap_or("Non renseigné");
-        let publisher = metadata.publisher.as_deref().unwrap_or("Non renseigné");
-        let release_date = metadata.release_date.as_deref().unwrap_or("Non renseignée");
-        p.paragraph(
-            MX + 22,
-            metadata_y + 40,
-            MW - 44,
-            18,
-            &format!("Développeur : {developer}  ·  Éditeur : {publisher}  ·  Sortie : {release_date}"),
-            12.0,
-            W::Med,
-            SOFT,
-            2,
-        );
-
-        let mut content_y = metadata_y + 66;
-        if let Some(genres) = genres_text.as_deref() {
-            let height = p.paragraph(
-                MX + 22,
-                content_y,
-                MW - 44,
-                18,
-                genres,
-                12.0,
-                W::Reg,
-                MUT,
-                genres_lines,
-            );
-            content_y += height + 8;
-        }
-
-        if let Some(description) = metadata
-            .description
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-        {
-            let visible_lines = description_lines.min(14);
-            let height = p.paragraph(
-                MX + 22,
-                content_y,
-                MW - 44,
-                18,
-                description,
-                12.0,
-                W::Reg,
-                MUT,
-                visible_lines,
-            );
-            content_y += height + 8;
-            if description_lines > visible_lines {
-                p.text(
-                    MX + 22,
-                    content_y,
-                    16,
-                    "Description raccourcie dans cet aperçu.",
-                    11.0,
-                    W::Reg,
-                    MUT,
-                );
-            }
-        }
-    } else {
-        p.paragraph(
-            MX + 22,
-            metadata_y + 44,
-            MW - 44,
-            18,
-            "Aucune métadonnée catalogue n'est encore associée à ce jeu. Les informations apparaîtront ici lorsqu'elles seront disponibles.",
-            12.0,
-            W::Reg,
-            MUT,
-            3,
-        );
-    }
-
-    let metadata_bottom = metadata_y + metadata_height;
-    if editing_executable {
-        let editor_y = metadata_bottom + 12;
-        p.rrect(MX, editor_y, MW, 142, 16, PANEL);
-        p.rrect_line(MX, editor_y, MW, 142, 16, LINE);
-        p.text(MX + 22, editor_y + 10, 22, "Configurer l'exécutable", 17.0, W::Semi, TXT);
-        p.text(
-            MX + 22,
-            editor_y + 32,
-            18,
-            "Chemin relatif au dossier du jeu conseillé (ex. bin/game.exe).",
-            12.0,
-            W::Reg,
-            MUT,
-        );
-        let input_x = MX + 22;
-        let input_y = editor_y + 54;
-        let input_w = MW - 44;
-        p.rrect(input_x, input_y, input_w, 34, 8, BG);
-        p.rrect_line(input_x, input_y, input_w, 34, 8, VIO);
-        let display_path = if executable_draft.is_empty() {
-            "bin/game.exe"
-        } else {
-            executable_draft
-        };
-        p.text(
-            input_x + 12,
-            input_y,
-            34,
-            display_path,
-            12.0,
-            W::Reg,
-            if executable_draft.is_empty() { MUT } else { TXT },
-        );
-        let save_x = MX + MW - 22 - 120;
-        button(p, save_x, editor_y + 94, Some(120), "Enregistrer", true);
-        p.hit(save_x, editor_y + 94, 120, 44, 10, Action::SaveExecutable, false);
-        let cancel_x = save_x - 112;
-        button(p, cancel_x, editor_y + 94, Some(104), "Annuler", false);
-        p.hit(cancel_x, editor_y + 94, 104, 44, 10, Action::CancelExecutableEdit, false);
-        editor_y + 160
-    } else {
-        metadata_bottom + 12
-    }
+    let by = my + mh - 24 - BTN_H;
+    let rw = button_width(p, "Retirer", Some(Icon::Trash)) + 8;
+    let cancel_w = 120;
+    let dialog_bg = Color::rgb(0x17, 0x14, 0x21);
+    let confirm = button(p, mx + mw - 24 - rw, by, Some(rw), "Retirer", Some(Icon::Trash), Btn::Danger, dialog_bg, None);
+    let cancel = button(p, mx + mw - 24 - rw - 10 - cancel_w, by, Some(cancel_w), "Annuler", None, Btn::Ghost, dialog_bg, None);
+    // These hits are page-space (they scroll with the page, which is frozen while the dialog is open).
+    p.hit_with(mx + mw - 24 - confirm, by, confirm, BTN_H, 12, Action::ConfirmRemoveGame, false, Hover::Danger);
+    p.hit_with(mx + mw - 24 - rw - 10 - cancel, by, cancel, BTN_H, 12, Action::CancelRemoveGame, false, Hover::Soft);
 }
 
 #[cfg(test)]
-mod live_library_tests {
+mod tests {
     use super::*;
 
-    fn game(platform: &str) -> amethys_ipc::IpcGameEntry {
-        amethys_ipc::IpcGameEntry {
+    fn game(platform: &str) -> IpcGameEntry {
+        IpcGameEntry {
             id: platform.to_owned(),
             name: "Fixture".to_owned(),
             platform: platform.to_owned(),
@@ -1194,6 +1180,30 @@ mod live_library_tests {
             catalogue_metadata: None,
             install_path: ".".to_owned(),
             executable: None,
+        }
+    }
+
+    fn named(name: &str, platform: &str) -> IpcGameEntry {
+        let mut g = game(platform);
+        g.name = name.to_owned();
+        g.id = format!("{name}-{platform}");
+        g
+    }
+
+    fn view<'a>(games: &'a [IpcGameEntry], statuses: &'a [GameStatus], filter: usize, sort: usize, query: &'a str) -> LibraryView<'a> {
+        LibraryView {
+            games,
+            statuses,
+            detected: &[],
+            scanning: false,
+            progress: None,
+            scan_found: None,
+            filter,
+            sort,
+            query,
+            search_focused: false,
+            core_error: None,
+            limit: 48,
         }
     }
 
@@ -1217,5 +1227,49 @@ mod live_library_tests {
         assert!(library_matches_query(&entry, "C:/Games knight"));
         assert!(!library_matches_query(&entry, "hollow epic"));
         assert!(library_matches_query(&entry, "  "));
+    }
+
+    #[test]
+    fn visible_games_filter_by_platform_then_sort_by_name() {
+        let games = [named("Zelda", "GOG"), named("Alpha", "Steam"), named("Beta", "Steam")];
+        let statuses: Vec<GameStatus> = games.iter().map(|_| crate::status::classify(true, true, None)).collect();
+        // platforms sorted: GOG (1), Steam (2)
+        assert_eq!(visible_games(&view(&games, &statuses, 2, 0, "")), vec![1, 2]);
+        assert_eq!(visible_games(&view(&games, &statuses, 0, 0, "")), vec![1, 2, 0]);
+        assert_eq!(visible_games(&view(&games, &statuses, 0, 0, "zel")), vec![0]);
+    }
+
+    #[test]
+    fn out_of_range_filter_falls_back_to_all_games() {
+        let games = [named("A", "Steam"), named("B", "GOG")];
+        let statuses: Vec<GameStatus> = games.iter().map(|_| crate::status::classify(true, true, None)).collect();
+        assert_eq!(visible_games(&view(&games, &statuses, 99, 0, "")).len(), 2);
+    }
+
+    #[test]
+    fn status_sort_puts_launchable_games_first() {
+        let games = [named("A", "Steam"), named("B", "Steam"), named("C", "Steam")];
+        let statuses = vec![
+            crate::status::classify(false, true, Some("x".into())),
+            crate::status::classify(true, true, None),
+            crate::status::classify(true, false, Some("y".into())),
+        ];
+        assert_eq!(visible_games(&view(&games, &statuses, 0, 2, "")), vec![1, 2, 0]);
+    }
+
+    #[test]
+    fn card_columns_adapt_to_window_width() {
+        assert_eq!(Layout::new(1600, 900).columns(), 6);
+        assert!(Layout::new(1100, 700).columns() < Layout::new(1600, 900).columns());
+        assert!(Layout::new(960, 600).columns() >= 2);
+        let wide = Layout::new(1600, 900);
+        assert!(wide.card_width() * wide.columns() + GAP * (wide.columns() - 1) <= wide.mw);
+    }
+
+    #[test]
+    fn plural_follows_french_rules() {
+        assert_eq!(plural(0, "jeu", "jeux"), "0 jeu");
+        assert_eq!(plural(1, "jeu", "jeux"), "1 jeu");
+        assert_eq!(plural(2, "jeu", "jeux"), "2 jeux");
     }
 }
