@@ -555,10 +555,10 @@ pub fn resolve_game_executable_for(
 
 /// Searches a game directory without following symlinks or leaving its root.
 fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option<PathBuf> {
-    const MAX_DEPTH: usize = 6;
-    const MAX_DIRECTORIES: usize = 2_000;
-    const MAX_FILES: usize = 20_000;
-    const MAX_CANDIDATES: usize = 1_024;
+    const MAX_DEPTH: usize = 12;
+    const MAX_DIRECTORIES: usize = 20_000;
+    const MAX_FILES: usize = 150_000;
+    const MAX_CANDIDATES: usize = 10_000;
 
     fn normalize(value: &str) -> String {
         value.chars()
@@ -659,11 +659,19 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
             }
 
             let normalized_stem = normalize(stem);
+            let relative_path = path.strip_prefix(&root).ok()?;
+            let normalized_relative_path = normalize(&relative_path.to_string_lossy());
             let normalized_parent = path.parent()
                 .and_then(Path::file_name)
                 .and_then(|value| value.to_str())
                 .map(normalize)
                 .unwrap_or_default();
+
+            let target_tokens: Vec<_> = game_name
+                .split(|character: char| !character.is_ascii_alphanumeric())
+                .filter(|token| token.len() >= 3)
+                .map(normalize)
+                .collect();
 
             let mut score = 0i32;
             if normalized_stem == target {
@@ -674,15 +682,23 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
                 score += 65;
             }
 
-            let target_tokens: Vec<_> = game_name.split(|character: char| !character.is_ascii_alphanumeric())
-                .filter(|token| token.len() >= 3)
-                .map(normalize)
-                .collect();
+            // The executable is often named after an internal project or
+            // character, not the storefront title. Match the title against
+            // every directory in the relative path, not only the .exe name
+            // and its immediate parent (for example Game\\Binaries\\Win64).
+            if normalized_relative_path.contains(&target) && target.len() >= 4 {
+                score += 70;
+            }
             if !target_tokens.is_empty() {
-                let matched = target_tokens.iter()
+                let matched_stem = target_tokens.iter()
                     .filter(|token| normalized_stem.contains(token.as_str()))
                     .count();
-                score += ((matched * 45) / target_tokens.len()) as i32;
+                score += ((matched_stem * 45) / target_tokens.len()) as i32;
+
+                let matched_path = target_tokens.iter()
+                    .filter(|token| normalized_relative_path.contains(token.as_str()))
+                    .count();
+                score += ((matched_path * 35) / target_tokens.len()) as i32;
             }
             if normalized_parent == target {
                 score += 35;
@@ -692,9 +708,9 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
                 score += 15;
             }
 
-            let relative_depth = path.strip_prefix(&root).ok()?.components().count();
+            let relative_depth = relative_path.components().count();
             score -= (relative_depth.saturating_sub(1) as i32) * 2;
-            let path_lower = path.to_string_lossy().to_ascii_lowercase();
+            let path_lower = relative_path.to_string_lossy().to_ascii_lowercase();
             if path_lower.contains("binaries\\win64") || path_lower.contains("binaries/win64") {
                 score += 12;
             }
