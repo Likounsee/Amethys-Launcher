@@ -28,25 +28,28 @@ pub struct Layout {
     pub mx: i32,
     /// Width of the content column.
     pub mw: i32,
+    pub side_w: i32,
 }
 
 impl Layout {
     pub fn new(w: i32, h: i32) -> Self {
         // Keep a consistent gutter while allowing the content area to shrink
         // with the actual client width instead of overflowing at compact sizes.
-        let mx = SIDE_W + 24;
-        let mw = (w - mx - 24).max(280);
-        Self { w, h, mx, mw }
+        let side_w = if w < 900 { 72 } else { SIDE_W };
+        let gutter = if w < 520 { 12 } else { 20 };
+        let mx = side_w + gutter;
+        let mw = (w - mx - gutter).max(160);
+        Self { w, h, mx, mw, side_w }
     }
 
     /// Narrow windows stack toolbars and columns instead of placing them side by side.
     pub fn compact(&self) -> bool {
-        self.mw < 1000
+        self.mw < 760
     }
 
     /// Number of game-card columns for the current width.
     pub fn columns(&self) -> i32 {
-        ((self.mw + GAP) / (MIN_CARD_W + GAP)).clamp(2, 8)
+        if self.mw < MIN_CARD_W * 2 + GAP { 1 } else { ((self.mw + GAP) / (MIN_CARD_W + GAP)).clamp(1, 8) }
     }
 
     pub fn card_width(&self) -> i32 {
@@ -99,7 +102,7 @@ fn tail_fit(p: &mut Painter, s: &str, size: f32, w: W, max_w: i32) -> String {
 
 /// Soft violet light at the top of every page.
 fn backdrop(p: &mut Painter, lay: &Layout) {
-    let (x, w) = (SIDE_W, lay.w - SIDE_W);
+    let (x, w) = (lay.side_w, lay.w - lay.side_w);
     p.glow(x + w / 3, 0, 640, Color::rgba(122, 92, 232, 40), x, 0, w, 460);
     p.glow(x + w - 120, 60, 420, Color::rgba(70, 120, 235, 16), x, 0, w, 420);
 }
@@ -276,19 +279,43 @@ fn nav_item(p: &mut Painter, y: i32, label: &str, ic: Icon, active: bool, badge:
 
 pub fn sidebar(p: &mut Painter, lay: &Layout, active: Active, info: &SidebarInfo) {
     let vh = lay.h;
-    p.fill(0, 0, SIDE_W, vh, SIDE);
-    p.fill(SIDE_W - 1, 0, 1, vh, alpha(Color::WHITE, 14));
-    p.glow(0, 0, 260, Color::rgba(122, 92, 232, 38), 0, 0, SIDE_W - 1, 220);
+    let sw = lay.side_w;
+    p.fill(0, 0, sw, vh, SIDE);
+    p.fill(sw - 1, 0, 1, vh, alpha(Color::WHITE, 14));
+    p.glow(0, 0, 260, Color::rgba(122, 92, 232, 38), 0, 0, sw - 1, 220);
+
+    // Compact windows use an icon rail so navigation remains accessible.
+    if sw < 100 {
+        p.icon(Icon::Gem, (sw - 30) / 2, 22, 30, VIO, SIDE);
+        let entries = [
+            (104, Icon::Library, Active::Library, Page::Library),
+            (164, Icon::Gem, Active::Store, Page::Store),
+            (vh - 72, Icon::Gear, Active::Settings, Page::Settings),
+        ];
+        for (y, icon, item, page) in entries {
+            let x = 8;
+            let w = sw - 16;
+            if active == item {
+                p.rrect(x, y, w, 48, 12, ACT);
+                p.rrect(x, y + 14, 3, 20, 2, VIO);
+            }
+            let bg = if active == item { ACT } else { SIDE };
+            p.icon(icon, (sw - 20) / 2, y + 14, 20, if active == item { VIO_HI } else { MUT }, bg);
+            p.hit_with(x, y, w, 48, 12, Action::Go(page), true, Hover::Soft);
+        }
+        p.circle(sw / 2, vh - 24, 4, if info.core_ok { GREEN } else { AMBER });
+        return;
+    }
+
     p.icon(Icon::Gem, 24, 24, 30, VIO, SIDE);
     p.text(64, 24, 30, "Amethys", 21.0, W::Disp, TXT);
-
     p.text(28, 84, 16, "NAVIGATION", 10.5, W::Semi, FAINT);
     let count = info.game_count.to_string();
     nav_item(p, 106, "Bibliothèque", Icon::Library, active == Active::Library, Some((&count, true)), Page::Library);
     nav_item(p, 156, "Boutique", Icon::Gem, active == Active::Store, Some(("Bientôt", false)), Page::Store);
     nav_item(p, vh - 144, "Paramètres", Icon::Gear, active == Active::Settings, None, Page::Settings);
 
-    let (fx, fy, fw, fh) = (14, vh - 84, SIDE_W - 28, 62);
+    let (fx, fy, fw, fh) = (14, vh - 84, sw - 28, 62);
     p.rrect(fx, fy, fw, fh, 14, PANEL);
     p.rrect_line(fx, fy, fw, fh, 14, alpha(Color::WHITE, 15));
     let (dot, title, sub) = if info.core_ok {
@@ -1149,11 +1176,11 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
 /// scroll offset so it always appears in the visible part of the window.
 pub fn remove_dialog(p: &mut Painter, lay: &Layout, game_name: &str, offset: i32) {
     // The sidebar is painted once at the top of the page; the content scrolls.
-    p.fill(0, 0, SIDE_W, lay.h, Color::rgba(0, 0, 0, 150));
-    p.fill(SIDE_W, offset, lay.w - SIDE_W, lay.h, Color::rgba(0, 0, 0, 150));
-    let mw = 500.min(lay.w - SIDE_W - 60);
+    p.fill(0, 0, lay.side_w, lay.h, Color::rgba(0, 0, 0, 150));
+    p.fill(lay.side_w, offset, lay.w - lay.side_w, lay.h, Color::rgba(0, 0, 0, 150));
+    let mw = 500.min(lay.w - lay.side_w - 24);
     let mh = 252;
-    let mx = SIDE_W + (lay.w - SIDE_W - mw) / 2;
+    let mx = lay.side_w + (lay.w - lay.side_w - mw) / 2;
     let my = offset + (lay.h - mh) / 2;
     p.shadow(mx, my, mw, mh, 20, 28, 160);
     p.rrect(mx, my, mw, mh, 20, Color::rgb(0x17, 0x14, 0x21));
@@ -1285,9 +1312,13 @@ mod tests {
 
         let compact = Layout::new(720, 520);
         assert!(compact.compact());
-        assert_eq!(compact.mx, SIDE_W + 24);
-        assert_eq!(compact.mw, 432);
+        assert_eq!(compact.side_w, 72);
+        assert_eq!(compact.mx, 92);
+        assert_eq!(compact.mw, 588);
         assert!(compact.card_width() >= MIN_CARD_W);
+        let tiny = Layout::new(360, 420);
+        assert_eq!(tiny.columns(), 1);
+        assert!(tiny.mw < compact.mw);
     }
 
     #[test]
