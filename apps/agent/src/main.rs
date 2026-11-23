@@ -684,8 +684,9 @@ mod tests {
         let request = IpcEnvelope::new(IpcRequest::new(command));
         let server_database = Arc::clone(database);
         let server_state = Arc::clone(state);
+        let notify = Notify::new();
         let server_task = tokio::spawn(async move {
-            serve_database_connection(&mut server, &server_state, &server_database)
+            serve_database_connection(&mut server, &server_state, &server_database, &notify)
                 .await
                 .expect("serve IPC request");
         });
