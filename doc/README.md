@@ -18,7 +18,8 @@ This directory contains the project's documentation. Start with the root [README
 - [IPC protocol and transport](technical/IPC.md) — message format, commands, endpoints and security considerations.
 - [Game discovery](technical/game-discovery.md) — supported launchers, detection methods, identifier rules and current limitations.
 - [Launcher discovery coverage](discovery/LAUNCHER-COVERAGE.md) — evidence and real-install validation status for each adapter.
-- [Game compatibility](technical/GAME-COMPATIBILITY.md) — compatibility scope and known constraints.
+- [Game compatibility](technical/GAME-COMPATIBILITY.md) — long-term compatibility architecture and security boundaries.
+- [0.2 compatibility and validation report](technical/COMPATIBILITY-REPORT-0.2.md) — evidence levels, real-install limitations, anti-cheat boundaries and publisher-collaboration needs.
 
 ## Community
 
