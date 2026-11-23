@@ -1347,6 +1347,7 @@ impl App {
                 }
             } else if self.pending_remove.is_some() {
                 self.pending_remove = None;
+                self.keyboard_focus = None;
                 self.render(false);
             } else if self.editing_executable {
                 // Escape discards the draft and restores the executable saved by Core.
