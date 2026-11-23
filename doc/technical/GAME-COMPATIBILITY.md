@@ -1,6 +1,6 @@
 # Game compatibility and platform adaptation strategy
 
-> **Version 0.1 scope:** Amethys currently targets native game discovery, import, verification and launch on Windows and Linux only. macOS work is paused until physical Mac testing is available. Compatibility runtimes (Proton/Wine), game adaptation and cross-OS porting are future work and are not promised by 0.1.
+> **Current 0.2 scope:** Amethys provides local game discovery, explicit import, path verification and direct launch of a configured executable on Windows and Linux. macOS is not supported by the published 0.2 release. Version 0.2 does not provide Proton/Wine management, publisher-approved per-game launch profiles, anti-cheat management or cross-OS game porting. These are future investigations, not current capabilities.
 
 
 Amethys is a cross-platform game launcher. Windows, Linux and macOS are first-class host platforms; support must not be designed around Windows first and retrofitted later.
@@ -9,7 +9,7 @@ This document defines the long-term compatibility direction. It does not claim t
 
 ## Product goals
 
-- Long-term: discover, import, organize, verify and launch games across desktop operating systems; the current 0.1 release is limited to Windows and Linux.
+- Long-term: discover, import, organize, verify and launch games across desktop operating systems; the current 0.2 release is limited to Windows and Linux.
 - Clearly distinguish native games from games launched through a compatibility runtime.
 - Help users identify which compatibility options are available for a particular game and host.
 - Prefer safe, reversible, per-game configuration over global system changes.
