@@ -514,6 +514,204 @@ pub fn epic_launch_executable(
     None
 }
 
+/// Resolves the primary executable for any detected installation.
+///
+/// Platform metadata is preferred when it declares a trustworthy in-root launch
+/// target. Otherwise a bounded, deterministic filesystem scan ranks candidates
+/// using the detected title and directory layout. Ambiguous installations are
+/// deliberately left unconfigured rather than launching an arbitrary helper.
+pub fn resolve_game_executable(game: &DetectedGame) -> Option<PathBuf> {
+    if !is_existing_absolute_directory(&game.install_path) {
+        return None;
+    }
+
+    if game.platform.eq_ignore_ascii_case("Epic Games") {
+        if let Some(app_id) = game.platform_id.as_deref() {
+            if let Some(executable) = epic_manifest_roots().iter().find_map(|root| {
+                epic_launch_executable(root, app_id, &game.install_path)
+            }) {
+                return Some(executable);
+            }
+        }
+    }
+
+    resolve_executable_from_files(&game.install_path, &game.name)
+}
+
+/// Searches a game directory without following symlinks or leaving its root.
+fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option<PathBuf> {
+    const MAX_DEPTH: usize = 6;
+    const MAX_DIRECTORIES: usize = 2_000;
+    const MAX_FILES: usize = 20_000;
+    const MAX_CANDIDATES: usize = 1_024;
+
+    fn normalize(value: &str) -> String {
+        value.chars()
+            .filter(|character| character.is_ascii_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect()
+    }
+
+    fn ignored_directory(name: &str) -> bool {
+        let name = normalize(name);
+        [
+            "redist", "redistributable", "commonredist", "support",
+            "easyanticheat", "battleye", "crashreporter", "crashhandler",
+            "uninstall", "directx", "vcredist", "prerequisite",
+        ].iter().any(|part| name.contains(part))
+    }
+
+    fn ignored_executable(stem: &str) -> bool {
+        let stem = normalize(stem);
+        [
+            "uninstall", "unins", "setup", "install", "update", "updater",
+            "crash", "report", "redist", "vcredist", "directx", "dxsetup",
+            "unitycrash", "crashhandler", "easyanticheat", "battleye",
+            "startprotectedgame", "eac", "repair", "benchmark",
+        ].iter().any(|part| stem.contains(part))
+    }
+
+    let root = install_path.canonicalize().ok()?;
+    if !root.is_dir() {
+        return None;
+    }
+
+    let target = normalize(game_name);
+    if target.is_empty() {
+        return None;
+    }
+
+    let mut pending = vec![(root.clone(), 0usize)];
+    let mut visited_directories = 0usize;
+    let mut visited_files = 0usize;
+    let mut candidates: Vec<(PathBuf, i32)> = Vec::new();
+
+    while let Some((directory, depth)) = pending.pop() {
+        if visited_directories >= MAX_DIRECTORIES || visited_files >= MAX_FILES
+            || candidates.len() >= MAX_CANDIDATES
+        {
+            break;
+        }
+        visited_directories += 1;
+
+        let Ok(entries) = fs::read_dir(&directory) else { continue; };
+        let mut entries: Vec<_> = entries.flatten().collect();
+        entries.sort_by_key(|entry| entry.file_name());
+
+        for entry in entries {
+            if visited_files >= MAX_FILES || candidates.len() >= MAX_CANDIDATES {
+                break;
+            }
+            let path = entry.path();
+            let Ok(kind) = entry.file_type() else { continue; };
+
+            if kind.is_dir() && depth < MAX_DEPTH {
+                let directory_name = entry.file_name().to_string_lossy().into_owned();
+                if !ignored_directory(&directory_name) {
+                    pending.push((path, depth + 1));
+                }
+                continue;
+            }
+            if !kind.is_file() {
+                continue;
+            }
+            visited_files += 1;
+
+            let is_windows_executable = path.extension()
+                .and_then(|extension| extension.to_str())
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"));
+            #[cfg(unix)]
+            let is_unix_executable = {
+                use std::os::unix::fs::PermissionsExt;
+                entry.metadata().ok().is_some_and(|metadata| metadata.permissions().mode() & 0o111 != 0)
+                    && path.extension().is_none()
+            };
+            #[cfg(not(unix))]
+            let is_unix_executable = false;
+
+            if !is_windows_executable && !is_unix_executable {
+                continue;
+            }
+
+            let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("");
+            if ignored_executable(stem) {
+                continue;
+            }
+
+            let Ok(canonical) = path.canonicalize() else { continue; };
+            if !canonical.is_file() || !canonical.starts_with(&root) {
+                continue;
+            }
+
+            let normalized_stem = normalize(stem);
+            let normalized_parent = path.parent()
+                .and_then(Path::file_name)
+                .and_then(|value| value.to_str())
+                .map(normalize)
+                .unwrap_or_default();
+
+            let mut score = 0i32;
+            if normalized_stem == target {
+                score += 120;
+            } else if normalized_stem.starts_with(&target) && target.len() >= 4 {
+                score += 90;
+            } else if target.starts_with(&normalized_stem) && normalized_stem.len() >= 5 {
+                score += 65;
+            }
+
+            let target_tokens: Vec<_> = game_name.split(|character: char| !character.is_ascii_alphanumeric())
+                .filter(|token| token.len() >= 3)
+                .map(normalize)
+                .collect();
+            if !target_tokens.is_empty() {
+                let matched = target_tokens.iter()
+                    .filter(|token| normalized_stem.contains(token.as_str()))
+                    .count();
+                score += ((matched * 45) / target_tokens.len()) as i32;
+            }
+            if normalized_parent == target {
+                score += 35;
+            } else if !normalized_parent.is_empty() && target.len() >= 4
+                && (normalized_parent.starts_with(&target) || target.starts_with(&normalized_parent))
+            {
+                score += 15;
+            }
+
+            let relative_depth = path.strip_prefix(&root).ok()?.components().count();
+            score -= (relative_depth.saturating_sub(1) as i32) * 2;
+            let path_lower = path.to_string_lossy().to_ascii_lowercase();
+            if path_lower.contains("binaries\\win64") || path_lower.contains("binaries/win64") {
+                score += 12;
+            }
+            if path_lower.contains("shipping") {
+                score += 5;
+            }
+
+            candidates.push((canonical, score));
+        }
+    }
+
+    if candidates.is_empty() {
+        return None;
+    }
+    candidates.sort_by(|left, right| {
+        right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0))
+    });
+
+    let (best_path, best_score) = candidates.first()?;
+    // A single plausible executable is useful even when its filename differs
+    // from the storefront title. With several candidates, require a clear
+    // title-derived lead to avoid choosing launchers, tools or secondary apps.
+    if candidates.len() > 1 {
+        let second_score = candidates.get(1).map(|candidate| candidate.1).unwrap_or(i32::MIN);
+        if *best_score < 55 || *best_score - second_score < 18 {
+            return None;
+        }
+    }
+
+    best_path.strip_prefix(&root).ok().map(Path::to_path_buf)
+}
+
 /// Builds Epic Games Launcher manifest locations from explicit platform inputs.
 /// Keeping path selection separate from environment access makes every OS layout
 /// testable on every CI runner.
