@@ -262,7 +262,7 @@ impl App {
             page_h: win_h,
             hits: Vec::new(),
             scroll: ScrollViewport::new(
-                Rect::new(lay.side_w as u32, 0, (win_w - lay.side_w).max(1) as u32, win_h as u32),
+                Rect::new((lay.side_w as f32 * lay.scale).round() as u32, 0, (win_w - (lay.side_w as f32 * lay.scale).round() as i32).max(1) as u32, win_h as u32),
                 LayoutDirection::Vertical,
                 win_h as u32,
             ),
@@ -318,7 +318,7 @@ impl App {
     fn paint(&self, buf_h: u32) -> (Vec<Hit>, Framebuffer, i32) {
         let lay = self.lay;
         let t_alloc = Instant::now();
-        let mut p = Painter::new(self.win_w as u32, buf_h, self.fonts).with_covers(&*self.covers);
+        let mut p = Painter::new(self.win_w as u32, buf_h, self.fonts).with_scale(lay.scale).with_covers(&*self.covers);
         let alloc_ms = t_alloc.elapsed().as_secs_f64() * 1000.0;
         let t_side = Instant::now();
         let info = SidebarInfo { core_ok: self.core_error.is_none(), game_count: self.games.len() };
@@ -381,12 +381,12 @@ impl App {
             // A modal must be the only interactive layer while it is open.
             p.hits.clear();
             let name = self.games.get(index).map_or("ce jeu", |game| game.name.as_str());
-            pages::remove_dialog(&mut p, &lay, name, self.scroll.offset() as i32);
+            pages::remove_dialog(&mut p, &lay, name, (self.scroll.offset() as f32 / lay.scale).round() as i32);
         }
         if std::env::var_os("AMETHYS_TIMING").is_some() {
             eprintln!("  paint {:?}: buffer {}x{} alloc {:.1} ms, sidebar {:.1} ms, page {:.1} ms", self.page, self.win_w, buf_h, alloc_ms, side_ms, t_page.elapsed().as_secs_f64() * 1000.0);
         }
-        (p.hits, p.fb, h.max(lay.h))
+        (p.hits, p.fb, (h.max(lay.h) as f32 * lay.scale).ceil() as i32)
     }
 
     /// Re-draws the current page (sidebar, content, hit regions).
@@ -428,7 +428,7 @@ impl App {
         self.win_h = height.max(200);
         self.lay = Layout::new(self.win_w, self.win_h);
         self.scroll = ScrollViewport::new(
-            Rect::new(self.lay.side_w as u32, 0, (self.win_w - self.lay.side_w).max(1) as u32, self.win_h as u32),
+            Rect::new(self.side_px() as u32, 0, (self.win_w - self.side_px()).max(1) as u32, self.win_h as u32),
             LayoutDirection::Vertical,
             self.win_h as u32,
         );
@@ -437,6 +437,8 @@ impl App {
     }
 
     // ------------------------------------------------------------------ actions
+    fn side_px(&self) -> i32 { (self.lay.side_w as f32 * self.lay.scale).round() as i32 }
+
     fn selected_artwork(&self) -> Option<(String, String)> {
         self.selected_game.and_then(|index| self.games.get(index)).map(|game| {
             (game.catalogue_game_id.as_deref().unwrap_or(&game.id).to_owned(), game.name.clone())
@@ -687,7 +689,7 @@ impl App {
         let off = self.scroll.offset() as i32;
         let (x0, y0) = (rect.x as i32, rect.y as i32 - if fixed { 0 } else { off });
         let (x1, y1) = (x0 + rect.width as i32, y0 + rect.height as i32);
-        let (cx0, cx1) = if fixed { (0, self.win_w) } else { (self.lay.side_w, self.win_w) };
+        let (cx0, cx1) = if fixed { (0, self.win_w) } else { (self.side_px(), self.win_w) };
         let (a, b, c, d) = (x0.max(cx0), y0.max(0), x1.min(cx1), y1.min(self.win_h));
         (c > a && d > b).then(|| Rect::new(a as u32, b as u32, (c - a) as u32, (d - b) as u32))
     }
@@ -744,7 +746,7 @@ impl App {
         }
         let rows = (fb.height() as usize).min(self.win_h as usize);
         let offset = self.scroll.offset() as usize;
-        let sidebar_w = self.lay.side_w as usize;
+        let sidebar_w = self.side_px() as usize;
         let source = self.content.pixels();
         let target = fb.pixels_mut();
         let available = self.content.height() as usize;
@@ -883,7 +885,7 @@ impl App {
 
         self.blit(fb);
         if let Some(alpha_value) = self.page_fade_alpha() {
-            fb_fill(fb, self.lay.side_w, 0, self.win_w - self.lay.side_w, self.win_h, Color::rgba(gfx::BG.r, gfx::BG.g, gfx::BG.b, alpha_value));
+            fb_fill(fb, self.side_px(), 0, self.win_w - self.side_px(), self.win_h, Color::rgba(gfx::BG.r, gfx::BG.g, gfx::BG.b, alpha_value));
         }
 
         if clicked.is_none() {
@@ -918,14 +920,14 @@ impl App {
             return;
         }
         let mut probe = Painter::new(1, 1, self.fonts);
-        let max_w = (self.win_w - self.lay.side_w - 32).clamp(120, 540);
+        let max_w = (self.win_w - self.side_px() - (32.0 * self.lay.scale).round() as i32).clamp((120.0 * self.lay.scale).round() as i32, (540.0 * self.lay.scale).round() as i32);
         let text_w = max_w - 72;
         let lines = probe.wrap(&toast.text, 13.0, W::Med, text_w).len().clamp(1, 3) as i32;
         let wide = lines > 1 || probe.width(&toast.text, 13.0, W::Med) > text_w as f32;
         let w = if wide { max_w } else { (probe.width(&toast.text, 13.0, W::Med).round() as i32 + 72).max(220) };
         let h = (lines * 20 + 28).max(56);
         let slide = ((1.0 - ease_out(age / 0.22)) * 14.0).round() as i32;
-        let (x, y) = (self.lay.side_w + 12, self.win_h - 12 - h + slide);
+        let (x, y) = (self.side_px() + (12.0 * self.lay.scale).round() as i32, self.win_h - (12.0 * self.lay.scale).round() as i32 - h + slide);
         let (accent, soft, icon) = match toast.kind {
             ToastKind::Success => (gfx::GREEN, gfx::GREEN_DARK, Icon::Check),
             ToastKind::Error => (gfx::RED, gfx::RED_DARK, Icon::Alert),
