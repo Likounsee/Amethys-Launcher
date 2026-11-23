@@ -1224,7 +1224,7 @@ pub fn remove_dialog(p: &mut Painter, lay: &Layout, game_name: &str, offset: i32
     p.fill(0, 0, lay.side_w, lay.h, Color::rgba(0, 0, 0, 150));
     p.fill(lay.side_w, offset, lay.w - lay.side_w, lay.h, Color::rgba(0, 0, 0, 150));
     let mw = 500.min(lay.w - lay.side_w - 24);
-    let mh = 252;
+    let mh = if lay.mw < 400 { 288 } else { 252 };
     let mx = lay.side_w + (lay.w - lay.side_w - mw) / 2;
     let my = offset + (lay.h - mh) / 2;
     p.shadow(mx, my, mw, mh, 20, 28, 160);
