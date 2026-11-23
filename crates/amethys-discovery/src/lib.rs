@@ -5286,7 +5286,6 @@ HKEY_CURRENT_USER\Software\Valve\Steam
     }
 }
 
-
 #[cfg(test)]
 mod executable_metadata_detection_tests {
     use super::{ExecutableMetadata, normalized_detection_text, score_executable_metadata};
