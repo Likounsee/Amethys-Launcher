@@ -3,7 +3,7 @@ resolver = "2"
 members = ["apps/agent", "apps/cli", "crates/amethys-discovery", "crates/amethys-config", "crates/amethys-errors", "crates/amethys-events", "crates/amethys-ipc", "crates/amethys-logging", "crates/amethys-orchestration", "crates/amethys-runtime", "crates/amethys-storage", "crates/amethys-media"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "LicenseRef-Proprietary"
 rust-version = "1.85"
