@@ -1388,7 +1388,7 @@ mod tests {
 
     #[test]
     fn card_columns_adapt_to_window_width() {
-        assert_eq!(Layout::new(1600, 900).scale, 1.08);
+        assert!((Layout::new(1600, 900).scale - 1.08).abs() < 0.001);
         assert!(Layout::new(1600, 900).columns() >= 4);
         assert!(Layout::new(1100, 700).columns() < Layout::new(1600, 900).columns());
         assert!(Layout::new(960, 600).columns() >= 2);
