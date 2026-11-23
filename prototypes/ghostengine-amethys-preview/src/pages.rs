@@ -37,7 +37,7 @@ impl Layout {
     pub fn new(physical_w: i32, physical_h: i32) -> Self {
         // Use a 1280x800 logical design baseline. Larger displays scale every
         // primitive and font together; the cap prevents oversized controls on 4K.
-        let scale = ((physical_w as f32 / 1280.0).min(physical_h as f32 / 800.0)).clamp(1.0, 1.65);
+        let scale = (((physical_w as f32 / 1280.0).min(physical_h as f32 / 800.0)) * 0.96).clamp(0.96, 1.58);
         let w = (physical_w as f32 / scale).round() as i32;
         let h = (physical_h as f32 / scale).round() as i32;
         let side_w = if w < 900 || h < 520 { 72 } else { SIDE_W };
@@ -1388,7 +1388,7 @@ mod tests {
 
     #[test]
     fn card_columns_adapt_to_window_width() {
-        assert_eq!(Layout::new(1600, 900).scale, 1.125);
+        assert_eq!(Layout::new(1600, 900).scale, 1.08);
         assert!(Layout::new(1600, 900).columns() >= 4);
         assert!(Layout::new(1100, 700).columns() < Layout::new(1600, 900).columns());
         assert!(Layout::new(960, 600).columns() >= 2);
@@ -1400,8 +1400,8 @@ mod tests {
         assert_eq!(compact.side_w, 72);
         assert_eq!(compact.mx, 92);
         assert_eq!(compact.mw, 588);
-        assert_eq!(Layout::new(1920, 1080).scale, 1.35);
-        assert!(Layout::new(3840, 2160).scale <= 1.65);
+        assert_eq!(Layout::new(1920, 1080).scale, 1.296);
+        assert!(Layout::new(3840, 2160).scale <= 1.58);
         assert!(compact.card_width() >= MIN_CARD_W);
         let tiny = Layout::new(360, 420);
         assert_eq!(tiny.columns(), 1);
