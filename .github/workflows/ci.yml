@@ -376,7 +376,6 @@ EOF
           test -s "$snapshot/01-bibliotheque.png"
           test -s "$snapshot/18-parametres.png"
           rm -rf "$snapshot" "$AMETHYS_DATA_DIR"
-          (cd dist && sha256sum Amethys-Linux-x64.tar.gz > Amethys-Linux-x64.tar.gz.sha256)
 
   desktop-integration:
     name: GhostEngine desktop integration
