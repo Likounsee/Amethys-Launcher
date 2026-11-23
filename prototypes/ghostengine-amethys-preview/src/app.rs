@@ -1619,7 +1619,7 @@ mod tests {
         let root = std::env::temp_dir().join(format!("amethys-prefs-recovery-{}-{nonce}", std::process::id()));
         std::fs::create_dir_all(&root).expect("test directory");
         let path = root.join("launcher-preferences-v1");
-        std::fs::write(path.with_extension("bak"), "schema=1\\nlibrary_sort=2\\n").expect("backup");
+        std::fs::write(path.with_extension("bak"), "schema=1\nlibrary_sort=2\n").expect("backup");
         assert_eq!(load_library_sort(&path), 2);
         assert!(path.exists(), "the backup is restored to the primary preference path");
         let _ = std::fs::remove_dir_all(root);
