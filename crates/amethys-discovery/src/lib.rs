@@ -745,6 +745,40 @@ fn find_root_game_launcher(root: &Path, game_name: &str, publisher: &str) -> Opt
     (launchers.len() == 1).then(|| launchers.remove(0))
 }
 
+/// Rejects obvious installers, redistributables and support tools without
+/// filtering legitimate game titles that merely contain words such as "crash".
+fn is_ignored_executable_candidate(stem: &str) -> bool {
+    let stem = normalized_detection_text(stem);
+    const PREFIXES: &[&str] = &[
+        "uninstall",
+        "unins",
+        "setup",
+        "install",
+        "update",
+        "updater",
+        "crashreport",
+        "crashpad",
+        "crashhandler",
+        "redist",
+        "vcredist",
+        "directx",
+        "dxsetup",
+        "unitycrash",
+        "easyanticheat",
+        "battleye",
+        "startprotectedgame",
+        "bootstrap",
+        "startgame",
+        "repair",
+        "benchmark",
+    ];
+
+    PREFIXES.iter().any(|prefix| stem.starts_with(prefix))
+        || stem == "launcher"
+        || stem == "eac"
+        || stem.ends_with("helper")
+}
+
 /// Searches a game directory without following symlinks or leaving its root.
 fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option<PathBuf> {
     const MAX_DEPTH: usize = 12;
@@ -778,39 +812,6 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
         ]
         .iter()
         .any(|part| name.contains(part))
-    }
-
-    fn ignored_executable(stem: &str) -> bool {
-        let stem = normalize(stem);
-        [
-            "uninstall",
-            "unins",
-            "setup",
-            "install",
-            "update",
-            "updater",
-            "crash",
-            "report",
-            "redist",
-            "vcredist",
-            "directx",
-            "dxsetup",
-            "unitycrash",
-            "crashhandler",
-            "easyanticheat",
-            "battleye",
-            "startprotectedgame",
-            "launcher",
-            "bootstrap",
-            "bootstrapper",
-            "startgame",
-            "eac",
-            "repair",
-            "benchmark",
-            "helper",
-        ]
-        .iter()
-        .any(|part| stem.contains(part))
     }
 
     fn path_matches_token(words: &[String], normalized_path: &str, token: &str) -> bool {
@@ -910,7 +911,7 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
                 .file_stem()
                 .and_then(|value| value.to_str())
                 .unwrap_or("");
-            if ignored_executable(stem) {
+            if is_ignored_executable_candidate(stem) {
                 continue;
             }
 
@@ -5288,7 +5289,10 @@ HKEY_CURRENT_USER\Software\Valve\Steam
 
 #[cfg(test)]
 mod executable_metadata_detection_tests {
-    use super::{ExecutableMetadata, normalized_detection_text, score_executable_metadata};
+    use super::{
+        ExecutableMetadata, is_ignored_executable_candidate, normalized_detection_text,
+        read_executable_metadata, score_executable_metadata,
+    };
 
     #[test]
     fn normalizes_titles_and_metadata_without_locale_assumptions() {
@@ -5310,6 +5314,54 @@ mod executable_metadata_detection_tests {
         assert!(
             score_executable_metadata(&metadata, "Apex Legends") >= 200,
             "matching game product metadata should strongly rank the real game binary"
+        );
+    }
+
+    #[test]
+    fn non_pe_candidate_metadata_is_safely_unavailable() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-non-pe-metadata-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create fixture");
+        let candidate = root.join("not-a-pe.exe");
+        std::fs::write(&candidate, b"not a portable executable").expect("write fixture");
+
+        let metadata = read_executable_metadata(&candidate);
+        assert!(metadata.description.is_empty());
+        assert!(metadata.product.is_empty());
+        assert!(metadata.original_filename.is_empty());
+        assert!(metadata.internal_name.is_empty());
+        assert!(metadata.company.is_empty());
+
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn executable_filter_does_not_reject_legitimate_titles_containing_crash() {
+        assert!(!is_ignored_executable_candidate("CrashBandicoot"));
+        assert!(!is_ignored_executable_candidate("PeaceEmu"));
+        assert!(is_ignored_executable_candidate("CrashReportClient"));
+        assert!(is_ignored_executable_candidate("EasyAntiCheat_EOS_Setup"));
+        assert!(is_ignored_executable_candidate("RainbowSixHelper"));
+    }
+
+    #[test]
+    fn anti_cheat_metadata_is_penalized() {
+        let anti_cheat = ExecutableMetadata {
+            description: "Easy Anti-Cheat Launcher".to_owned(),
+            product: "Easy Anti-Cheat".to_owned(),
+            original_filename: "EasyAntiCheat_EOS_Setup.exe".to_owned(),
+            internal_name: "EasyAntiCheat".to_owned(),
+            company: "Epic Games".to_owned(),
+        };
+        assert!(
+            score_executable_metadata(&anti_cheat, "Apex Legends")
+                < score_executable_metadata(&ExecutableMetadata::default(), "Apex Legends")
         );
     }
 
