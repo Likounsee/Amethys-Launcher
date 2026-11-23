@@ -268,6 +268,8 @@ pub struct App {
     scan_progress: Option<amethys_discovery::DiscoveryProgress>,
     scan_in_progress: bool,
     scan_found: Option<usize>,
+    library_loading: bool,
+    library_receiver: Option<std::sync::mpsc::Receiver<Result<Vec<IpcGameEntry>, String>>>,
     pub core_error: Option<String>,
     toast: Option<Toast>,
     pub selected_game: Option<usize>,
@@ -344,6 +346,8 @@ impl App {
             scan_progress: None,
             scan_in_progress: false,
             scan_found: None,
+            library_loading: false,
+            library_receiver: None,
             core_error,
             toast: None,
             selected_game: None,
@@ -386,6 +390,45 @@ impl App {
         self.toast = Some(Toast { kind, text: text.into(), born: Instant::now() });
     }
 
+    /// Starts the initial Core request without blocking window creation.
+    pub fn start_library_load(&mut self) {
+        if self.library_loading {
+            return;
+        }
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let result = crate::core_client::list_games_or_start_agent();
+            let _ = sender.send(result);
+        });
+        self.library_receiver = Some(receiver);
+        self.library_loading = true;
+        self.core_error = None;
+        self.render(false);
+    }
+
+    /// Applies the initial library response on the UI thread.
+    fn poll_library_load(&mut self) {
+        let result = match self.library_receiver.as_ref().map(|receiver| receiver.try_recv()) {
+            Some(Ok(result)) => Some(result),
+            Some(Err(std::sync::mpsc::TryRecvError::Disconnected)) => Some(Err(
+                "Le chargement initial de la bibliothèque s'est interrompu.".to_owned()
+            )),
+            Some(Err(std::sync::mpsc::TryRecvError::Empty)) | None => None,
+        };
+        if let Some(result) = result {
+            self.library_receiver = None;
+            self.library_loading = false;
+            match result {
+                Ok(games) => {
+                    self.set_games(games);
+                    self.core_error = None;
+                }
+                Err(error) => self.core_error = Some(error),
+            }
+            self.render(false);
+        }
+    }
+
     /// Replaces the library and recomputes every launch status once.
     fn set_games(&mut self, games: Vec<IpcGameEntry>) {
         self.statuses = status::statuses_of(&games);
@@ -419,7 +462,11 @@ impl App {
         let mut p = Painter::new(self.win_w as u32, buf_h, self.fonts).with_scale(lay.scale).with_covers(&*self.covers);
         let alloc_ms = t_alloc.elapsed().as_secs_f64() * 1000.0;
         let t_side = Instant::now();
-        let info = SidebarInfo { core_ok: self.core_error.is_none(), game_count: self.games.len() };
+        let info = SidebarInfo {
+            core_ok: self.core_error.is_none() && !self.library_loading,
+            core_loading: self.library_loading,
+            game_count: self.games.len(),
+        };
         let active = match self.page {
             Page::Store => Active::Store,
             Page::Library | Page::Product => Active::Library,
@@ -438,6 +485,7 @@ impl App {
                     statuses: &self.statuses,
                     detected: &self.detected_games,
                     scanning: self.scan_in_progress,
+                    loading: self.library_loading,
                     progress: self.scan_progress.as_ref(),
                     scan_found: self.scan_found,
                     filter: self.st.lib_filter,
@@ -467,6 +515,7 @@ impl App {
                 &lay,
                 &SettingsView {
                     core_error: self.core_error.as_deref(),
+                    core_loading: self.library_loading,
                     game_count: self.games.len(),
                     ready_count: self.statuses.iter().filter(|s| s.is_ready()).count(),
                     media_root: self.media_store.map(|store| store.root()),
@@ -1392,6 +1441,7 @@ impl App {
             self.resize(w, h);
         }
 
+        self.poll_library_load();
         self.poll_scan();
 
         let escape = input.escape_down && !self.esc_was_down;
@@ -1482,7 +1532,8 @@ impl App {
             || (self.scroll_target - self.scroll_pos).abs() > 0.5
             || self.page_fade_alpha().is_some()
             || self.toast.is_some()
-            || self.scan_in_progress;
+            || self.scan_in_progress
+            || self.library_loading;
         if animating {
             // The window loop does not wait for vsync: keep animation near 60 images/s.
             if let Some(rest) = FRAME_BUDGET.checked_sub(start.elapsed()) {
