@@ -13,7 +13,8 @@ use winit::{
     dpi::PhysicalSize,
     event::WindowEvent,
     event_loop::{ActiveEventLoop, EventLoop, OwnedDisplayHandle},
-    window::{Window, WindowAttributes, WindowId},
+    window::{Fullscreen, Window, WindowAttributes, WindowId},
+    keyboard::{KeyCode, PhysicalKey},
 };
 
 /// Errors raised while creating or running a native Winit window.
@@ -244,6 +245,31 @@ where
         {
             return;
         }
+        // F11 toggles borderless fullscreen. Escape leaves fullscreen first,
+        // allowing the application to keep its normal Escape navigation behaviour.
+        if let WindowEvent::KeyboardInput { event: key, .. } = &event {
+            if key.state == ElementState::Pressed && !key.repeat {
+                if let Some(window) = &self.window {
+                    match key.physical_key {
+                        PhysicalKey::Code(KeyCode::F11) => {
+                            let fullscreen = if window.fullscreen().is_some() {
+                                None
+                            } else {
+                                Some(Fullscreen::Borderless(None))
+                            };
+                            window.set_fullscreen(fullscreen);
+                            return;
+                        }
+                        PhysicalKey::Code(KeyCode::Escape) if window.fullscreen().is_some() => {
+                            window.set_fullscreen(None);
+                            return;
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
         self.input.process_window_event(&event);
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
