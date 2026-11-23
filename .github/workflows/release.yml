@@ -213,7 +213,7 @@ jobs:
           }
           trap cleanup EXIT
           ready=false
-          for ((attempt = 1; attempt <= 30; attempt++)); do
+          for _ in {1..30}; do
             if ! kill -0 "$agent_pid" 2>/dev/null; then
               echo "Packaged Linux agent exited during startup."
               exit 1
