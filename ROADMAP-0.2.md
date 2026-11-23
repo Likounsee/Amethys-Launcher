@@ -12,7 +12,7 @@ La priorité de la 0.2 est une interface de bureau complète, cohérente et soig
 - [ ] Finaliser la direction visuelle, la typographie, les espacements et la cohérence des composants.
 - [ ] Refaire les cartes de jeux autour de proportions d'illustrations fixes et de placeholders originaux.
 - [ ] Compléter les états vides, chargements, erreurs, confirmations et notifications.
-- [ ] Rendre la mise en page adaptative aux dimensions réelles de la fenêtre.
+- [x] Rendre la mise en page adaptative aux dimensions réelles de la fenêtre (mise à l'échelle, sidebar compacte et colonnes entières).
 - [ ] Terminer la navigation clavier et le focus accessible des champs et dialogues.
 - [x] Afficher l'état réel de Core, le nombre de jeux locaux et le chemin du stockage média dans les paramètres.
 - [x] Ajouter aux paramètres des actions réelles pour actualiser la bibliothèque et lancer/annuler la détection des jeux.
@@ -29,7 +29,7 @@ La priorité de la 0.2 est une interface de bureau complète, cohérente et soig
 - [x] Stocker localement les illustrations personnalisées des jeux, indépendamment du dossier d'installation, avec remplacement et retour à l'image par défaut.
 - [ ] Stocker les préférences propres à l'utilisateur et les exposer dans une interface de paramètres complète.
 - [x] Utiliser des illustrations originales de remplacement pendant le développement ; aucun visuel de jeu non autorisé ne doit être distribué.
-- [ ] Améliorer le rapport d'import et les erreurs par installation.
+- [x] Améliorer le rapport d'import et les erreurs par installation (jeu, plateforme, chemin et erreur technique visibles).
 
 ### Qualité
 - [ ] Éliminer les hypothèses de résolution fixe et vérifier les tailles de bibliothèque importantes.
