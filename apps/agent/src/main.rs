@@ -13,7 +13,7 @@ use std::{
     },
 };
 use tokio::{
-    sync::{Mutex, Semaphore},
+    sync::{Mutex, Notify, Semaphore},
     task::JoinSet,
 };
 
@@ -39,6 +39,7 @@ async fn serve_database_connection<S>(
     stream: &mut S,
     shared_state: &AtomicU8,
     database: &Mutex<Database>,
+    discovery_notify: &Notify,
 ) -> Result<(), Box<dyn Error + Send + Sync>>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
@@ -66,6 +67,10 @@ where
         write_message(stream, &response).await?;
         return Ok(());
     }
+    let retry_executable_discovery = matches!(
+        &request.payload.command,
+        IpcCommand::AddGame { .. } | IpcCommand::AddDetectedGame { .. }
+    );
     let result = match request.payload.command {
         IpcCommand::Ping => Ok(IpcResponsePayload::Pong),
         IpcCommand::GetStatus => Ok(IpcResponsePayload::CoreStatus { state }),
@@ -186,6 +191,11 @@ where
             }
         }
     };
+    // Imports can happen after Core has already started. Wake the background
+    // resolver immediately instead of waiting for the next process restart.
+    if retry_executable_discovery {
+        discovery_notify.notify_one();
+    }
     let response = match result {
         Ok(payload) => IpcResponse::success(request.request_id, payload),
         Err(error) => IpcResponse::failure(
@@ -282,6 +292,26 @@ async fn resolve_missing_game_executables_on_startup(database: Arc<Mutex<Databas
         resolved = saved,
         "Background executable discovery completed"
     );
+}
+
+/// Keeps executable discovery alive for the lifetime of Core.
+///
+/// It runs once immediately, whenever a game is imported, and periodically so
+/// that games whose files appear later are retried without restarting Core.
+async fn run_game_executable_discovery(
+    database: Arc<Mutex<Database>>,
+    discovery_notify: Arc<Notify>,
+) {
+    let mut retry_interval = tokio::time::interval(std::time::Duration::from_secs(300));
+    retry_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+    loop {
+        tokio::select! {
+            _ = retry_interval.tick() => {}
+            _ = discovery_notify.notified() => {}
+        }
+        resolve_missing_game_executables_on_startup(Arc::clone(&database)).await;
+    }
 }
 
 /// Maps discovery platform names to stable catalogue provider keys.
@@ -419,8 +449,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
     #[cfg(not(any(unix, windows)))]
     return Err("Amethys Core IPC is not supported on this platform.".into());
 
-    // Start the retry scan without delaying Core startup or IPC availability.
-    tokio::spawn(resolve_missing_game_executables_on_startup(Arc::clone(&database)));
+    // Start executable discovery before serving requests. The worker scans once
+    // immediately, then reacts to imports and retries periodically.
+    let discovery_notify = Arc::new(Notify::new());
+    tokio::spawn(run_game_executable_discovery(
+        Arc::clone(&database),
+        Arc::clone(&discovery_notify),
+    ));
 
     tracing::info!("Amethys Core is running and waiting for local requests");
 
@@ -451,11 +486,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                         };
                         let shared_state = Arc::clone(&shared_state);
                         let database = Arc::clone(&database);
+                        let discovery_notify = Arc::clone(&discovery_notify);
                         connections.spawn(async move {
                             let _permit = permit;
                             match tokio::time::timeout(
                                 std::time::Duration::from_secs(15),
-                                serve_database_connection(&mut stream, &shared_state, &database),
+                                serve_database_connection(&mut stream, &shared_state, &database, &discovery_notify),
                             ).await {
                                 Ok(Ok(())) => {}
                                 Ok(Err(error)) => {
@@ -490,7 +526,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{STATE_STOPPING, mutation_allowed, serve_database_connection};
+    use super::{STATE_STOPPING, Notify, mutation_allowed, serve_database_connection};
     use amethys_ipc::{
         IpcCommand, IpcCoreStatus, IpcEnvelope, IpcRequest, IpcResponse, read_message,
         write_message,
@@ -612,8 +648,9 @@ mod tests {
 
         let server_database = Arc::clone(&database);
         let server_state = Arc::clone(&state);
+        let notify = Notify::new();
         let server_task = tokio::spawn(async move {
-            serve_database_connection(&mut server, &server_state, &server_database)
+            serve_database_connection(&mut server, &server_state, &server_database, &notify)
                 .await
                 .expect("serve rejected request");
         });
