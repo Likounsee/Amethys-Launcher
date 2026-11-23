@@ -23,7 +23,7 @@ The in-progress GhostEngine desktop prototype has a separate Windows x64 packagi
 ./scripts/package-desktop-windows.ps1
 ```
 
-The script runs workspace and desktop checks/tests, builds the agent, CLI and desktop executable, then stages the application and its required fonts and cover assets under `dist/Amethys/`. It creates `dist/Amethys-Windows-x64.zip`, a per-file `SHA256SUMS.txt` manifest and a `.sha256` checksum for the archive. CI verifies both checksum layers and launches the packaged application in snapshot mode.
+The script runs workspace and desktop checks/tests, builds the agent, CLI and desktop executable, then stages the application and its required fonts and cover assets under `dist/Amethys/`. It creates `dist/Amethys-Windows-x64.zip`, a per-file `SHA256SUMS.txt` manifest and a `.sha256` checksum for the archive. CI verifies both checksum layers and launches the packaged application in snapshot mode at compact, standard and 4K window sizes, checking that the library and settings pages are captured.
 
 This is an experimental development package, not the public 0.1.0 CLI archive, an installer or a production-ready release. The desktop window/rendering backend is still a prototype and the application remains under active development.
 
