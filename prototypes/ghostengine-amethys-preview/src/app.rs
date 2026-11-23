@@ -84,6 +84,19 @@ fn toast_opacity(age: f32, life: f32) -> f32 {
     fade_in.min(fade_out)
 }
 
+/// Computes the next actionable hit index for keyboard navigation.
+fn next_focus_index(current: Option<usize>, count: usize, backwards: bool) -> Option<usize> {
+    if count == 0 {
+        return None;
+    }
+    Some(match (current, backwards) {
+        (None, false) => 0,
+        (None, true) => count - 1,
+        (Some(index), false) => (index + 1) % count,
+        (Some(index), true) => (index + count - 1) % count,
+    })
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ToastKind {
     Success,
@@ -1224,19 +1237,10 @@ impl App {
     }
 
     fn handle_tab(&mut self, input: &InputState) {
-        let count = self.hits.len();
-        if count == 0 {
-            self.keyboard_focus = None;
-            return;
+        self.keyboard_focus = next_focus_index(self.keyboard_focus, self.hits.len(), input.shift_down);
+        if let Some(next) = self.keyboard_focus {
+            self.ensure_visible(next);
         }
-        let next = match (self.keyboard_focus, input.shift_down) {
-            (None, false) => 0,
-            (None, true) => count - 1,
-            (Some(i), false) => (i + 1) % count,
-            (Some(i), true) => (i + count - 1) % count,
-        };
-        self.keyboard_focus = Some(next);
-        self.ensure_visible(next);
     }
 
     /// Drains scan messages; renders at most once per call.
@@ -1466,6 +1470,18 @@ mod tests {
         save_library_sort(&path, 1).expect("preferences replacement");
         assert_eq!(load_library_sort(&path), 1);
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn keyboard_focus_cycles_forward_and_backward_without_losing_the_empty_state() {
+        assert_eq!(next_focus_index(None, 0, false), None);
+        assert_eq!(next_focus_index(None, 3, false), Some(0));
+        assert_eq!(next_focus_index(None, 3, true), Some(2));
+        assert_eq!(next_focus_index(Some(0), 3, false), Some(1));
+        assert_eq!(next_focus_index(Some(2), 3, false), Some(0));
+        assert_eq!(next_focus_index(Some(0), 3, true), Some(2));
+        assert_eq!(next_focus_index(Some(2), 3, true), Some(1));
+        assert_eq!(next_focus_index(Some(9), 3, false), Some(1));
     }
 
     #[test]
