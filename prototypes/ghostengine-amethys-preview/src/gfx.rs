@@ -316,6 +316,7 @@ pub struct Painter<'a> {
     fonts: &'a Fonts,
     covers: Option<&'a CoverStore>,
     scratch: Framebuffer,
+    scale: f32,
 }
 
 impl<'a> Painter<'a> {
@@ -326,8 +327,18 @@ impl<'a> Painter<'a> {
             fonts,
             covers: None,
             scratch: Framebuffer::new(1, 1, BG).expect("scratch"),
+            scale: 1.0,
         }
     }
+
+    /// Scales logical UI coordinates and typography into physical pixels.
+    pub fn with_scale(mut self, scale: f32) -> Self {
+        self.scale = if scale.is_finite() { scale.clamp(0.75, 2.0) } else { 1.0 };
+        self
+    }
+
+    fn px(&self, value: i32) -> i32 { (value as f32 * self.scale).round() as i32 }
+    fn pf(&self, value: f32) -> f32 { value * self.scale }
 
     pub fn with_covers(mut self, covers: &'a CoverStore) -> Self {
         self.covers = Some(covers);
@@ -360,7 +371,7 @@ impl<'a> Painter<'a> {
         };
         let base = &mips.levels()[0];
         let (bw, bh) = (base.width() as i64, base.height() as i64);
-        let dest = rect(x, y, w, h);
+        let dest = rect(self.px(x), self.px(y), self.px(w), self.px(h));
         if ((w as i64 * bh) - (h as i64 * bw)).abs() * 20 <= w as i64 * bh {
             draw_mipmapped_texture_clipped(&mut self.fb, mips, dest, dest);
         } else {
@@ -435,7 +446,7 @@ impl<'a> Painter<'a> {
         w: i32,
         h: i32,
     ) {
-        let mut tile = Painter::new(w as u32, h as u32, self.fonts);
+        let mut tile = Painter::new(self.px(w).max(1) as u32, self.px(h).max(1) as u32, self.fonts).with_scale(self.scale);
         tile.covers = self.covers;
         if !tile.draw_cover_for_game(catalogue_game_id, installation_id, title, 0, 0, w, h) {
             tile.placeholder_cover(title, 0, 0, w, h);
@@ -448,6 +459,7 @@ impl<'a> Painter<'a> {
     /// Copies an opaque framebuffer into the page at (x, y).
     pub fn blit(&mut self, src: &Framebuffer, x: i32, y: i32) {
         let (sw, sh) = (src.width() as i32, src.height() as i32);
+        let (x, y) = (self.px(x), self.px(y));
         let (fw, fh) = (self.fb.width() as i32, self.fb.height() as i32);
         for row in 0..sh {
             let dy = y + row;
@@ -471,30 +483,30 @@ impl<'a> Painter<'a> {
 
     #[allow(clippy::too_many_arguments)]
     pub fn hit_with(&mut self, x: i32, y: i32, w: i32, h: i32, radius: i32, action: Action, fixed: bool, hover: Hover) {
-        self.hits.push(Hit { rect: rect(x, y, w, h), radius: radius.max(0) as u32, action, fixed, hover });
+        self.hits.push(Hit { rect: rect(self.px(x), self.px(y), self.px(w), self.px(h)), radius: self.px(radius).max(0) as u32, action, fixed, hover });
     }
 
     // ---- shapes -------------------------------------------------------
     pub fn fill(&mut self, x: i32, y: i32, w: i32, h: i32, c: Color) {
-        fb_fill(&mut self.fb, x, y, w, h, c);
+        fb_fill(&mut self.fb, self.px(x), self.px(y), self.px(w), self.px(h), c);
     }
 
     pub fn rrect(&mut self, x: i32, y: i32, w: i32, h: i32, r: i32, c: Color) {
-        fb_fill_rrect(&mut self.fb, x, y, w, h, r, c);
+        fb_fill_rrect(&mut self.fb, self.px(x), self.px(y), self.px(w), self.px(h), self.px(r), c);
     }
 
     pub fn rrect_line(&mut self, x: i32, y: i32, w: i32, h: i32, r: i32, c: Color) {
-        fb_stroke_rrect(&mut self.fb, x, y, w, h, r, c);
+        fb_stroke_rrect(&mut self.fb, self.px(x), self.px(y), self.px(w), self.px(h), self.px(r), c);
     }
 
     pub fn circle(&mut self, cx: i32, cy: i32, r: i32, c: Color) {
-        fill_circle_aa(&mut self.fb, Point::new(cx, cy), r.max(0) as u32, c);
+        fill_circle_aa(&mut self.fb, Point::new(self.px(cx), self.px(cy)), self.px(r).max(0) as u32, c);
     }
 
     pub fn poly(&mut self, pts: &[(f32, f32)], c: Color) {
         let v: Vec<Point> = pts
             .iter()
-            .map(|&(x, y)| Point::new(x.round() as i32, y.round() as i32))
+            .map(|&(x, y)| Point::new(self.pf(x).round() as i32, self.pf(y).round() as i32))
             .collect();
         fill_polygon_aa(&mut self.fb, &v, c);
     }
@@ -516,6 +528,7 @@ impl<'a> Painter<'a> {
         if w <= 0 || h <= 0 {
             return;
         }
+        let (x, y, w, h) = (self.px(x), self.px(y), self.px(w), self.px(h));
         let a = angle.to_radians();
         let (dx, dy) = (a.sin(), -a.cos());
         let len = (w as f32 * dx).abs() + (h as f32 * dy).abs();
@@ -536,6 +549,7 @@ impl<'a> Painter<'a> {
         if w <= 0 || h <= 0 || radius <= 0 {
             return;
         }
+        let (cx, cy, radius, x, y, w, h) = (self.px(cx), self.px(cy), self.px(radius), self.px(x), self.px(y), self.px(w), self.px(h));
         let g = Gradient::new(vec![
             GradientStop { position: 0.0, color },
             GradientStop { position: 1.0, color: alpha(color, 0) },
@@ -560,6 +574,7 @@ impl<'a> Painter<'a> {
     /// Rounds the four corners of an already painted rectangle by blending
     /// the surrounding background colour back over the outside of the arc.
     pub fn round_corners(&mut self, x: i32, y: i32, w: i32, h: i32, r: i32, bg: Color) {
+        let (x, y, w, h, r) = (self.px(x), self.px(y), self.px(w), self.px(h), self.px(r));
         let r = r.min(w / 2).min(h / 2).max(0);
         if r == 0 {
             return;
@@ -694,7 +709,7 @@ impl<'a> Painter<'a> {
     pub fn text(&mut self, x: i32, y: i32, lh: i32, s: &str, size: f32, w: W, c: Color) -> f32 {
         let baseline = y as f32 + (lh as f32 - 1.21 * size) / 2.0 + 0.969 * size;
         let font = self.fonts.get(w);
-        draw_text(&mut self.fb, font, s, Point::new(x, baseline.round() as i32), size, c).width
+        draw_text(&mut self.fb, font, s, Point::new(self.px(x), self.px(baseline.round() as i32)), self.pf(size), c).width
     }
 
     pub fn text_right(&mut self, right: i32, y: i32, lh: i32, s: &str, size: f32, w: W, c: Color) {
