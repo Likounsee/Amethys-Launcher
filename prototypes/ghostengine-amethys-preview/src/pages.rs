@@ -557,6 +557,8 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
     }
     if view.scanning {
         button(p, if stack_actions { mx } else { actions_x + refresh_w + 12 }, scan_y, Some(scan_w), scan_label, Some(scan_icon), Btn::Secondary, BG, Some(Action::CancelScan));
+    } else if view.loading {
+        button_disabled(p, actions_x + refresh_w + 12, actions_y, scan_label, Some(scan_icon));
     } else {
         button(p, actions_x + refresh_w + 12, actions_y, Some(scan_w), scan_label, Some(scan_icon), Btn::Primary, BG, Some(Action::ScanGames));
     }
@@ -1218,6 +1220,8 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
         if !compact {
             p.text_fit(sx + cw + 16, second_button_y, BTN_H, &progress, 12.0, W::Med, VIO_HI, (mx + mw - 24) - (sx + cw + 16));
         }
+    } else if view.core_loading {
+        button_disabled(p, sx, second_button_y, scan_button_label, Some(Icon::Search));
     } else {
         button(p, sx, second_button_y, None, scan_button_label, Some(Icon::Search), Btn::Primary, PANEL, Some(Action::ScanGames));
     }
