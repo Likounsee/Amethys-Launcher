@@ -563,7 +563,7 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
         let narrow_error = mw < 420;
         let msg_w = if narrow_error { mw - 40 } else { mw - 200 };
         let msg_h = p.paragraph_height(msg_w, 19, error, 12.5, W::Reg, 3);
-        let h = if narrow_error { (msg_h + 112).max(150) } else { (msg_h + 62).max(92) };
+        let h = if narrow_error { (msg_h + 148).max(180) } else { (msg_h + 62).max(92) };
         panel(p, mx, y, mw, h, 16);
         icon_badge(p, mx + 20, y + 20, 44, Icon::Alert, AMBER, AMBER_DARK);
         if narrow_error {
@@ -725,6 +725,24 @@ pub struct DetailView<'a> {
 fn info_row(p: &mut Painter, x: i32, y: i32, w: i32, first: bool, label: &str, value: &str, color: Color, ic: Option<Icon>) -> i32 {
     if !first {
         p.fill(x, y, w, 1, alpha(Color::WHITE, 12));
+    }
+    if w < 280 {
+        p.text_fit(x, y + 5, 18, label, 11.5, W::Reg, MUT, w);
+        let mut value_x = x;
+        let mut value_w = w;
+        if let Some(icon) = ic {
+            p.icon(icon, x, y + 29, 16, color, PANEL);
+            value_x += 24;
+            value_w -= 24;
+        }
+        let shown = if value.contains('/') || value.contains('\\') {
+            p.ellipsize_path(value, 12.5, W::Med, value_w)
+        } else {
+            value.to_owned()
+        };
+        let h = p.paragraph_height(value_w, 18, &shown, 12.5, W::Med, 3).max(18);
+        p.paragraph(value_x, y + 27, value_w, 18, &shown, 12.5, W::Med, color, 3);
+        return h + 48;
     }
     let label_w = 150.min(w / 3);
     p.text(x, y + 12, 20, label, 12.5, W::Reg, MUT);
@@ -1009,6 +1027,13 @@ pub fn game_detail(p: &mut Painter, lay: &Layout, view: &DetailView) -> i32 {
 
 /// Height of the rows `info_row` would draw, without drawing them.
 fn measure_rows(p: &mut Painter, inner: i32, rows: &[(&str, bool)]) -> i32 {
+    if inner < 280 {
+        return rows.iter().map(|(value, has_icon)| {
+            let width = inner - if *has_icon { 24 } else { 0 };
+            let shown = if value.contains('/') || value.contains('\\') { p.ellipsize_path(value, 12.5, W::Med, width) } else { (*value).to_owned() };
+            p.paragraph_height(width, 18, &shown, 12.5, W::Med, 3).max(18) + 48
+        }).sum();
+    }
     let label_w = 150.min(inner / 3);
     let vw = inner - label_w - 12;
     rows.iter()
@@ -1194,7 +1219,7 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
     // ---- privacy and about
     let ph = 132;
     panel(p, mx, y, mw, ph, 18);
-    p.text(mx + 24, y + 18, 24, "Confidentialité et fonctionnement", 16.0, W::Semi, TXT);
+    p.text_fit(mx + 24, y + 18, 24, "Confidentialité et fonctionnement", 16.0, W::Semi, TXT, mw - 48);
     p.paragraph(
         mx + 24,
         y + 52,
