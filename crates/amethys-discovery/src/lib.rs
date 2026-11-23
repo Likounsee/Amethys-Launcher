@@ -673,6 +673,52 @@ fn score_executable_metadata(metadata: &ExecutableMetadata, game_name: &str) -> 
     score
 }
 
+/// Uses a single publisher-matched root launcher as a safe hand-off when
+/// several equally credible game binaries are shipped side by side (for example
+/// mutually exclusive platform/build variants). This avoids guessing between
+/// binaries while still giving the user a launchable entry point.
+fn find_root_game_launcher(root: &Path, game_name: &str, publisher: &str) -> Option<PathBuf> {
+    let publisher = normalized_detection_text(publisher);
+    if publisher.is_empty() {
+        return None;
+    }
+    let entries = fs::read_dir(root).ok()?;
+    let mut launchers = Vec::new();
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !entry.file_type().ok()?.is_file()
+            || !path.extension().and_then(|value| value.to_str())
+                .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
+        {
+            continue;
+        }
+        let metadata = read_executable_metadata(&path);
+        let role = format!(
+            "{}{}",
+            normalized_detection_text(&metadata.description),
+            normalized_detection_text(&metadata.product)
+        );
+        if !role.contains("gamelauncher") && !role.contains("gameboot") {
+            continue;
+        }
+        if normalized_detection_text(&metadata.company) != publisher {
+            continue;
+        }
+        let title = format!(
+            "{}{}",
+            normalized_detection_text(&metadata.description),
+            normalized_detection_text(&metadata.product)
+        );
+        if title.contains(&normalized_detection_text(game_name)) {
+            continue;
+        }
+        if let Ok(relative) = path.strip_prefix(root) {
+            launchers.push(relative.to_path_buf());
+        }
+    }
+    (launchers.len() == 1).then(|| launchers.remove(0))
+}
+
 /// Searches a game directory without following symlinks or leaving its root.
 fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option<PathBuf> {
     const MAX_DEPTH: usize = 12;
@@ -908,6 +954,11 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
             {
                 score -= 30;
             }
+            if normalized_stem.ends_with("steam")
+                && fs::metadata(&canonical).is_ok_and(|metadata| metadata.len() < 2 * 1024 * 1024)
+            {
+                score -= 25;
+            }
             if path_lower.contains("binaries\\win64") || path_lower.contains("binaries/win64") {
                 score += 12;
             }
@@ -934,6 +985,16 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
             .map(|candidate| candidate.1)
             .unwrap_or(i32::MIN);
         if *best_score < 55 || *best_score - second_score < 18 {
+            let best_metadata = read_executable_metadata(best_path);
+            if best_metadata.product.eq_ignore_ascii_case(game_name)
+                || best_metadata.description.eq_ignore_ascii_case(game_name)
+            {
+                if let Some(launcher) =
+                    find_root_game_launcher(&root, game_name, &best_metadata.company)
+                {
+                    return Some(launcher);
+                }
+            }
             return None;
         }
     }
