@@ -17,7 +17,7 @@ Each archive contains `amethys-agent` (or `.exe`), `amethysctl` (or `.exe`), the
 
 ## Experimental Windows desktop development package
 
-The in-progress GhostEngine desktop prototype has a separate Windows x64 packaging script. From the repository root, run:
+The GhostEngine desktop preview has a separate Windows x64 packaging script. From the repository root, run:
 
 ```powershell
 ./scripts/package-desktop-windows.ps1
@@ -25,7 +25,9 @@ The in-progress GhostEngine desktop prototype has a separate Windows x64 packagi
 
 The script runs workspace and desktop checks/tests, builds the agent, CLI and desktop executable, then stages the application and its required fonts and cover assets under `dist/Amethys/`. It creates `dist/Amethys-Windows-x64.zip`, a per-file `SHA256SUMS.txt` manifest and a `.sha256` checksum for the archive. CI verifies both checksum layers and launches the packaged application in snapshot mode at compact, standard and 4K window sizes, checking that the library and settings pages are captured.
 
-This is an experimental development package, not the public 0.1.0 CLI archive, an installer or a production-ready release. The desktop window/rendering backend is still a prototype and the application remains under active development.
+**Windows 0.2 validation:** the portable ZIP was built locally, extracted and launched successfully on a real Windows machine. All 15 manual checks passed. The exact tested archive had SHA-256 `d02e616d99c038d3856f6d2d55840c75b16aeec0a8bab44de8cbb0034306ae59`; a rebuild may produce a different checksum. The successful [CI run 45204643241](https://github.com/Likounsee/Amethys-Launcher/actions/runs/45204643241) also verified the Windows package checksums and desktop snapshots. Linux CI quality and desktop library tests passed, but manual testing of a Linux desktop package is deferred and remains outstanding.
+
+This remains an experimental development preview, separate from the public 0.1.0 CLI archive. It is not an installer or a production-ready release.
 
 ## First-run notes
 
