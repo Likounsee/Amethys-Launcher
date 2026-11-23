@@ -1264,9 +1264,11 @@ impl App {
             } else if self.pending_remove.is_some() {
                 self.pending_remove = None;
                 self.render(false);
-            } else if self.search_focused || self.editing_executable {
+            } else if self.editing_executable {
+                // Escape discards the draft and restores the executable saved by Core.
+                self.apply(Action::CancelExecutableEdit);
+            } else if self.search_focused {
                 self.search_focused = false;
-                self.editing_executable = false;
                 self.render(false);
             } else if self.stats_open {
                 self.stats_open = false;
@@ -1290,7 +1292,10 @@ impl App {
                 self.handle_tab(input);
             }
         }
-        if input.enter_pressed && !had_text_focus && !self.search_focused && !self.editing_executable {
+        if input.enter_pressed && self.editing_executable {
+            // Enter submits the executable field just like the Save button.
+            self.apply(Action::SaveExecutable);
+        } else if input.enter_pressed && !had_text_focus && !self.search_focused && !self.editing_executable {
             if let Some(action) = self.keyboard_focus.and_then(|i| self.hits.get(i)).map(|h| h.action) {
                 self.apply(action);
             }
