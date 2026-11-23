@@ -481,7 +481,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let data_dir = amethys_config::prepare_data_directory()?;
     let database = Arc::new(Mutex::new(Database::open(data_dir.join("amethys.sqlite"))?));
-    amethys_catalog::CatalogRepository::initialize(&database.lock().await)?;
+    amethys_catalog::CatalogRepository::initialize(&*database.lock().await)?;
     // Keep slow or stalled local clients from blocking the accept loop or
     // exhausting the agent's task and socket resources.
     const MAX_IPC_CONNECTIONS: usize = 32;
