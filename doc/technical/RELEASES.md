@@ -1,84 +1,103 @@
 # Builds and releases
 
-## Amethys 0.1.0 — first public test milestone
+## Amethys Launcher 0.2.0 — published desktop preview
 
-The first public version, `v0.1.0`, has been built and published for Windows and Linux. It is an **experimental prototype intended for testing and feedback only**. It is not a finished launcher, not production-ready and not recommended for everyday use.
+**Status:** published  
+**Publication date:** 23 November 2026  
+**Tag:** `v0.2.0`  
+**Release page:** https://github.com/Likounsee/Amethys-Launcher/releases/tag/v0.2.0  
+**Release workflow:** https://github.com/Likounsee/Amethys-Launcher/actions/runs/45235089145
 
-The release workflow successfully built both targets, ran the release tests, packaged the binaries and generated and verified SHA-256 checksums. This confirms the automated release pipeline; it does not establish broad compatibility with every launcher, game, machine or installation.
+The 0.2.0 release is the first published desktop preview. It packages the graphical launcher, Core agent, CLI, required fonts and cover assets for Windows x64 and Linux x86_64 GNU.
 
-## Supported 0.1.0 test packages
+### Published packages
 
-| Operating system | Target | Archive |
-| --- | --- | --- |
-| Windows 64-bit | `x86_64-pc-windows-msvc` | ZIP |
-| Linux x86_64 (GNU) | `x86_64-unknown-linux-gnu` | TAR.GZ |
+| Operating system | Target | Archive | Download |
+| --- | --- | --- | --- |
+| Windows 64-bit | `x86_64-pc-windows-msvc` | ZIP | [Download](https://github.com/Likounsee/Amethys-Launcher/releases/download/v0.2.0/amethys-v0.2.0-x86_64-pc-windows-msvc.zip) |
+| Linux x86_64 (GNU) | `x86_64-unknown-linux-gnu` | TAR.GZ | [Download](https://github.com/Likounsee/Amethys-Launcher/releases/download/v0.2.0/amethys-v0.2.0-x86_64-unknown-linux-gnu.tar.gz) |
 
-Each archive contains `amethys-agent` (or `.exe`), `amethysctl` (or `.exe`), the project `README.md`, the `LICENSE`, and this guide as `RELEASES.md`. The archives are portable test binaries, not an installer or operating-system service package. The agent must be running before the CLI can communicate with it. Automatic startup, service registration, desktop shortcuts, update delivery and uninstallers are not included.
+The release also publishes a combined [SHA256SUMS](https://github.com/Likounsee/Amethys-Launcher/releases/download/v0.2.0/SHA256SUMS) file.
 
-## Experimental Windows desktop development package
+Each archive contains:
 
-The GhostEngine desktop preview has a separate Windows x64 packaging script. From the repository root, run:
+- `amethys-launcher` — graphical desktop application;
+- `amethys-agent` — local Core agent;
+- `amethysctl` — command-line client;
+- `assets/fonts/` and `assets/covers/`;
+- `README.md`, `LICENSE`, `RELEASES.md` and `LIRE-MOI.txt`.
 
-```powershell
-./scripts/package-desktop-windows.ps1
-```
+The archives are portable packages, not installers or operating-system service packages. They do not create shortcuts, register a background service or install an automatic updater.
 
-The script runs workspace and desktop checks/tests, builds the agent, CLI and desktop executable, then stages the application and its required fonts and cover assets under `dist/Amethys/`. It creates `dist/Amethys-Windows-x64.zip`, a per-file `SHA256SUMS.txt` manifest and a `.sha256` checksum for the archive. CI verifies both checksum layers and launches the packaged application in snapshot mode at compact, standard and 4K window sizes, checking that the library and settings pages are captured.
+### Published archive checksums
 
-**Windows 0.2 validation:** the portable ZIP was built locally, extracted and launched successfully on a real Windows machine. All 15 manual checks passed. The exact tested archive had SHA-256 `d02e616d99c038d3856f6d2d55840c75b16aeec0a8bab44de8cbb0034306ae59`; a rebuild may produce a different checksum. The successful [CI run 45204643241](https://github.com/Likounsee/Amethys-Launcher/actions/runs/45204643241) also verified the Windows package checksums and desktop snapshots.
+The following SHA-256 values match the assets attached to the published GitHub release and are repeated in its `SHA256SUMS` manifest.
 
-**0.2 release target:** the official desktop release is intended to provide both Windows x64 (ZIP) and Linux x86_64 GNU (TAR.GZ) portable packages. The release workflow includes the graphical launcher, Core agent, CLI, fonts and cover assets in both platform archives. The main-branch CI has now passed on the release candidate and its Linux desktop packaging checks are green. The dedicated release workflow still needs to build and verify both final archives before publication. Manual testing on a Linux machine is deliberately deferred and remains outstanding.
+| File | SHA-256 |
+| --- | --- |
+| `amethys-v0.2.0-x86_64-pc-windows-msvc.zip` | `4ccb3c90f248ca89b8be2d42537bb145763ee6ab67e3b47e3377b327fea955e5` |
+| `amethys-v0.2.0-x86_64-unknown-linux-gnu.tar.gz` | `376aef5bd6249315dae46dbc83c21997681cd93af9daff54696c752c1327c7fe` |
 
-This remains an experimental development preview, separate from the public 0.1.0 CLI archive. It is not an installer or a production-ready release.
+Verify the archive before extracting it:
 
-**Versioning gate:** the workspace crates and desktop preview are versioned `0.2.0`, and the release workflow accepts a `v0.2.0` tag. The main-branch CI is green, but the versioned release build has not yet been run. The `v0.2.0` tag is not created and no release has been published. The release is ready for its draft-build stage; publication must wait until the Windows and Linux release jobs both pass and produce the two portable desktop archives plus the combined `SHA256SUMS` file. Linux manual testing remains explicitly deferred; the Linux archive will be CI-validated until it is tested on a real Linux machine.
+- **Windows PowerShell:** `Get-FileHash .\amethys-v0.2.0-x86_64-pc-windows-msvc.zip -Algorithm SHA256`
+- **Linux:** download both the archive and `SHA256SUMS` into the same directory, then run `sha256sum -c SHA256SUMS`.
 
-## First-run notes
+### Release validation evidence
+
+The dedicated release workflow completed successfully (run `45235089145`) on 23 November 2026. Both platform build jobs and the publish job passed.
+
+Each platform job ran workspace release tests, desktop Clippy with warnings denied, desktop tests, release builds, archive staging and extracted-package smoke checks. The smoke checks verify the packaged CLI version and help output, then start the packaged agent and confirm IPC readiness. The publish job generated the two-entry SHA-256 manifest, verified it and uploaded both archives.
+
+- **Windows:** automated release build and packaged archive smoke checks passed. A separate Windows desktop development package had previously passed 15 manual checks on a real Windows machine. That manually tested development archive is not the same file as the published release ZIP.
+- **Linux:** automated release build and packaged archive smoke checks passed. Manual testing on a physical Linux machine remains outstanding.
+- **macOS:** not included in 0.2.0.
+
+Automated CI results confirm the tested build and packaging paths, not universal compatibility with all PCs, desktop environments, launchers or games.
+
+### First launch
+
+1. Download the archive for your operating system from the [v0.2.0 release page](https://github.com/Likounsee/Amethys-Launcher/releases/tag/v0.2.0).
+2. Extract it to a directory where your user account has read/write access.
+3. Launch the graphical application:
+   - **Windows:** run `amethys-launcher.exe`.
+   - **Linux:** run `./amethys-launcher`. If needed, run `chmod +x amethys-launcher` first.
+4. The package also includes the Core agent and CLI. Run `amethysctl.exe --help` on Windows or `./amethysctl --help` on Linux to inspect the available commands.
+
+Keep official platform launchers as the source of truth for game installation, updates, authentication and licences. Amethys does not bypass DRM, licensing, account checks, anti-cheat or platform restrictions.
+
+### Scope and limitations
+
+Version 0.2.0 remains an experimental development preview, not a production-ready launcher. It provides a graphical local library, search, filters, sorting, game details, executable configuration and launching, supported launcher discovery, explicit import, custom covers and asynchronous Core operations.
+
+It does not provide a connected commercial store, prices, promotions, purchases, account management, game downloads or game installation. Cloud saves, cross-device synchronization and automatic updates are also not included. Discovery coverage is adapter-specific, and detecting a game does not guarantee that it will launch. See [launcher discovery coverage](../discovery/LAUNCHER-COVERAGE.md) and [desktop documentation](DESKTOP-PREVIEW.md).
+
+## Amethys Launcher 0.1.0 — first public test milestone
+
+The first public version, `v0.1.0`, was an experimental agent/CLI prototype for Windows and Linux. It provided a Rust background agent, CLI, local IPC, SQLite-backed storage, initial read-only launcher discovery, explicit import and basic local library operations. It did not include a graphical interface.
+
+The 0.1.0 archives were portable test binaries, not installers. They contained the agent, CLI, project README, LICENSE and this release guide. The agent ran in the foreground and had to be started before the CLI could communicate with it.
+
+### First run for 0.1.0 CLI packages
 
 1. Extract the archive to a directory owned by the current user.
-2. Open a terminal in that extracted directory and start the agent:
+2. Open a terminal in that directory and start the agent:
    - **Windows PowerShell:** `./amethys-agent.exe`
    - **Linux:** `./amethys-agent`
-3. Keep that terminal open. Open a second terminal in the same directory and check the connection:
+3. Keep that terminal open. In a second terminal, check the connection:
    - **Windows PowerShell:** `./amethysctl.exe ping`, then `./amethysctl.exe status`
    - **Linux:** `./amethysctl ping`, then `./amethysctl status`
-4. Inspect supported local launcher metadata:
-   - **Windows PowerShell:** `./amethysctl.exe games scan`
-   - **Linux:** `./amethysctl games scan`
-5. Use `games import-all` only when you explicitly want to add all detected installations to the Amethys database:
-   - **Windows PowerShell:** `./amethysctl.exe games import-all`
-   - **Linux:** `./amethysctl games import-all`
-
-The agent currently runs in the foreground. Closing its terminal stops it. The CLI commands must be run from the extracted directory (or with the full executable path). Do not expose the IPC endpoint over a network.
-
-## Known scope and limitations
-
-Version 0.1.0 is a very small first milestone. It provides a Rust agent, a CLI, local IPC, SQLite-backed storage, initial read-only launcher discovery, explicit import and basic local library operations. These foundations are incomplete and should be treated as experimental.
-
-There is no graphical interface, store/catalogue, game download or installation, account system, cloud save synchronization, backup feature, automatic updater, service installer or polished end-user experience. Discovery is metadata-based and does not guarantee that a game is launchable. The project is still being developed; do not present this release as a complete or production-ready product.
-
-## CI revalidation record
-
-On 2026-11-23, a fresh main-branch CI run was requested for the 0.2.0 release candidate because the preceding GitHub Actions runs reported failure without exposing any job records or artifacts through the available API. This revalidation does not change application source code; release approval still depends on successful Windows and Linux jobs and their generated archives.
-
-## Validation and test evidence
-
-Keep three evidence levels distinct in release notes and bug reports:
-
-1. **Automated CI / fixture-tested:** parser, command, IPC, storage, packaging or security behavior exercised by automated tests. A fixture does not prove compatibility with every installed launcher version.
-2. **Real-install validated:** a reproducible scan or operation was checked against an actual game installation and launcher on a real machine. Record only the platforms and cases that were genuinely exercised.
-3. **Not yet tested:** no suitable physical machine, launcher account or installed game was available. State this plainly; do not imply that the case passed.
-
-The release pipeline completed successfully for both Windows and Linux: build and release tests passed, platform archives were generated, and SHA-256 checksums were generated and verified. These automated results do not replace real-world testing. Real-install validation is recorded per adapter in [launcher discovery coverage](../discovery/LAUNCHER-COVERAGE.md); untested adapters must remain labelled as pending. macOS is outside the 0.1.0 target and is deferred until a suitable Mac test machine is available.
-
-## Future development
-
-Development continues after this first test milestone. Planned directions include stabilizing the core, expanding automated and real-machine testing, improving launcher compatibility and diagnostics, and progressively designing a more complete user experience. A graphical interface and larger features such as a store/catalogue, downloads, accounts, backups and save synchronization are future possibilities, not part of 0.1.0. Their scope and timing are not guaranteed and may change as the project evolves.
+4. Inspect supported local launcher metadata with `games scan`.
+5. Use `games import-all` only when you explicitly want to add all detected installations to the Amethys database.
 
 ## Security and privacy
 
-Amethys does not bypass DRM, licensing, authentication, anti-cheat or platform restrictions. Discovery reads launcher metadata and does not modify game installations or launcher databases. IPC is local-only and must not be exposed over a network.
+Discovery reads launcher metadata and does not modify game installations or launcher databases. IPC is local-only and must not be exposed over a network.
 
-Windows named-pipe access uses an explicit DACL granting access to the current process user and LocalSystem, while omitting Everyone and anonymous users. Remote clients are rejected and client opens use identification-level QoS. The Windows CI suite checks the named-pipe peer SID/PID and runs an agent/CLI IPC smoke test. Unix sockets use mode `0600` and are cleaned up using socket inode checks.
+Windows named-pipe access uses an explicit DACL granting access to the current process user and LocalSystem, while omitting Everyone and anonymous users. Remote clients are rejected and client opens use identification-level QoS. Unix sockets use mode `0600` and are cleaned up using socket inode checks.
 
 These controls restrict the IPC endpoint to the current user context; they do not protect against malicious code already running as that user or a compromised account. Review the [IPC security notes](IPC.md) before testing.
+
+## CI and release automation
+
+The cross-platform quality checks are defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml). Versioned release builds and publication are defined in [`.github/workflows/release.yml`](../../.github/workflows/release.yml). A release tag must match the workspace version in `Cargo.toml`; the workflow validates the tag, tests and builds both targets, checks the extracted packages and publishes the archives with SHA-256 checksums.
