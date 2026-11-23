@@ -1080,8 +1080,15 @@ impl App {
         Rect::new(self.win_w as u32 - px(12 + 250), self.win_h as u32 - px(12 + 34), px(250), px(34))
     }
 
+    fn stats_panel_scale(&self) -> f32 {
+        let width_scale = self.win_w.saturating_sub(20) as f32 / (PANEL_W as f32);
+        let height_scale = self.win_h.saturating_sub(62) as f32 / (PANEL_H as f32);
+        self.lay.scale.min(width_scale).min(height_scale).max(0.1)
+    }
+
     fn panel_rect(&self) -> Rect {
-        let px = |value: i32| (value as f32 * self.lay.scale).round() as u32;
+        let scale = self.stats_panel_scale();
+        let px = |value: i32| (value as f32 * scale).round() as u32;
         let x = (self.win_w as u32).saturating_sub(px(12 + PANEL_W));
         let y = (self.win_h as u32)
             .saturating_sub(px(12 + 34 + 8 + PANEL_H))
@@ -1091,7 +1098,7 @@ impl App {
 
     fn bench_button(&self) -> Rect {
         let p = self.panel_rect();
-        let px = |value: i32| (value as f32 * self.lay.scale).round() as u32;
+        let px = |value: i32| (value as f32 * self.stats_panel_scale()).round() as u32;
         Rect::new(p.x + px(20), p.y + px(PANEL_H - 20 - 44 - 44), px(200), px(44))
     }
 
@@ -1159,8 +1166,10 @@ impl App {
         ];
         let bench_label = self.bench;
         let panel = self.panel_rect();
-        let by = ((self.bench_button().y - panel.y) as f32 / scale).round() as i32;
-        self.overlay_scaled(fb, (panel.x as i32, panel.y as i32, px(PANEL_W), px(PANEL_H)), 1.0, scale, |p| {
+        let panel_scale = self.stats_panel_scale();
+        let panel_px = |value: i32| (value as f32 * panel_scale).round() as i32;
+        let by = ((self.bench_button().y - panel.y) as f32 / panel_scale).round() as i32;
+        self.overlay_scaled(fb, (panel.x as i32, panel.y as i32, panel_px(PANEL_W), panel_px(PANEL_H)), 1.0, panel_scale, |p| {
             p.shadow(0, 0, PANEL_W, PANEL_H, 18, 8, 60);
             p.rrect(0, 0, PANEL_W, PANEL_H, 18, gfx::PANEL);
             p.rrect_line(0, 0, PANEL_W, PANEL_H, 18, alpha(gfx::VIO, 200));
