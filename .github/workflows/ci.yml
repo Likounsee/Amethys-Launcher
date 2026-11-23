@@ -76,7 +76,7 @@ jobs:
 
             $installDir = Join-Path $dataDir "Smoke Game"
             New-Item -ItemType Directory -Force (Join-Path $installDir "bin") | Out-Null
-            Set-Content -Path (Join-Path $installDir "bin/game.exe") -Value "smoke"
+            Set-Content -Path (Join-Path $installDir "bin/game.fixture") -Value "smoke"
             $addOutput = & "$PWD/target/release/amethysctl.exe" games add "Smoke Game" "CI" $installDir
             if ($LASTEXITCODE -ne 0) { throw "CLI game add failed." }
             if ($addOutput -notmatch 'identifiant : ([^)]+)') { throw "CLI game add did not return a game ID." }
@@ -85,7 +85,7 @@ jobs:
             if ($LASTEXITCODE -ne 0 -or $unconfiguredVerify.healthy -ne 1 -or $unconfiguredVerify.launch_ready -ne 0 -or $unconfiguredVerify.games[0].launch_ready -ne $false) {
               throw "CLI verification did not distinguish a healthy unconfigured game from a launch-ready game."
             }
-            & "$PWD/target/release/amethysctl.exe" games set-executable $gameId "bin/game.exe"
+            & "$PWD/target/release/amethysctl.exe" games set-executable $gameId "bin/game.fixture"
             if ($LASTEXITCODE -ne 0) { throw "CLI executable configuration failed." }
 
             # Exercise the launcher's security boundary through the real IPC/CLI path.
