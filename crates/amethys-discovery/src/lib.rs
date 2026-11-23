@@ -586,6 +586,26 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
         ].iter().any(|part| stem.contains(part))
     }
 
+    fn path_matches_token(words: &[String], normalized_path: &str, token: &str) -> bool {
+        if normalized_path.contains(token) {
+            return true;
+        }
+
+        // Some storefront titles are commonly abbreviated in executable and
+        // install metadata (for example GTA = Grand Theft Auto). Recognize a
+        // title token as the initials of adjacent directory words without
+        // maintaining a per-game alias table.
+        if (3..=5).contains(&token.len()) {
+            words.windows(token.len()).any(|window| {
+                window.iter()
+                    .filter_map(|word| word.chars().next())
+                    .collect::<String>() == token
+            })
+        } else {
+            false
+        }
+    }
+
     let root = install_path.canonicalize().ok()?;
     if !root.is_dir() {
         return None;
@@ -674,6 +694,23 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
             let normalized_install_context = format!(
                 "{normalized_root_name}{normalized_relative_path}"
             );
+            let mut install_path_words: Vec<String> = root.file_name()
+                .into_iter()
+                .chain(relative_path.components().filter_map(|component| {
+                    match component {
+                        std::path::Component::Normal(value) => Some(value),
+                        _ => None,
+                    }
+                }))
+                .flat_map(|component| {
+                    component.to_string_lossy()
+                        .split(|character: char| !character.is_ascii_alphanumeric())
+                        .filter(|word| !word.is_empty())
+                        .map(normalize)
+                        .collect::<Vec<_>>()
+                })
+                .collect();
+            install_path_words.retain(|word| !word.is_empty());
             let normalized_parent = path.parent()
                 .and_then(Path::file_name)
                 .and_then(|value| value.to_str())
@@ -709,7 +746,13 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
                 score += ((matched_stem * 45) / target_tokens.len()) as i32;
 
                 let matched_path = target_tokens.iter()
-                     .filter(|token| normalized_install_context.contains(token.as_str()))
+                    .filter(|token| {
+                        path_matches_token(
+                            &install_path_words,
+                            &normalized_install_context,
+                            token,
+                        )
+                    })
                     .count();
                 score += ((matched_path * 35) / target_tokens.len()) as i32;
             }
@@ -2509,6 +2552,34 @@ mod tests {
             Some(std::path::PathBuf::from(
                 "default_game/Binaries/Win64/RainbowSix.exe"
             ))
+        );
+        std::fs::remove_dir_all(parent).unwrap();
+    }
+
+    #[test]
+    fn generic_executable_resolver_matches_title_acronyms_in_install_folder_words() {
+        let parent = std::env::temp_dir().join(format!(
+            "amethys-executable-acronym-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let root = parent.join("Grand Theft Auto V Enhanced");
+        let game_bin = root.join("Binaries/Win64");
+        std::fs::create_dir_all(&game_bin).unwrap();
+        std::fs::write(game_bin.join("PlayGTAV.exe"), b"game").unwrap();
+
+        let detected = super::DetectedGame {
+            platform_id: None,
+            name: "GTA V Enhanced".to_owned(),
+            install_path: root.clone(),
+            platform: "Unknown Store",
+        };
+        assert_eq!(
+            super::resolve_game_executable(&detected),
+            Some(std::path::PathBuf::from("Binaries/Win64/PlayGTAV.exe"))
         );
         std::fs::remove_dir_all(parent).unwrap();
     }
