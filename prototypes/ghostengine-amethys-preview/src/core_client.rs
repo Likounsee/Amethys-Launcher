@@ -174,59 +174,6 @@ pub fn remove_game(id: &str) -> Result<bool, String> {
 }
 
 
-/// Finds a likely game executable without guessing when several unrelated executables exist.
-fn detect_game_executable(install_path: &std::path::Path, game_name: &str) -> Option<String> {
-    fn normalize(value: &str) -> String {
-        value.chars().filter(|character| character.is_ascii_alphanumeric())
-            .flat_map(char::to_lowercase).collect()
-    }
-
-    fn collect_executables(directory: &std::path::Path, depth: usize, output: &mut Vec<std::path::PathBuf>) {
-        if depth > 3 || output.len() >= 512 { return; }
-        let Ok(entries) = std::fs::read_dir(directory) else { return; };
-        let mut entries: Vec<_> = entries.flatten().collect();
-        entries.sort_by_key(|entry| entry.file_name());
-        for entry in entries {
-            let path = entry.path();
-            let Ok(kind) = entry.file_type() else { continue; };
-            if kind.is_file() && path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("exe")) {
-                let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("");
-                let name = normalize(stem);
-                let ignored = ["uninstall", "unins", "setup", "install", "crash", "report",
-                    "redist", "vc_redist", "directx", "dxsetup", "unitycrash", "helper"];
-                if !ignored.iter().any(|part| name.contains(part)) {
-                    output.push(path);
-                }
-            } else if kind.is_dir() && depth < 3 {
-                collect_executables(&path, depth + 1, output);
-            }
-            if output.len() >= 512 { return; }
-        }
-    }
-
-    if !install_path.is_dir() { return None; }
-    let target = normalize(game_name);
-    let mut candidates = Vec::new();
-    collect_executables(install_path, 0, &mut candidates);
-
-    // Prefer a filename matching the detected game title (including common suffixes).
-    let mut matching: Vec<_> = candidates.iter().filter(|path| {
-        let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("");
-        let stem = normalize(stem);
-        !stem.is_empty() && (stem == target || stem.starts_with(&target) || target.starts_with(&stem))
-    }).cloned().collect();
-    matching.sort_by_key(|path| (path.components().count(), path.clone()));
-    let selected = if matching.len() == 1 {
-        matching.into_iter().next()
-    } else if matching.is_empty() && candidates.len() == 1 {
-        candidates.into_iter().next()
-    } else {
-        None
-    }?;
-    selected.strip_prefix(install_path).ok()
-        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
-}
-
 /// Imports one discovered installation through the Core-owned database.
 pub fn add_detected_game(
     detected: &amethys_discovery::DetectedGame,
@@ -268,7 +215,8 @@ pub fn add_detected_game(
                     platform: detected.platform.to_owned(),
                     platform_id: detected.platform_id.clone(),
                     install_path: detected.install_path.to_string_lossy().into_owned(),
-                    executable: detect_game_executable(&detected.install_path, &detected.name),
+                    executable: amethys_discovery::resolve_game_executable(detected)
+                        .map(|path| path.to_string_lossy().into_owned()),
                 }),
             ),
         )
