@@ -8,6 +8,12 @@ This directory contains the project's documentation. Start with the root [README
 - [Builds and releases](technical/RELEASES.md) — release history, package contents, first-run guidance and release pipeline.
 - [Desktop preview 0.2](technical/DESKTOP-PREVIEW.md) — desktop architecture, capabilities, source build, validation and packaging details.
 
+## Development roadmap — 0.3
+
+- [0.3 development roadmap](../ROADMAP-0.3.md) — fixed order, dependencies, scope, acceptance criteria and deferred 0.4 quality campaign.
+- [Lot 1 audit](technical/LOT-1-AUDIT-0.3.md) — full inventory of the existing 0.2 codebase and gaps.
+- [Lot 0 architecture](technical/ARCHITECTURE-0.3.md) — target architecture, data contracts, IPC, persistence and security rules.
+
 ## Previous release — 0.1.0
 
 - [0.1.0 first public release notes](releases/0.1.0-pre-release-notes.md) — original experimental CLI milestone, included foundations and limitations.
