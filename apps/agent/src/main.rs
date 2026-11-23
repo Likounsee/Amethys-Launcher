@@ -280,12 +280,19 @@ async fn resolve_missing_game_executables_on_startup(database: Arc<Mutex<Databas
         missing_games
             .into_iter()
             .filter_map(|(id, name, platform, platform_id, install_path, previous_executable)| {
-                let executable = amethys_discovery::resolve_game_executable_for(
+                let Some(executable) = amethys_discovery::resolve_game_executable_for(
                     &platform,
                     platform_id.as_deref(),
                     std::path::Path::new(&install_path),
                     &name,
-                )?;
+                ) else {
+                    tracing::debug!(
+                        game = %name,
+                        install_path = %install_path,
+                        "No unambiguous executable candidate found for game"
+                    );
+                    return None;
+                };
                 Some((
                     id,
                     previous_executable,
