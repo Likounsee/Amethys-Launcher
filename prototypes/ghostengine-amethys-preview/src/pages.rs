@@ -1282,6 +1282,12 @@ mod tests {
         assert!(Layout::new(960, 600).columns() >= 2);
         let wide = Layout::new(1600, 900);
         assert!(wide.card_width() * wide.columns() + GAP * (wide.columns() - 1) <= wide.mw);
+
+        let compact = Layout::new(720, 520);
+        assert!(compact.compact());
+        assert_eq!(compact.mx, SIDE_W + 24);
+        assert_eq!(compact.mw, 432);
+        assert!(compact.card_width() >= MIN_CARD_W);
     }
 
     #[test]
