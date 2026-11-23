@@ -336,6 +336,24 @@ jobs:
         run: |
           & scripts/package-desktop-windows.ps1
           if ($LASTEXITCODE -ne 0) { throw "Windows desktop packaging failed." }
+
+          # Verify every staged file and the final archive against their SHA-256 records.
+          $packageRoot = Join-Path $PWD "dist/Amethys"
+          $manifestPath = Join-Path $packageRoot "SHA256SUMS.txt"
+          if (-not (Test-Path $manifestPath -PathType Leaf)) { throw "Portable package is missing SHA256SUMS.txt." }
+          foreach ($line in Get-Content -LiteralPath $manifestPath) {
+            $parts = $line -split '  ', 2
+            if ($parts.Count -ne 2) { throw "Malformed portable package checksum entry: $line" }
+            $filePath = Join-Path $packageRoot $parts[1]
+            if (-not (Test-Path $filePath -PathType Leaf)) { throw "Checksum manifest references a missing file: $($parts[1])" }
+            $actualHash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actualHash -ne $parts[0]) { throw "Portable package checksum mismatch: $($parts[1])" }
+          }
+          $archivePath = Join-Path $PWD "dist/Amethys-Windows-x64.zip"
+          $archiveHash = (Get-FileHash -LiteralPath $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          $declaredArchiveHash = ((Get-Content -LiteralPath "$archivePath.sha256" -Raw).Trim() -split '\s+', 2)[0]
+          if ($archiveHash -ne $declaredArchiveHash) { throw "Windows portable archive SHA-256 verification failed." }
+
           $app = Join-Path $PWD "dist/Amethys/amethys-launcher.exe"
           $cli = Join-Path $PWD "dist/Amethys/amethysctl.exe"
           if (-not (Test-Path $cli -PathType Leaf)) { throw "Portable desktop package is missing amethysctl.exe." }
