@@ -339,7 +339,7 @@ pub fn set_game_executable(id: &str, executable: &str) -> Result<IpcGameEntry, S
 /// Connects to the running agent or starts the bundled agent beside the desktop executable.
 pub fn list_games_or_start_agent() -> Result<Vec<IpcGameEntry>, String> {
     match list_games() {
-        Ok(games) => return Ok(games),
+        Ok(games) => Ok(games),
         Err(initial_error) => {
             let executable = std::env::current_exe()
                 .map_err(|error| format!("Impossible de localiser le launcher : {error}"))?;
