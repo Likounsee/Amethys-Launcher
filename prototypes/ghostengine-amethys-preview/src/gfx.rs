@@ -481,7 +481,6 @@ impl<'a> Painter<'a> {
     }
 
     #[allow(clippy::too_many_arguments)] // Explicit drawing geometry is intentional in this low-level painter API.
-
     pub fn hit(&mut self, x: i32, y: i32, w: i32, h: i32, radius: i32, action: Action, fixed: bool) {
         self.hit_with(x, y, w, h, radius, action, fixed, Hover::Glow);
     }
@@ -727,7 +726,6 @@ impl<'a> Painter<'a> {
     }
 
     #[allow(clippy::too_many_arguments)] // Explicit drawing geometry is intentional in this low-level painter API.
-
     pub fn text_right(&mut self, right: i32, y: i32, lh: i32, s: &str, size: f32, w: W, c: Color) {
         let tw = self.width(s, size, w);
         self.text(right - tw.round() as i32, y, lh, s, size, w, c);
