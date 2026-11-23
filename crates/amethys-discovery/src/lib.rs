@@ -2367,6 +2367,54 @@ fn unescape_vdf(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn generic_executable_resolver_finds_a_title_match_in_engine_subfolders() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-executable-match-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        let game_bin = root.join("Binaries/Win64");
+        let support = root.join("EasyAntiCheat");
+        std::fs::create_dir_all(&game_bin).unwrap();
+        std::fs::create_dir_all(&support).unwrap();
+        std::fs::write(game_bin.join("ExampleAdventure-Win64-Shipping.exe"), b"game").unwrap();
+        std::fs::write(support.join("EasyAntiCheat_EOS_Setup.exe"), b"setup").unwrap();
+
+        let detected = super::DetectedGame {
+            platform_id: Some("arbitrary-id".to_owned()),
+            name: "Example Adventure".to_owned(),
+            install_path: root.clone(),
+            platform: "Any Store",
+        };
+        assert_eq!(
+            super::resolve_game_executable(&detected),
+            Some(std::path::PathBuf::from("Binaries/Win64/ExampleAdventure-Win64-Shipping.exe"))
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn generic_executable_resolver_does_not_guess_between_unrelated_binaries() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-executable-ambiguous-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(root.join("bin")).unwrap();
+        std::fs::write(root.join("bin/first.exe"), b"one").unwrap();
+        std::fs::write(root.join("bin/second.exe"), b"two").unwrap();
+
+        let detected = super::DetectedGame {
+            platform_id: None,
+            name: "Unknown Title".to_owned(),
+            install_path: root.clone(),
+            platform: "Unknown Store",
+        };
+        assert_eq!(super::resolve_game_executable(&detected), None);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn discovery_cancellation_before_first_source_returns_without_scanning() {
         let cancel = std::sync::atomic::AtomicBool::new(true);
         let mut reports = 0;
