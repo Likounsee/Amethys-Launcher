@@ -50,6 +50,12 @@ const PAGE_FADE_S: f32 = 0.22;
 const HOVER_IN_S: f32 = 0.12;
 const HOVER_OUT_S: f32 = 0.22;
 const SCROLL_RATE: f32 = 16.0;
+fn fit_stats_panel_scale(win_w: u32, win_h: u32, layout_scale: f32) -> f32 {
+    let width_scale = win_w.saturating_sub(20) as f32 / PANEL_W as f32;
+    let height_scale = win_h.saturating_sub(62) as f32 / PANEL_H as f32;
+    layout_scale.min(width_scale).min(height_scale).max(0.1)
+}
+
 
 #[derive(Clone, Copy)]
 struct Bench {
@@ -1081,9 +1087,7 @@ impl App {
     }
 
     fn stats_panel_scale(&self) -> f32 {
-        let width_scale = self.win_w.saturating_sub(20) as f32 / (PANEL_W as f32);
-        let height_scale = self.win_h.saturating_sub(62) as f32 / (PANEL_H as f32);
-        self.lay.scale.min(width_scale).min(height_scale).max(0.1)
+        fit_stats_panel_scale(self.win_w, self.win_h, self.lay.scale)
     }
 
     fn panel_rect(&self) -> Rect {
@@ -1474,6 +1478,17 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stats_panel_scale_fits_compact_and_large_windows() {
+        let compact = fit_stats_panel_scale(360, 360, 0.96);
+        assert!(compact * PANEL_W as f32 <= 340.0);
+        assert!(compact * PANEL_H as f32 <= 298.0);
+        assert!(compact >= 0.1);
+
+        let regular = fit_stats_panel_scale(1440, 900, 1.08);
+        assert!((regular - 1.08).abs() < f32::EPSILON);
+    }
 
     #[test]
     fn desktop_preferences_default_and_reject_unknown_values() {
