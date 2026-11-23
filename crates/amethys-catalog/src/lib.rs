@@ -4,7 +4,7 @@
 //! create licenses, or imply that a provider supports direct installation.
 
 use amethys_storage::Database;
-use rusqlite::{OptionalExtension, params};
+use rusqlite::params;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -568,6 +568,28 @@ pub struct CatalogRepository;
 impl CatalogRepository {
     pub fn initialize(database: &Database) -> CatalogResult<()> {
         let connection = database.connection();
+        let table_exists: bool = connection.query_row(
+            "SELECT EXISTS(
+                SELECT 1 FROM sqlite_master
+                WHERE type = 'table' AND name = 'catalog_schema_migrations'
+            )",
+            [],
+            |row| row.get(0),
+        ).map_err(db_error)?;
+        let detected_version: i64 = if table_exists {
+            connection.query_row(
+                "SELECT COALESCE(MAX(version), 0) FROM catalog_schema_migrations",
+                [],
+                |row| row.get(0),
+            ).map_err(db_error)?
+        } else {
+            0
+        };
+        if detected_version > 1 {
+            return Err(CatalogError::Database(format!(
+                "catalogue cache schema version {detected_version} is newer than this build supports"
+            )));
+        }
         let transaction = connection
             .unchecked_transaction()
             .map_err(db_error)?;
@@ -620,16 +642,6 @@ impl CatalogRepository {
                 ON catalog_offers(catalogue_game_id);
             INSERT OR IGNORE INTO catalog_schema_migrations(version) VALUES (1);"
         ).map_err(db_error)?;
-        let version: i64 = transaction.query_row(
-            "SELECT COALESCE(MAX(version), 0) FROM catalog_schema_migrations",
-            [],
-            |row| row.get(0),
-        ).map_err(db_error)?;
-        if version > 1 {
-            return Err(CatalogError::Database(format!(
-                "catalogue cache schema version {version} is newer than this build supports"
-            )));
-        }
         transaction.commit().map_err(db_error)
     }
 
@@ -871,10 +883,6 @@ fn db_error(error: rusqlite::Error) -> CatalogError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    static NEXT_DB: AtomicU64 = AtomicU64::new(0);
-
     fn database() -> (tempfile::TempDir, Database) {
         let directory = tempfile::tempdir().expect("temporary directory");
         let database = Database::open(directory.path().join("catalog-test.sqlite"))
