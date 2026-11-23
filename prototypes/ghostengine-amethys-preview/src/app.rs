@@ -37,7 +37,7 @@ enum ScanMessage {
 pub const WIN_W: u32 = 1440;
 pub const WIN_H: u32 = 900;
 /// Smallest window the layout is designed for.
-pub const MIN_W: u32 = SIDE_W as u32 + 480;
+pub const MIN_W: u32 = 180;
 
 const PANEL_W: i32 = 520;
 const PANEL_H: i32 = 500;
@@ -223,7 +223,7 @@ impl App {
         width: u32,
         height: u32,
     ) -> Self {
-        let (win_w, win_h) = (width.max(MIN_W) as i32, height.max(360) as i32);
+        let (win_w, win_h) = (width.max(MIN_W) as i32, height.max(200) as i32);
         let (games, core_error) = match library {
             Ok(games) => (games, None),
             Err(error) => (Vec::new(), Some(error)),
@@ -261,7 +261,7 @@ impl App {
             page_h: win_h,
             hits: Vec::new(),
             scroll: ScrollViewport::new(
-                Rect::new(SIDE_W as u32, 0, (win_w - SIDE_W) as u32, win_h as u32),
+                Rect::new(app.lay.side_w as u32, 0, (win_w - app.lay.side_w).max(1) as u32, win_h as u32),
                 LayoutDirection::Vertical,
                 win_h as u32,
             ),
@@ -424,10 +424,10 @@ impl App {
     /// Adapts the layout to a new window size.
     fn resize(&mut self, width: i32, height: i32) {
         self.win_w = width.max(MIN_W as i32);
-        self.win_h = height.max(360);
+        self.win_h = height.max(200);
         self.lay = Layout::new(self.win_w, self.win_h);
         self.scroll = ScrollViewport::new(
-            Rect::new(SIDE_W as u32, 0, (self.win_w - SIDE_W) as u32, self.win_h as u32),
+            Rect::new(self.lay.side_w as u32, 0, (self.win_w - self.lay.side_w).max(1) as u32, self.win_h as u32),
             LayoutDirection::Vertical,
             self.win_h as u32,
         );
@@ -686,7 +686,7 @@ impl App {
         let off = self.scroll.offset() as i32;
         let (x0, y0) = (rect.x as i32, rect.y as i32 - if fixed { 0 } else { off });
         let (x1, y1) = (x0 + rect.width as i32, y0 + rect.height as i32);
-        let (cx0, cx1) = if fixed { (0, self.win_w) } else { (SIDE_W, self.win_w) };
+        let (cx0, cx1) = if fixed { (0, self.win_w) } else { (self.lay.side_w, self.win_w) };
         let (a, b, c, d) = (x0.max(cx0), y0.max(0), x1.min(cx1), y1.min(self.win_h));
         (c > a && d > b).then(|| Rect::new(a as u32, b as u32, (c - a) as u32, (d - b) as u32))
     }
@@ -743,7 +743,7 @@ impl App {
         }
         let rows = (fb.height() as usize).min(self.win_h as usize);
         let offset = self.scroll.offset() as usize;
-        let sidebar_w = SIDE_W as usize;
+        let sidebar_w = self.lay.side_w as usize;
         let source = self.content.pixels();
         let target = fb.pixels_mut();
         let available = self.content.height() as usize;
@@ -853,7 +853,7 @@ impl App {
     fn draw_scene(&mut self, fb: &mut Framebuffer, real: &InputState, mask: bool, dt: f32) {
         let blank = InputState::default();
         let input = if mask { &blank } else { real };
-        let main = Rect::new(SIDE_W as u32, 0, (self.win_w - SIDE_W) as u32, self.win_h as u32);
+        let main = Rect::new(self.lay.side_w as u32, 0, (self.win_w - self.lay.side_w).max(1) as u32, self.win_h as u32);
         let pointer = input.mouse_position;
         let in_main = pointer.is_some_and(|p| main.contains(p));
 
@@ -882,7 +882,7 @@ impl App {
 
         self.blit(fb);
         if let Some(alpha_value) = self.page_fade_alpha() {
-            fb_fill(fb, SIDE_W, 0, self.win_w - SIDE_W, self.win_h, Color::rgba(gfx::BG.r, gfx::BG.g, gfx::BG.b, alpha_value));
+            fb_fill(fb, self.lay.side_w, 0, self.win_w - self.lay.side_w, self.win_h, Color::rgba(gfx::BG.r, gfx::BG.g, gfx::BG.b, alpha_value));
         }
 
         if clicked.is_none() {
@@ -917,14 +917,14 @@ impl App {
             return;
         }
         let mut probe = Painter::new(1, 1, self.fonts);
-        let max_w = (self.win_w - SIDE_W - 48).clamp(260, 540);
+        let max_w = (self.win_w - self.lay.side_w - 24).clamp(180, 540);
         let text_w = max_w - 72;
         let lines = probe.wrap(&toast.text, 13.0, W::Med, text_w).len().clamp(1, 3) as i32;
         let wide = lines > 1 || probe.width(&toast.text, 13.0, W::Med) > text_w as f32;
         let w = if wide { max_w } else { (probe.width(&toast.text, 13.0, W::Med).round() as i32 + 72).max(220) };
         let h = (lines * 20 + 28).max(56);
         let slide = ((1.0 - ease_out(age / 0.22)) * 14.0).round() as i32;
-        let (x, y) = (SIDE_W + 24, self.win_h - 24 - h + slide);
+        let (x, y) = (self.lay.side_w + 12, self.win_h - 12 - h + slide);
         let (accent, soft, icon) = match toast.kind {
             ToastKind::Success => (gfx::GREEN, gfx::GREEN_DARK, Icon::Check),
             ToastKind::Error => (gfx::RED, gfx::RED_DARK, Icon::Alert),
@@ -1216,7 +1216,7 @@ impl App {
         self.last_frame = Some(start);
 
         let (w, h) = (fb.width() as i32, fb.height() as i32);
-        if w <= SIDE_W + 40 || h < 200 {
+        if w < MIN_W as i32 || h < 160 {
             return FrameOutcome::idle();
         }
         if (w, h) != (self.win_w, self.win_h) || self.content.width() != fb.width() {
