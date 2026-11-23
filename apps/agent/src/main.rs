@@ -237,9 +237,14 @@ async fn resolve_missing_game_executables_on_startup(database: Arc<Mutex<Databas
     };
 
     if missing_games.is_empty() {
-        tracing::debug!("Startup executable discovery skipped: every game already has an executable");
+        tracing::debug!("Executable discovery skipped: every game already has an executable");
         return;
     }
+
+    tracing::info!(
+        candidates = missing_games.len(),
+        "Starting background game executable discovery"
+    );
 
     let scanned = tokio::task::spawn_blocking(move || {
         missing_games
@@ -491,7 +496,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             let _permit = permit;
                             match tokio::time::timeout(
                                 std::time::Duration::from_secs(15),
-                                serve_database_connection(&mut stream, &shared_state, &database, &discovery_notify),
+                                serve_database_connection(
+                                    &mut stream,
+                                    &shared_state,
+                                    &database,
+                                    &discovery_notify,
+                                ),
                             ).await {
                                 Ok(Ok(())) => {}
                                 Ok(Err(error)) => {
