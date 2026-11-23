@@ -330,7 +330,9 @@ pub fn sidebar(p: &mut Painter, lay: &Layout, active: Active, info: &SidebarInfo
     let (fx, fy, fw, fh) = (14, vh - 84, sw - 28, 62);
     p.rrect(fx, fy, fw, fh, 14, PANEL);
     p.rrect_line(fx, fy, fw, fh, 14, alpha(Color::WHITE, 15));
-    let (dot, title, sub) = if info.core_loading {
+    let (dot, title, sub) = if info.core_loading && info.core_refreshing {
+        (VIO_HI, "Actualisation Core", "Mise à jour de la bibliothèque…".to_owned())
+    } else if info.core_loading {
         (VIO_HI, "Connexion à Core", "Chargement de la bibliothèque…".to_owned())
     } else if info.core_ok {
         (GREEN, "Core connecté", format!("{} en local", plural(info.game_count, "jeu", "jeux")))
@@ -1171,6 +1173,7 @@ pub fn store(p: &mut Painter, lay: &Layout) -> i32 {
 pub struct SettingsView<'a> {
     pub core_error: Option<&'a str>,
     pub core_loading: bool,
+    pub core_refreshing: bool,
     pub game_count: usize,
     pub ready_count: usize,
     pub media_root: Option<&'a std::path::Path>,
