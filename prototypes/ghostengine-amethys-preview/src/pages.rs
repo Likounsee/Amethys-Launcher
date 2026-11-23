@@ -549,6 +549,7 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
     let stack_actions = compact && mw < refresh_w + scan_w + 12;
     let actions_x = if stack_actions { mx } else if compact { mx + mw - refresh_w - 12 - scan_w } else { tx + search_w + 12 };
     let actions_y = if compact { ty + BTN_H + 12 } else { ty };
+    let scan_x = if stack_actions { mx } else { actions_x + refresh_w + 12 };
     let scan_y = actions_y + if stack_actions { BTN_H + 8 } else { 0 };
     if view.loading {
         button_disabled(p, actions_x, actions_y, "Actualiser", Some(Icon::Refresh));
@@ -556,11 +557,11 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
         button(p, actions_x, actions_y, Some(refresh_w), "Actualiser", Some(Icon::Refresh), Btn::Secondary, BG, Some(Action::RefreshLibrary));
     }
     if view.scanning {
-        button(p, if stack_actions { mx } else { actions_x + refresh_w + 12 }, scan_y, Some(scan_w), scan_label, Some(scan_icon), Btn::Secondary, BG, Some(Action::CancelScan));
+        button(p, scan_x, scan_y, Some(scan_w), scan_label, Some(scan_icon), Btn::Secondary, BG, Some(Action::CancelScan));
     } else if view.loading {
-        button_disabled(p, actions_x + refresh_w + 12, actions_y, scan_label, Some(scan_icon));
+        button_disabled(p, scan_x, scan_y, scan_label, Some(scan_icon));
     } else {
-        button(p, actions_x + refresh_w + 12, actions_y, Some(scan_w), scan_label, Some(scan_icon), Btn::Primary, BG, Some(Action::ScanGames));
+        button(p, scan_x, scan_y, Some(scan_w), scan_label, Some(scan_icon), Btn::Primary, BG, Some(Action::ScanGames));
     }
     let mut y = if compact { scan_y + BTN_H + 22 } else { 118 };
 
