@@ -316,6 +316,7 @@ pub struct App {
     scan_found: Option<usize>,
     library_loading: bool,
     library_refreshing: bool,
+    library_silent_refresh: bool,
     /// Last automatic library refresh while Core may be discovering executables.
     last_auto_library_refresh: Instant,
     library_receiver: Option<std::sync::mpsc::Receiver<Result<Vec<IpcGameEntry>, String>>>,
@@ -399,6 +400,7 @@ impl App {
             scan_found: None,
             library_loading: false,
             library_refreshing: false,
+            library_silent_refresh: false,
             last_auto_library_refresh: Instant::now(),
             library_receiver: None,
             mutation_receiver: None,
@@ -600,20 +602,22 @@ impl App {
         };
         if let Some(result) = result {
             let refreshing = self.library_refreshing;
+            let silent_refresh = self.library_silent_refresh;
             self.library_receiver = None;
             self.library_loading = false;
             self.library_refreshing = false;
+            self.library_silent_refresh = false;
             match result {
                 Ok(games) => {
                     self.set_games(games);
                     self.core_error = None;
-                    if refreshing {
+                    if refreshing && !silent_refresh {
                         self.notify(ToastKind::Success, "Bibliothèque actualisée.");
                     }
                 }
                 Err(error) => {
                     self.core_error = Some(error.clone());
-                    if refreshing {
+                    if refreshing && !silent_refresh {
                         self.notify(ToastKind::Error, format!("Actualisation impossible : {error}"));
                     }
                 }
@@ -1603,6 +1607,7 @@ impl App {
         {
             self.last_auto_library_refresh = start;
             self.start_library_request(true);
+            self.library_silent_refresh = true;
         }
 
         let escape = input.escape_down && !self.esc_was_down;
