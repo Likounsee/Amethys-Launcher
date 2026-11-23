@@ -15,6 +15,18 @@ The release workflow successfully built both targets, ran the release tests, pac
 
 Each archive contains `amethys-agent` (or `.exe`), `amethysctl` (or `.exe`), the project `README.md`, the `LICENSE`, and this guide as `RELEASES.md`. The archives are portable test binaries, not an installer or operating-system service package. The agent must be running before the CLI can communicate with it. Automatic startup, service registration, desktop shortcuts, update delivery and uninstallers are not included.
 
+## Experimental Windows desktop development package
+
+The in-progress GhostEngine desktop prototype has a separate Windows x64 packaging script. From the repository root, run:
+
+```powershell
+./scripts/package-desktop-windows.ps1
+```
+
+The script runs workspace and desktop checks/tests, builds the agent, CLI and desktop executable, then stages the application and its required fonts and cover assets under `dist/Amethys/`. It creates `dist/Amethys-Windows-x64.zip`, a per-file `SHA256SUMS.txt` manifest and a `.sha256` checksum for the archive. CI verifies both checksum layers and launches the packaged application in snapshot mode.
+
+This is an experimental development package, not the public 0.1.0 CLI archive, an installer or a production-ready release. The desktop window/rendering backend is still a prototype and the application remains under active development.
+
 ## First-run notes
 
 1. Extract the archive to a directory owned by the current user.
