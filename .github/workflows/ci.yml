@@ -345,13 +345,13 @@ jobs:
           cp -R prototypes/ghostengine-amethys-preview/assets/covers "$stage/assets/"
           cp README.md LICENSE "$stage/"
           cat > "$stage/LIRE-MOI.txt" <<'EOF'
-Amethys Launcher — Linux x86_64 (development package)
-
-Run ./amethys-launcher to open the graphical launcher.
-The agent starts automatically when needed.
-Use ./amethysctl --help for command-line tools.
-This is a portable development package, not an installer.
-EOF
+          Amethys Launcher — Linux x86_64 (development package)
+          
+          Run ./amethys-launcher to open the graphical launcher.
+          The agent starts automatically when needed.
+          Use ./amethysctl --help for command-line tools.
+          This is a portable development package, not an installer.
+          EOF
           (
             cd "$stage"
             find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
