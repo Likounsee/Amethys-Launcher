@@ -218,18 +218,19 @@ fn configured_executable_is_usable(install_path: &str, executable: &str) -> bool
         candidate.to_path_buf()
     } else {
         if executable.trim().is_empty()
-            || executable.starts_with('/') || executable.starts_with('\\')
-            || executable.split(['/', '\\']).any(|part| {
-                part.is_empty() || part == "." || part == ".." || part.contains(':')
-            })
+            || executable.starts_with('/')
+            || executable.starts_with('\\')
+            || executable
+                .split(['/', '\\'])
+                .any(|part| part.is_empty() || part == "." || part == ".." || part.contains(':'))
         {
             return false;
         }
         root.join(executable)
     };
-    candidate.canonicalize().is_ok_and(|resolved| {
-        resolved.is_file() && resolved.starts_with(&root)
-    })
+    candidate
+        .canonicalize()
+        .is_ok_and(|resolved| resolved.is_file() && resolved.starts_with(&root))
 }
 
 /// Retries executable discovery for every library entry with a missing or unusable path.
@@ -279,26 +280,28 @@ async fn resolve_missing_game_executables_on_startup(database: Arc<Mutex<Databas
     let scanned = tokio::task::spawn_blocking(move || {
         missing_games
             .into_iter()
-            .filter_map(|(id, name, platform, platform_id, install_path, previous_executable)| {
-                let Some(executable) = amethys_discovery::resolve_game_executable_for(
-                    &platform,
-                    platform_id.as_deref(),
-                    std::path::Path::new(&install_path),
-                    &name,
-                ) else {
-                    tracing::debug!(
-                        game = %name,
-                        install_path = %install_path,
-                        "No unambiguous executable candidate found for game"
-                    );
-                    return None;
-                };
-                Some((
-                    id,
-                    previous_executable,
-                    executable.to_string_lossy().into_owned(),
-                ))
-            })
+            .filter_map(
+                |(id, name, platform, platform_id, install_path, previous_executable)| {
+                    let Some(executable) = amethys_discovery::resolve_game_executable_for(
+                        &platform,
+                        platform_id.as_deref(),
+                        std::path::Path::new(&install_path),
+                        &name,
+                    ) else {
+                        tracing::debug!(
+                            game = %name,
+                            install_path = %install_path,
+                            "No unambiguous executable candidate found for game"
+                        );
+                        return None;
+                    };
+                    Some((
+                        id,
+                        previous_executable,
+                        executable.to_string_lossy().into_owned(),
+                    ))
+                },
+            )
             .collect::<Vec<_>>()
     })
     .await;
@@ -318,8 +321,12 @@ async fn resolve_missing_game_executables_on_startup(database: Arc<Mutex<Databas
             Ok(Some(game)) if game.executable == previous_executable => {
                 match database.set_game_executable(&id, &executable) {
                     Ok(Some(_)) => saved += 1,
-                    Ok(None) => tracing::debug!(game_id = %id, "Game disappeared before executable could be saved"),
-                    Err(error) => tracing::warn!(game_id = %id, %error, "Unable to save discovered game executable"),
+                    Ok(None) => {
+                        tracing::debug!(game_id = %id, "Game disappeared before executable could be saved")
+                    }
+                    Err(error) => {
+                        tracing::warn!(game_id = %id, %error, "Unable to save discovered game executable")
+                    }
                 }
             }
             Ok(Some(_)) => {
@@ -577,7 +584,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{STATE_STOPPING, Notify, mutation_allowed, serve_database_connection};
+    use super::{Notify, STATE_STOPPING, mutation_allowed, serve_database_connection};
     use amethys_ipc::{
         IpcCommand, IpcCoreStatus, IpcEnvelope, IpcRequest, IpcResponse, read_message,
         write_message,
@@ -597,8 +604,7 @@ mod tests {
                 .as_nanos()
         ));
         std::fs::create_dir_all(&root).expect("create install directory");
-        std::fs::write(root.join("Sample Game.exe"), b"fixture")
-            .expect("create game executable");
+        std::fs::write(root.join("Sample Game.exe"), b"fixture").expect("create game executable");
 
         let database = Arc::new(Mutex::new(
             Database::open(":memory:").expect("database opens"),
@@ -621,14 +627,9 @@ mod tests {
         let server_state = Arc::clone(&state);
         let server_notify = Arc::clone(&notify);
         let server_task = tokio::spawn(async move {
-            serve_database_connection(
-                &mut server,
-                &server_state,
-                &server_database,
-                &server_notify,
-            )
-            .await
-            .expect("serve game import");
+            serve_database_connection(&mut server, &server_state, &server_database, &server_notify)
+                .await
+                .expect("serve game import");
         });
 
         write_message(&mut client, &request)
