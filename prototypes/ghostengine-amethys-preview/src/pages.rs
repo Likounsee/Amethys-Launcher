@@ -20,7 +20,7 @@ const DETECTED_LIMIT: usize = 24;
 
 // ------------------------------------------------------------------ layout
 /// Geometry of the current window: sidebar on the left, one content column.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Layout {
     pub w: i32,
     pub h: i32,
