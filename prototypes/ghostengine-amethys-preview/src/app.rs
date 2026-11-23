@@ -1442,7 +1442,8 @@ mod tests {
 
     #[test]
     fn desktop_preferences_round_trip_atomically() {
-        let root = std::env::temp_dir().join(format!("amethys-prefs-{}", uuid::Uuid::new_v4()));
+        let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("clock").as_nanos();
+        let root = std::env::temp_dir().join(format!("amethys-prefs-{}-{nonce}", std::process::id()));
         let path = root.join("launcher-preferences-v1");
         save_library_sort(&path, 2).expect("preferences save");
         assert_eq!(load_library_sort(&path), 2);
