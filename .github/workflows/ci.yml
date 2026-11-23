@@ -324,6 +324,8 @@ jobs:
           components: clippy, rustfmt
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
+      - name: Build Core and CLI binaries
+        run: cargo build --workspace --release
       - name: Check desktop prototype
         run: |
           cargo clippy --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml --all-targets -- -D warnings
