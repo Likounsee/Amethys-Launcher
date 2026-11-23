@@ -1418,6 +1418,7 @@ mod tests {
             detected: &[],
             scanning: false,
             loading: false,
+            refreshing: false,
             progress: None,
             scan_found: None,
             filter,
