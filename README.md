@@ -42,6 +42,10 @@ Version 0.1.0 was the first public technical milestone. It provided the Rust bac
 
 The 0.1.0 packages and their original limitations are documented in [the 0.1.0 release notes](doc/releases/0.1.0-pre-release-notes.md).
 
+## Development roadmap — 0.3
+
+The 0.2 release is frozen. The next development cycle is Amethys Launcher 0.3: a real catalogue, authorized distribution sources, persistent download/install operations, managed installations, updates and repairs. The [0.3 roadmap](ROADMAP-0.3.md), [complete baseline audit](doc/technical/LOT-1-AUDIT-0.3.md) and [target architecture](doc/technical/ARCHITECTURE-0.3.md) define the implementation order and boundaries. The global Quality Check campaign is deferred to 0.4.
+
 ## Project status and scope
 
 The 0.2.0 desktop application is built on the existing Rust workspace and the vendored GhostEngine UI preview. The desktop client communicates with Amethys Core through IPC; Core remains the owner of persistent game-library data and its SQLite database.
