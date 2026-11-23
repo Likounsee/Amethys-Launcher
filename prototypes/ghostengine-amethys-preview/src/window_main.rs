@@ -72,8 +72,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         &assets_dir.join("covers-disabled"), // pas de PNG fournis : jaquettes dessinées par le moteur
         media_library_dir.as_deref(),
     )));
-    let library = core_client::list_games_or_start_agent();
-    let mut app = App::with_size(fonts, covers, media_store, library, width, height);
+    // Headless snapshots need a deterministic, fully loaded library before replay.
+    // The interactive desktop starts immediately and retrieves Core data in the background.
+    let mut app = if snapshot.is_some() {
+        let library = core_client::list_games_or_start_agent();
+        App::with_size(fonts, covers, media_store, library, width, height)
+    } else {
+        let mut app = App::with_size(fonts, covers, media_store, Ok(Vec::new()), width, height);
+        app.start_library_load();
+        app
+    };
 
     if let Some(dir) = snapshot {
         let dir = PathBuf::from(dir);
