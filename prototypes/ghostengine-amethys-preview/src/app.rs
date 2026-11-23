@@ -1082,8 +1082,10 @@ impl App {
 
     fn panel_rect(&self) -> Rect {
         let px = |value: i32| (value as f32 * self.lay.scale).round() as u32;
-        let x = self.win_w.saturating_sub(px(12 + PANEL_W));
-        let y = self.win_h.saturating_sub(px(12 + 34 + 8 + PANEL_H)).max(px(8));
+        let x = (self.win_w as u32).saturating_sub(px(12 + PANEL_W));
+        let y = (self.win_h as u32)
+            .saturating_sub(px(12 + 34 + 8 + PANEL_H))
+            .max(px(8));
         Rect::new(x, y, px(PANEL_W), px(PANEL_H))
     }
 
