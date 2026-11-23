@@ -953,17 +953,20 @@ impl App {
 
     // ------------------------------------------------------------ stats overlay
     fn chip_rect(&self) -> Rect {
-        Rect::new(self.win_w as u32 - 12 - 250, self.win_h as u32 - 12 - 34, 250, 34)
+        let px = |value: i32| (value as f32 * self.lay.scale).round() as u32;
+        Rect::new(self.win_w as u32 - px(12 + 250), self.win_h as u32 - px(12 + 34), px(250), px(34))
     }
 
     fn panel_rect(&self) -> Rect {
-        let y = (self.win_h - 12 - 34 - 8 - PANEL_H).max(8);
-        Rect::new(self.win_w as u32 - 12 - PANEL_W as u32, y as u32, PANEL_W as u32, PANEL_H as u32)
+        let px = |value: i32| (value as f32 * self.lay.scale).round() as u32;
+        let y = (self.win_h - px(12 + 34 + 8 + PANEL_H as i32) as i32).max(px(8) as i32);
+        Rect::new(self.win_w as u32 - px(12 + PANEL_W as i32), y as u32, px(PANEL_W as i32), px(PANEL_H as i32))
     }
 
     fn bench_button(&self) -> Rect {
         let p = self.panel_rect();
-        Rect::new(p.x + 20, p.y + PANEL_H as u32 - 20 - 44 - 44, 200, 44)
+        let px = |value: i32| (value as f32 * self.lay.scale).round() as u32;
+        Rect::new(p.x + px(20), p.y + px(PANEL_H - 20 - 44 - 44), px(200), px(44))
     }
 
     fn avg_frame_ms(&self) -> f64 {
@@ -1005,7 +1008,9 @@ impl App {
         let fps_text = if avg > 0.0 { format!("{:.0} img/s", 1000.0 / avg) } else { "au repos".to_owned() };
         let chip = self.chip_rect();
         let label = format!("GhostEngine · {:.1} ms · {fps_text}", self.work_ms);
-        self.overlay(fb, (chip.x as i32, chip.y as i32, 250, 34), 1.0, |c| {
+        let scale = self.lay.scale;
+        let px = |value: i32| (value as f32 * scale).round() as i32;
+        self.overlay_scaled(fb, (chip.x as i32, chip.y as i32, px(250), px(34)), 1.0, scale, |c| {
             c.rrect(0, 0, 250, 34, 17, gfx::ACT);
             c.rrect_line(0, 0, 250, 34, 17, alpha(gfx::VIO, 200));
             c.circle(18, 17, 5, gfx::GREEN);
@@ -1028,8 +1033,8 @@ impl App {
         ];
         let bench_label = self.bench;
         let panel = self.panel_rect();
-        let by = (self.bench_button().y - panel.y) as i32;
-        self.overlay(fb, (panel.x as i32, panel.y as i32, PANEL_W, PANEL_H), 1.0, |p| {
+        let by = ((self.bench_button().y - panel.y) as f32 / scale).round() as i32;
+        self.overlay_scaled(fb, (panel.x as i32, panel.y as i32, px(PANEL_W), px(PANEL_H)), 1.0, scale, |p| {
             p.shadow(0, 0, PANEL_W, PANEL_H, 18, 8, 60);
             p.rrect(0, 0, PANEL_W, PANEL_H, 18, gfx::PANEL);
             p.rrect_line(0, 0, PANEL_W, PANEL_H, 18, alpha(gfx::VIO, 200));
