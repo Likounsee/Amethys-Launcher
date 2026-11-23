@@ -442,6 +442,7 @@ pub struct LibraryView<'a> {
     pub scanning: bool,
     pub loading: bool,
     pub refreshing: bool,
+    pub mutating: bool,
     pub progress: Option<&'a amethys_discovery::DiscoveryProgress>,
     /// `Some(n)` once a scan has finished: n installations were found.
     pub scan_found: Option<usize>,
@@ -557,15 +558,15 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
     let actions_y = if compact { ty + BTN_H + 12 } else { ty };
     let scan_x = if stack_actions { mx } else { actions_x + refresh_w + 12 };
     let scan_y = actions_y + if stack_actions { BTN_H + 8 } else { 0 };
-    if view.loading {
-        button_disabled(p, actions_x, actions_y, "Actualiser", Some(Icon::Refresh));
+    if view.loading || view.mutating {
+        button_disabled(p, actions_x, actions_y, if view.mutating { "Opération…" } else { "Actualiser" }, Some(Icon::Refresh));
     } else {
         button(p, actions_x, actions_y, Some(refresh_w), "Actualiser", Some(Icon::Refresh), Btn::Secondary, BG, Some(Action::RefreshLibrary));
     }
     if view.scanning {
         button(p, scan_x, scan_y, Some(scan_w), scan_label, Some(scan_icon), Btn::Secondary, BG, Some(Action::CancelScan));
-    } else if view.loading {
-        button_disabled(p, scan_x, scan_y, scan_label, Some(scan_icon));
+    } else if view.loading || view.mutating {
+        button_disabled(p, scan_x, scan_y, if view.mutating { "Opération en cours" } else { scan_label }, Some(scan_icon));
     } else {
         button(p, scan_x, scan_y, Some(scan_w), scan_label, Some(scan_icon), Btn::Primary, BG, Some(Action::ScanGames));
     }
@@ -743,7 +744,11 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
                 let pw = p.width(game.platform, 11.5, W::Semi).round() as i32 + 20;
                 p.rrect(mx + 18, y + 10, pw, 22, 11, ACT);
                 p.text(mx + 28, y + 10, 22, game.platform, 11.5, W::Semi, VIO_HI);
-                button(p, mx + mw - 18 - 92, y + 8, Some(92), "Importer", None, Btn::Primary, PANEL, Some(Action::ImportDetectedGame(index)));
+                if view.mutating {
+                    button_disabled(p, mx + mw - 18 - 92, y + 8, "En cours…", None);
+                } else {
+                    button(p, mx + mw - 18 - 92, y + 8, Some(92), "Importer", None, Btn::Primary, PANEL, Some(Action::ImportDetectedGame(index)));
+                }
                 p.text_fit(mx + 18, y + 38, 22, &game.name, 13.0, W::Semi, TXT, mw - 36);
                 let path = p.ellipsize_path(&game.install_path.to_string_lossy(), 10.5, W::Reg, mw - 36);
                 p.text(mx + 18, y + 64, 16, &path, 10.5, W::Reg, FAINT);
@@ -758,7 +763,11 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
                 p.text_fit(text_x, y + 10, 24, &game.name, 14.5, W::Semi, TXT, max_w);
                 let path = p.ellipsize_path(&game.install_path.to_string_lossy(), 11.5, W::Reg, max_w);
                 p.text(text_x, y + 34, 18, &path, 11.5, W::Reg, FAINT);
-                button(p, mx + mw - 18 - 112, y + 13, Some(112), "Importer", None, Btn::Primary, PANEL, Some(Action::ImportDetectedGame(index)));
+                if view.mutating {
+                    button_disabled(p, mx + mw - 18 - 112, y + 13, "En cours…", None);
+                } else {
+                    button(p, mx + mw - 18 - 112, y + 13, Some(112), "Importer", None, Btn::Primary, PANEL, Some(Action::ImportDetectedGame(index)));
+                }
                 y += 66 + 10;
             }
         }
@@ -1430,6 +1439,7 @@ mod tests {
             scanning: false,
             loading: false,
             refreshing: false,
+            mutating: false,
             progress: None,
             scan_found: None,
             filter,
