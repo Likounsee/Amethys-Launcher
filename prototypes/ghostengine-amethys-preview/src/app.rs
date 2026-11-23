@@ -1023,9 +1023,15 @@ impl App {
         // hover / press / click through GhostEngine's interaction model
         let (bounds, enabled) = self.screen_bounds();
         let events = self.inter.update(pointer, input.left_mouse_pressed, input.left_mouse_released, &enabled, &bounds);
-        let clicked = events.clicked.map(|i| self.hits[i].action);
+        let clicked_index = events.clicked;
+        let clicked = clicked_index.map(|index| self.hits[index].action);
         self.update_fades(dt);
         let pressed = self.inter.hovered().is_some_and(|i| self.inter.is_pressed(i));
+        if let Some(index) = clicked_index {
+            // A pointer activation also establishes the keyboard starting point,
+            // so the next Tab continues from the control the user just used.
+            self.keyboard_focus = Some(index);
+        }
         if let Some(action) = clicked {
             self.apply(action);
         }
