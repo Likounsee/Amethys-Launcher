@@ -108,13 +108,13 @@ jobs:
           Copy-Item prototypes/ghostengine-amethys-preview/assets/covers dist/assets/ -Recurse
           Copy-Item README.md,LICENSE,doc/technical/RELEASES.md -Destination dist/
           @'
-Amethys Launcher desktop preview — Windows x64
-
-Run amethys-launcher.exe to open the graphical launcher. The agent starts automatically when needed.
-Use amethysctl.exe --help for command-line tools.
-Fonts and cover assets are included in assets/.
-This is a portable archive, not an installer.
-'@ | Set-Content -Encoding UTF8 dist/LIRE-MOI.txt
+          Amethys Launcher desktop preview — Windows x64
+          
+          Run amethys-launcher.exe to open the graphical launcher. The agent starts automatically when needed.
+          Use amethysctl.exe --help for command-line tools.
+          Fonts and cover assets are included in assets/.
+          This is a portable archive, not an installer.
+          '@ | Set-Content -Encoding UTF8 dist/LIRE-MOI.txt
           $archive = "amethys-$($env:RELEASE_TAG)-${{ matrix.target }}.zip"
           Compress-Archive -Path dist/* -DestinationPath $archive
           $verify = "archive-check"
@@ -177,13 +177,13 @@ This is a portable archive, not an installer.
           cp -R prototypes/ghostengine-amethys-preview/assets/covers dist/assets/
           cp README.md LICENSE doc/technical/RELEASES.md dist/
           cat > dist/LIRE-MOI.txt <<'EOF'
-Amethys Launcher desktop preview — Linux x86_64
-
-Run ./amethys-launcher to open the graphical launcher. The agent starts automatically when needed.
-Use ./amethysctl --help for command-line tools.
-Fonts and cover assets are included in assets/.
-This is a portable archive, not an installer.
-EOF
+          Amethys Launcher desktop preview — Linux x86_64
+          
+          Run ./amethys-launcher to open the graphical launcher. The agent starts automatically when needed.
+          Use ./amethysctl --help for command-line tools.
+          Fonts and cover assets are included in assets/.
+          This is a portable archive, not an installer.
+          EOF
           archive="amethys-${RELEASE_TAG}-${{ matrix.target }}.tar.gz"
           tar -czf "$archive" -C dist amethys-agent amethysctl amethys-launcher README.md LICENSE RELEASES.md LIRE-MOI.txt assets
           tar -tzf "$archive" | sort > archive-contents.txt
