@@ -4,42 +4,51 @@
   <a href="https://github.com/Likounsee/Amethys-Launcher/actions/workflows/ci.yml"><img src="https://github.com/Likounsee/Amethys-Launcher/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI"></a>
   <img src="https://img.shields.io/badge/Rust-2024-orange?logo=rust" alt="Rust 2024">
   <img src="https://img.shields.io/badge/Platforms-Windows%20%7C%20Linux-blue" alt="Windows and Linux">
+  <img src="https://img.shields.io/badge/Version-0.2.0-blueviolet" alt="Version 0.2.0">
 </p>
 
 A free, community-driven, cross-platform game library and launcher client.
 
 Amethys Launcher aims to bring game libraries, installations and platform integrations together without replacing official stores, accounts, licenses, DRM or platform policies.
 
-## Published baseline — version 0.1.0
+## Latest release — Amethys Launcher 0.2.0
 
-**Amethys Launcher 0.1.0 is the very first public version of the project. It is an experimental technical prototype released for testing, feedback and early evaluation only.**
+<https://github.com/Likounsee/Amethys-Launcher/releases/tag/v0.2.0>
 
-**The project is not finished and is not yet a complete, reliable or production-ready launcher. It is not intended for everyday use or to manage a user's full game library.** The current release is a small first milestone: it makes a limited part of the technical foundation available so that the basic architecture and workflows can be tried on Windows and Linux.
+**Version 0.2.0 was published on 23 November 2026.** It is the first published desktop preview of Amethys Launcher, available as portable packages for Windows x64 and Linux x86_64.
 
-This first version mainly provides:
-- a Rust-based background agent and command-line client (there is no graphical interface);
-- local communication between the agent and CLI;
-- a local SQLite database and configuration;
-- initial, read-only detection of game installations from selected launchers;
-- explicit import and basic local library operations;
-- read-only path/executable checks and launching of an explicitly configured executable;
-- portable Windows and Linux test packages.
+| Platform | Package | Download |
+| --- | --- | --- |
+| Windows x64 | ZIP | [Download](https://github.com/Likounsee/Amethys-Launcher/releases/download/v0.2.0/amethys-v0.2.0-x86_64-pc-windows-msvc.zip) |
+| Linux x86_64 (GNU) | TAR.GZ | [Download](https://github.com/Likounsee/Amethys-Launcher/releases/download/v0.2.0/amethys-v0.2.0-x86_64-unknown-linux-gnu.tar.gz) |
+| Checksums | SHA-256 | [SHA256SUMS](https://github.com/Likounsee/Amethys-Launcher/releases/download/v0.2.0/SHA256SUMS) |
 
-These features are partial and have important limitations. Detection coverage varies by launcher, and a detected installation is not a guarantee that a game will launch correctly. Automated builds and tests confirm only the cases covered by CI and fixtures; they do not establish broad compatibility or production readiness. See [launcher discovery coverage](doc/discovery/LAUNCHER-COVERAGE.md) for the exact evidence and pending tests.
+### What is included
 
-The 0.1.0 release does **not** include a graphical interface, a store/catalogue, game downloading or installation, account management, cloud saves, backups, automatic updates, or a finished end-user experience. The portable archives are test binaries, not installers. Use them only if you are comfortable testing early software and reporting issues. Keep official launchers as the source of truth for installation, updates, authentication and licenses.
+- Graphical desktop launcher connected to Amethys Core through the versioned IPC protocol.
+- Local game library with search, platform filters, sorting and game details.
+- Executable configuration and launching of configured local games.
+- Supported launcher discovery and explicit import of detected installations.
+- Custom game covers, responsive layout, keyboard navigation and asynchronous loading/operation feedback.
+- Core agent, CLI, fonts and cover assets in both portable release archives.
 
-### What comes next
+See the [0.2.0 release notes](doc/releases/0.2.0-release-notes.md) for installation instructions, archive checksums, validation evidence and known limitations.
 
-Development is continuing beyond this first milestone. Planned work includes consolidating and hardening the core, expanding real-world testing and launcher compatibility, improving reliability and diagnostics, and progressively designing the future user experience and larger features such as a graphical interface and store/catalogue. These are future development directions, not features promised by 0.1.0; priorities and scope may evolve as the project is tested.
+**Important:** 0.2.0 is an experimental development preview, not a finished or production-ready launcher. The archives are portable packages, not installers. Linux passed automated release validation but has not yet been manually tested on a physical Linux machine. macOS is not supported by this release.
 
-## Current development — desktop release 0.2.0 (in preparation)
+## Previous release — 0.1.0
 
-The published 0.1.0 release remains the experimental agent/CLI milestone described above. The `main` branch is also developing a separate, unreleased desktop preview under `prototypes/ghostengine-amethys-preview`. It uses the vendored GhostEngine UI and communicates with the existing Amethys Core through IPC; Core remains the owner of persistent game-library data.
+Version 0.1.0 was the first public technical milestone. It provided the Rust background agent and command-line client, local IPC, SQLite-backed storage, initial read-only launcher discovery, explicit import and basic local library operations. It did not include the graphical desktop application.
 
-The desktop application currently includes a responsive game library, search and platform filters, sorting with a locally persisted preference, game details and executable configuration, launching and removal of local entries, cover customization, supported installation discovery and explicit import, keyboard navigation, and asynchronous Core library loading, refresh, imports, executable updates and removals. The workspace and desktop application are versioned 0.2.0. The official 0.2.0 release has not yet been published.
+The 0.1.0 packages and their original limitations are documented in [the 0.1.0 release notes](doc/releases/0.1.0-pre-release-notes.md).
 
-The Windows x64 portable package has passed all 15 manual checks, including launch from the extracted ZIP. The 0.2.0 desktop release target is Windows x64 and Linux x86_64, with portable ZIP and TAR.GZ archives. The release workflow now runs desktop Clippy and tests on both operating systems before packaging. The full release workflow still needs to pass on the versioned commit before the v0.2.0 tag and draft release can be created. Manual Linux testing is intentionally deferred. See [Desktop preview 0.2](doc/technical/DESKTOP-PREVIEW.md) for build instructions, validation evidence, the tested Windows archive checksum and packaging details. This remains an experimental development preview, not a finished or production-ready launcher.
+## Project status and scope
+
+The 0.2.0 desktop application is built on the existing Rust workspace and the vendored GhostEngine UI preview. The desktop client communicates with Amethys Core through IPC; Core remains the owner of persistent game-library data and its SQLite database.
+
+The 0.2 release does **not** include a connected commercial store, prices, promotions, purchases, account management, game downloads or game installation. Cloud saves, synchronization, automatic updates and a finished end-user experience are also outside this release. Future plans are tracked in [ROADMAP-0.2.md](ROADMAP-0.2.md).
+
+Detection coverage varies by launcher. A detected installation is not a guarantee that a game can launch correctly. See [launcher discovery coverage](doc/discovery/LAUNCHER-COVERAGE.md) for implemented adapters and real-install validation status. Keep official launchers as the source of truth for installation, updates, authentication and licences.
 
 ## Principles
 
@@ -52,24 +61,9 @@ The Windows x64 portable package has passed all 15 manual checks, including laun
 - Errors must be explicit, identifiable and diagnosable.
 - Tests and CI are required on every supported operating system.
 
-## Initial development scope
-
-1. Rust workspace and project conventions.
-2. Core runtime and lifecycle.
-3. Typed internal event system.
-4. Cross-platform IPC protocol foundation.
-5. Module, task and worker management foundations.
-6. SQLite storage and configuration.
-7. Structured logging, error codes and diagnostics.
-8. Read-only discovery of installed games from multiple PC launchers.
-9. Explicit import, local library management and read-only path verification.
-10. Cross-platform CI and release archive generation.
-
-The desktop GUI, Amethys online store/catalogue, downloads, save synchronization and account system are intentionally outside the first 0.1.0 milestone.
-
 ## Build and test
 
-Install the stable Rust toolchain with the `rustfmt` and `clippy` components, then run:
+Install the Rust toolchain specified by `rust-toolchain.toml`, including the `rustfmt` and `clippy` components, then run:
 
 ```sh
 cargo fmt --all -- --check
@@ -78,9 +72,13 @@ cargo build --workspace
 cargo test --workspace --all-targets
 ```
 
-The CI workflow runs these quality checks on Windows and Linux.
+The desktop preview can be run from a source checkout with:
 
-See [the documentation index](doc/README.md) for technical details, including [builds and releases](doc/technical/RELEASES.md).
+```sh
+cargo run --release --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml --bin amethys-launcher
+```
+
+See the [documentation index](doc/README.md) for technical details, including [builds and releases](doc/technical/RELEASES.md), [desktop preview architecture](doc/technical/DESKTOP-PREVIEW.md), [IPC](doc/technical/IPC.md) and [game discovery](doc/technical/game-discovery.md).
 
 ## Ownership, contributions and rewards
 
