@@ -97,6 +97,20 @@ fn next_focus_index(current: Option<usize>, count: usize, backwards: bool) -> Op
     })
 }
 
+/// Keeps Tab navigation inside the destructive confirmation while it is open.
+fn next_modal_focus_index(hits: &[Hit], current: Option<usize>, backwards: bool) -> Option<usize> {
+    let modal_indices: Vec<usize> = hits
+        .iter()
+        .enumerate()
+        .filter_map(|(index, hit)| {
+            matches!(hit.action, Action::CancelRemoveGame | Action::ConfirmRemoveGame).then_some(index)
+        })
+        .collect();
+    let current_modal = modal_indices.iter().position(|index| Some(*index) == current);
+    let next = next_focus_index(current_modal, modal_indices.len(), backwards)?;
+    modal_indices.get(next).copied()
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ToastKind {
     Success,
@@ -1233,7 +1247,11 @@ impl App {
     }
 
     fn handle_tab(&mut self, input: &InputState) {
-        self.keyboard_focus = next_focus_index(self.keyboard_focus, self.hits.len(), input.shift_down);
+        self.keyboard_focus = if self.pending_remove.is_some() {
+            next_modal_focus_index(&self.hits, self.keyboard_focus, input.shift_down)
+        } else {
+            next_focus_index(self.keyboard_focus, self.hits.len(), input.shift_down)
+        };
         if let Some(next) = self.keyboard_focus {
             self.ensure_visible(next);
         }
@@ -1478,6 +1496,20 @@ mod tests {
         assert_eq!(next_focus_index(Some(0), 3, true), Some(2));
         assert_eq!(next_focus_index(Some(2), 3, true), Some(1));
         assert_eq!(next_focus_index(Some(9), 3, false), Some(1));
+    }
+
+    #[test]
+    fn modal_keyboard_focus_never_escapes_confirmation_actions() {
+        let hits = [
+            Hit { rect: Rect::new(0, 0, 10, 10), radius: 0, action: Action::Go(Page::Library), fixed: false, hover: Hover::Soft },
+            Hit { rect: Rect::new(0, 0, 10, 10), radius: 0, action: Action::CancelRemoveGame, fixed: false, hover: Hover::Soft },
+            Hit { rect: Rect::new(0, 0, 10, 10), radius: 0, action: Action::ConfirmRemoveGame, fixed: false, hover: Hover::Danger },
+        ];
+        assert_eq!(next_modal_focus_index(&hits, Some(1), false), Some(2));
+        assert_eq!(next_modal_focus_index(&hits, Some(2), false), Some(1));
+        assert_eq!(next_modal_focus_index(&hits, Some(1), true), Some(2));
+        assert_eq!(next_modal_focus_index(&hits, Some(0), false), Some(1));
+        assert_eq!(next_modal_focus_index(&hits, None, true), Some(2));
     }
 
     #[test]
