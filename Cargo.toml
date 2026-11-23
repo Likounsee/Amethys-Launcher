@@ -9,6 +9,7 @@ license = "LicenseRef-Proprietary"
 rust-version = "1.85"
 
 [workspace.dependencies]
+amethys-discovery = { path = "crates/amethys-discovery" }
 amethys-config = { path = "crates/amethys-config" }
 amethys-errors = { path = "crates/amethys-errors" }
 amethys-events = { path = "crates/amethys-events" }
