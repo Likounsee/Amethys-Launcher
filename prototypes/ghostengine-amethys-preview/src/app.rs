@@ -461,6 +461,11 @@ impl App {
         };
         self.hits = hits;
         self.content = fb;
+        // Keep keyboard focus inside the modal and make the safe action the
+        // default. Enter therefore dismisses the dialog instead of deleting.
+        if self.pending_remove.is_some() && self.keyboard_focus.is_none() {
+            self.keyboard_focus = self.hits.iter().position(|hit| hit.action == Action::CancelRemoveGame);
+        }
         self.page_h = h;
         self.scroll.set_content_extent(h as u32);
         let max = self.scroll.max_offset() as f32;
@@ -739,6 +744,9 @@ impl App {
             Action::RemoveGame(index) => {
                 if self.games.get(index).is_some() {
                     self.pending_remove = Some(index);
+                    // A destructive dialog must never inherit focus from the page
+                    // behind it. The dialog renderer will place focus on Cancel.
+                    self.keyboard_focus = None;
                 } else {
                     self.notify(ToastKind::Error, "Ce jeu n'existe plus dans la bibliothèque chargée.");
                 }
@@ -746,9 +754,11 @@ impl App {
             }
             Action::CancelRemoveGame => {
                 self.pending_remove = None;
+                self.keyboard_focus = None;
                 self.render(false);
             }
             Action::ConfirmRemoveGame => {
+                self.keyboard_focus = None;
                 let result = match self.pending_remove.take().and_then(|index| self.games.get(index).map(|game| game.id.clone())) {
                     Some(id) => crate::core_client::remove_game(&id),
                     None => Err("Ce jeu n'existe plus dans la bibliothèque chargée.".to_owned()),
