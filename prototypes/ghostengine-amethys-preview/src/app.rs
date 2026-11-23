@@ -183,6 +183,7 @@ pub struct App {
     search_focused: bool,
     executable_draft: String,
     editing_executable: bool,
+    executable_focused: bool,
     win_w: i32,
     win_h: i32,
     lay: Layout,
@@ -255,6 +256,7 @@ impl App {
             search_focused: false,
             executable_draft: String::new(),
             editing_executable: false,
+            executable_focused: false,
             win_w,
             win_h,
             lay,
@@ -451,6 +453,7 @@ impl App {
         }
         if !matches!(action, Action::EditExecutable | Action::SaveExecutable | Action::CancelExecutableEdit) {
             self.editing_executable = false;
+            self.executable_focused = false;
         }
         match action {
             Action::Go(page) => {
@@ -541,6 +544,7 @@ impl App {
             }
             Action::EditExecutable => {
                 self.editing_executable = true;
+                self.executable_focused = true;
                 self.render(false);
             }
             Action::SaveExecutable => {
@@ -560,10 +564,13 @@ impl App {
                         self.statuses = status::statuses_of(&self.games);
                         self.executable_draft = self.games[index].executable.clone().unwrap_or_default();
                         self.editing_executable = false;
+                        self.executable_focused = false;
+                        self.keyboard_focus = None;
                         self.notify(ToastKind::Success, "Chemin de l'exécutable enregistré dans Amethys Core.");
                     }
                     Err(error) => {
                         self.editing_executable = true;
+                        self.executable_focused = true;
                         self.notify(ToastKind::Error, format!("Impossible d'enregistrer l'exécutable : {error}"));
                     }
                 }
@@ -576,6 +583,8 @@ impl App {
                     .and_then(|game| game.executable.clone())
                     .unwrap_or_default();
                 self.editing_executable = false;
+                self.executable_focused = false;
+                self.keyboard_focus = None;
                 self.render(false);
             }
             Action::ScanGames => {
@@ -1090,7 +1099,7 @@ impl App {
 
     // -------------------------------------------------------------------- input
     fn handle_text_input(&mut self, input: &InputState) {
-        if !self.search_focused && !self.editing_executable {
+        if !self.search_focused && !self.executable_focused {
             return;
         }
         let mut changed = false;
@@ -1279,7 +1288,7 @@ impl App {
             }
         }
 
-        let had_text_focus = self.search_focused || self.editing_executable;
+        let had_text_focus = self.search_focused || self.executable_focused;
         self.handle_text_input(input);
         if input.tab_pressed {
             if self.search_focused {
@@ -1288,14 +1297,24 @@ impl App {
                 self.search_focused = false;
                 self.render(false);
                 self.handle_tab(input);
-            } else if !had_text_focus && !self.editing_executable {
+            } else if self.executable_focused {
+                // Keep edit mode active while moving keyboard focus from the text field
+                // to Save (Tab) or Cancel (Shift+Tab).
+                self.executable_focused = false;
+                self.render(false);
+                let target = if input.shift_down { Action::CancelExecutableEdit } else { Action::SaveExecutable };
+                if let Some(index) = self.hits.iter().position(|hit| hit.action == target) {
+                    self.keyboard_focus = Some(index);
+                    self.ensure_visible(index);
+                }
+            } else if !had_text_focus {
                 self.handle_tab(input);
             }
         }
-        if input.enter_pressed && self.editing_executable {
+        if input.enter_pressed && self.executable_focused {
             // Enter submits the executable field just like the Save button.
             self.apply(Action::SaveExecutable);
-        } else if input.enter_pressed && !had_text_focus && !self.search_focused && !self.editing_executable {
+        } else if input.enter_pressed && !had_text_focus && !self.search_focused && !self.executable_focused {
             if let Some(action) = self.keyboard_focus.and_then(|i| self.hits.get(i)).map(|h| h.action) {
                 self.apply(action);
             }
