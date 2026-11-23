@@ -294,6 +294,7 @@ pub struct App {
     scan_in_progress: bool,
     scan_found: Option<usize>,
     library_loading: bool,
+    library_refreshing: bool,
     library_receiver: Option<std::sync::mpsc::Receiver<Result<Vec<IpcGameEntry>, String>>>,
     pub core_error: Option<String>,
     toast: Option<Toast>,
@@ -372,6 +373,7 @@ impl App {
             scan_in_progress: false,
             scan_found: None,
             library_loading: false,
+            library_refreshing: false,
             library_receiver: None,
             core_error,
             toast: None,
@@ -415,8 +417,8 @@ impl App {
         self.toast = Some(Toast { kind, text: text.into(), born: Instant::now() });
     }
 
-    /// Starts the initial Core request without blocking window creation.
-    pub fn start_library_load(&mut self) {
+    /// Starts a Core library request without blocking the window thread.
+    fn start_library_request(&mut self, refreshing: bool) {
         if self.library_loading {
             return;
         }
@@ -427,28 +429,52 @@ impl App {
         });
         self.library_receiver = Some(receiver);
         self.library_loading = true;
-        self.core_error = None;
+        self.library_refreshing = refreshing;
+        if !refreshing {
+            self.core_error = None;
+        }
         self.render(false);
     }
 
-    /// Applies the initial library response on the UI thread.
+    /// Starts the initial Core request without blocking window creation.
+    pub fn start_library_load(&mut self) {
+        self.start_library_request(false);
+    }
+
+    /// Refreshes the library in the background while keeping the current view responsive.
+    fn start_library_refresh(&mut self) {
+        self.st.lib_filter = 0;
+        self.start_library_request(true);
+    }
+
+    /// Applies a Core library response on the UI thread.
     fn poll_library_load(&mut self) {
         let result = match self.library_receiver.as_ref().map(|receiver| receiver.try_recv()) {
             Some(Ok(result)) => Some(result),
             Some(Err(std::sync::mpsc::TryRecvError::Disconnected)) => Some(Err(
-                "Le chargement initial de la bibliothèque s'est interrompu.".to_owned()
+                "La requête de bibliothèque s'est interrompue.".to_owned()
             )),
             Some(Err(std::sync::mpsc::TryRecvError::Empty)) | None => None,
         };
         if let Some(result) = result {
+            let refreshing = self.library_refreshing;
             self.library_receiver = None;
             self.library_loading = false;
+            self.library_refreshing = false;
             match result {
                 Ok(games) => {
                     self.set_games(games);
                     self.core_error = None;
+                    if refreshing {
+                        self.notify(ToastKind::Success, "Bibliothèque actualisée.");
+                    }
                 }
-                Err(error) => self.core_error = Some(error),
+                Err(error) => {
+                    self.core_error = Some(error.clone());
+                    if refreshing {
+                        self.notify(ToastKind::Error, format!("Actualisation impossible : {error}"));
+                    }
+                }
             }
             self.render(false);
         }
@@ -464,15 +490,9 @@ impl App {
         }
     }
 
-    /// Reloads the library from Core, reporting failures in the UI instead of panicking.
+    /// Reloads the library from Core without blocking the UI thread.
     fn reload_from_core(&mut self) {
-        match crate::core_client::list_games() {
-            Ok(games) => {
-                self.set_games(games);
-                self.core_error = None;
-            }
-            Err(error) => self.core_error = Some(error),
-        }
+        self.start_library_refresh();
     }
 
     fn start_page_fade(&mut self) {
@@ -511,6 +531,7 @@ impl App {
                     detected: &self.detected_games,
                     scanning: self.scan_in_progress,
                     loading: self.library_loading,
+                    refreshing: self.library_refreshing,
                     progress: self.scan_progress.as_ref(),
                     scan_found: self.scan_found,
                     filter: self.st.lib_filter,
@@ -541,6 +562,7 @@ impl App {
                 &SettingsView {
                     core_error: self.core_error.as_deref(),
                     core_loading: self.library_loading,
+                    core_refreshing: self.library_refreshing,
                     game_count: self.games.len(),
                     ready_count: self.statuses.iter().filter(|s| s.is_ready()).count(),
                     media_root: self.media_store.map(|store| store.root()),
@@ -840,19 +862,7 @@ impl App {
                 self.render(false);
             }
             Action::RefreshLibrary => {
-                self.st.lib_filter = 0;
-                match crate::core_client::list_games_or_start_agent() {
-                    Ok(games) => {
-                        self.set_games(games);
-                        self.core_error = None;
-                        self.notify(ToastKind::Success, "Bibliothèque actualisée.");
-                    }
-                    Err(error) => {
-                        self.core_error = Some(error.clone());
-                        self.notify(ToastKind::Error, format!("Actualisation impossible : {error}"));
-                    }
-                }
-                self.render(false);
+                self.start_library_refresh();
             }
             Action::LaunchGame(index) => {
                 let result = match self.games.get(index) {
