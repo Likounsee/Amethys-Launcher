@@ -48,7 +48,7 @@ The 0.2.0 desktop application is built on the existing Rust workspace and the ve
 
 The 0.2 release does **not** include a connected commercial store, prices, promotions, purchases, account management, game downloads or game installation. Cloud saves, synchronization, automatic updates and a finished end-user experience are also outside this release. Future plans are tracked in [ROADMAP-0.2.md](ROADMAP-0.2.md).
 
-Detection coverage varies by launcher. A detected installation is not a guarantee that a game can launch correctly. See [launcher discovery coverage](doc/discovery/LAUNCHER-COVERAGE.md) for implemented adapters and real-install validation status. Keep official launchers as the source of truth for installation, updates, authentication and licences.
+Detection coverage varies by launcher, and a detected installation is not proof that a game can launch. See [launcher discovery coverage](doc/discovery/LAUNCHER-COVERAGE.md) for adapter evidence and the [0.2 compatibility report](doc/technical/COMPATIBILITY-REPORT-0.2.md) for unresolved executable, launcher and anti-cheat cases. Keep official launchers as the source of truth for installation, updates, authentication and licences.
 
 ## Principles
 
