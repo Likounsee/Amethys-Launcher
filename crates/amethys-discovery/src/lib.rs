@@ -660,7 +660,20 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
 
             let normalized_stem = normalize(stem);
             let relative_path = path.strip_prefix(&root).ok()?;
+            // Storefront libraries commonly use the game title as the install
+            // directory itself (for example "Tom Clancy's Rainbow Six Siege"),
+            // while the executable lives several generic engine folders below.
+            // Include that directory name in the matching context: it is part
+            // of the detected installation identity even though it is not part
+            // of the path relative to the install root.
+            let normalized_root_name = root.file_name()
+                .and_then(|value| value.to_str())
+                .map(normalize)
+                .unwrap_or_default();
             let normalized_relative_path = normalize(&relative_path.to_string_lossy());
+            let normalized_install_context = format!(
+                "{normalized_root_name}{normalized_relative_path}"
+            );
             let normalized_parent = path.parent()
                 .and_then(Path::file_name)
                 .and_then(|value| value.to_str())
@@ -686,7 +699,7 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
             // character, not the storefront title. Match the title against
             // every directory in the relative path, not only the .exe name
             // and its immediate parent (for example Game\\Binaries\\Win64).
-            if normalized_relative_path.contains(&target) && target.len() >= 4 {
+            if normalized_install_context.contains(&target) && target.len() >= 4 {
                 score += 70;
             }
             if !target_tokens.is_empty() {
@@ -696,7 +709,7 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
                 score += ((matched_stem * 45) / target_tokens.len()) as i32;
 
                 let matched_path = target_tokens.iter()
-                    .filter(|token| normalized_relative_path.contains(token.as_str()))
+                     .filter(|token| normalized_install_context.contains(token.as_str()))
                     .count();
                 score += ((matched_path * 35) / target_tokens.len()) as i32;
             }
@@ -2450,6 +2463,34 @@ mod tests {
             ))
         );
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn generic_executable_resolver_uses_the_install_root_name_as_game_context() {
+        let parent = std::env::temp_dir().join(format!(
+            "amethys-executable-root-context-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        let root = parent.join("Tom Clancy's Rainbow Six Siege");
+        let game_bin = root.join("default_game/Binaries/Win64");
+        let support = root.join("BattlEye");
+        std::fs::create_dir_all(&game_bin).unwrap();
+        std::fs::create_dir_all(&support).unwrap();
+        std::fs::write(game_bin.join("RainbowSix.exe"), b"game").unwrap();
+        std::fs::write(support.join("BELauncher.exe"), b"support").unwrap();
+
+        let detected = super::DetectedGame {
+            platform_id: None,
+            name: "Rainbow Six Siege".to_owned(),
+            install_path: root.clone(),
+            platform: "Unknown Store",
+        };
+        assert_eq!(
+            super::resolve_game_executable(&detected),
+            Some(std::path::PathBuf::from("default_game/Binaries/Win64/RainbowSix.exe"))
+        );
+        std::fs::remove_dir_all(parent).unwrap();
     }
 
     #[test]
