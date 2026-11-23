@@ -18,6 +18,7 @@ The desktop application is an **unreleased development preview**. It is not part
 - Discover supported installed games and explicitly import detected installations.
 - Resize the window, use responsive layouts, navigate actionable controls with Tab / Shift+Tab / Enter, and use the documented Escape and F11 shortcuts.
 - Load and refresh the Core library asynchronously so IPC requests do not block the window's UI thread.
+- Run imports, executable-path updates and library removals as background Core operations, with visible completion and error feedback.
 - Display explicit loading, connection, error, confirmation and notification states.
 
 The preview does not download or install games, replace official launchers, manage platform accounts or licenses, bypass DRM, or provide a finished store/catalogue. Discovery and launch readiness remain limited to the adapters and checks implemented by the project.
