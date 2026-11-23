@@ -468,6 +468,7 @@ pub fn visible_games(view: &LibraryView) -> Vec<usize> {
 }
 
 // -------------------------------------------------------------- game card
+#[allow(clippy::too_many_arguments)] // Page layout helpers receive explicit geometry and content.
 fn game_card(p: &mut Painter, x: i32, y: i32, cw: i32, ch: i32, index: usize, game: &IpcGameEntry, status: Option<&GameStatus>) {
     let total_h = ch + FOOTER_H;
     let kind = status.map_or(StatusKind::NeedsExecutable, |s| s.kind);
@@ -523,7 +524,7 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
     let subtitle = if games.is_empty() {
         "Aucun jeu enregistré pour le moment".to_owned()
     } else {
-        format!("{} · {}", plural(games.len(), "jeu", "jeux"), format!("{} {}", ready, if ready > 1 { "prêts à lancer" } else { "prêt à lancer" }))
+        format!("{} · {} {}", plural(games.len(), "jeu", "jeux"), ready, if ready > 1 { "prêts à lancer" } else { "prêt à lancer" })
     };
     p.text(mx, 72, 22, &subtitle, 13.5, W::Reg, MUT);
 
@@ -736,6 +737,7 @@ pub struct DetailView<'a> {
 }
 
 /// One label / value row of an information panel. Returns the row height.
+#[allow(clippy::too_many_arguments)] // Page layout helpers receive explicit geometry and content.
 fn info_row(p: &mut Painter, x: i32, y: i32, w: i32, first: bool, label: &str, value: &str, color: Color, ic: Option<Icon>) -> i32 {
     if !first {
         p.fill(x, y, w, 1, alpha(Color::WHITE, 12));
