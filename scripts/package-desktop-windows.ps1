@@ -24,14 +24,14 @@ try {
     cargo clippy --workspace --all-targets -- -D warnings
     if ($LASTEXITCODE -ne 0) { throw "Workspace Clippy checks failed." }
 
-    cargo clippy --manifest-path $Manifest --bin amethys-launcher -- -D warnings
+    cargo clippy --manifest-path $Manifest --all-targets -- -D warnings
     if ($LASTEXITCODE -ne 0) { throw "Desktop Clippy checks failed." }
 
     cargo test --workspace --all-targets
     if ($LASTEXITCODE -ne 0) { throw "Workspace tests failed." }
 
-    cargo test --manifest-path $Manifest --bin amethys-launcher
-    if ($LASTEXITCODE -ne 0) { throw "Desktop launcher tests failed." }
+    cargo test --manifest-path $Manifest --all-targets
+    if ($LASTEXITCODE -ne 0) { throw "Desktop tests failed." }
 
     cargo build --release -p amethys-agent
     if ($LASTEXITCODE -ne 0) { throw "Building amethys-agent failed." }
