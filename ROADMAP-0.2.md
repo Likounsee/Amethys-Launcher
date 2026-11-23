@@ -1,6 +1,16 @@
 # Amethys Launcher — feuille de route produit
 
-La priorité de la 0.2 est une interface de bureau complète, cohérente et soignée, reposant sur la vraie bibliothèque locale. La boutique commerciale n'est pas un objectif de la 0.2.
+## État de la version 0.2
+
+**Amethys Launcher 0.2.0 est publiée depuis le 23 novembre 2026.** La release fournit les archives portables Windows x64 et Linux x86_64 GNU. Les deux builds, les tests de release, les contrôles Clippy, les tests de l'application de bureau, les vérifications des archives extraites et la génération/vérification des sommes SHA-256 ont réussi dans GitHub Actions.
+
+- [Release v0.2.0](https://github.com/Likounsee/Amethys-Launcher/releases/tag/v0.2.0)
+- [Notes de version et téléchargements](doc/releases/0.2.0-release-notes.md)
+- [Détails techniques de la release](doc/technical/RELEASES.md)
+
+La publication ne signifie pas que toutes les ambitions initiales de la 0.2 sont terminées. Les tâches non cochées ci-dessous restent des travaux à poursuivre. En particulier, les tests manuels sur une vraie machine Linux sont encore à faire. La boutique commerciale, les achats et les téléchargements restent hors périmètre 0.2 et sont prévus pour une étape ultérieure.
+
+La priorité de la 0.2 était une interface de bureau cohérente reposant sur la vraie bibliothèque locale. La boutique commerciale n'était pas un objectif de cette version.
 
 ## Version 0.2 — interface et fondations locales
 
@@ -35,7 +45,7 @@ La priorité de la 0.2 est une interface de bureau complète, cohérente et soig
 ### Qualité
 - [ ] Éliminer les hypothèses de résolution fixe et vérifier les tailles de bibliothèque importantes.
 - [ ] Stabiliser les interactions et les états d'erreur.
-- [ ] Tests unitaires/intégration, packaging portable reproductible et documentation.
+- [x] Tests unitaires/intégration exécutés en CI, packaging portable vérifié et documentation de la release publiée.
 - [x] Conserver Core comme propriétaire des données persistantes ; l'interface utilise exclusivement le client IPC et ne dépend pas directement de SQLite.
 
 **Hors périmètre 0.2 :** catalogue commercial connecté, prix, promotions, achats, licences, téléchargement et installation depuis une boutique. Les écrans futurs peuvent être présentés comme indisponibles, jamais avec des données commerciales fictives.
