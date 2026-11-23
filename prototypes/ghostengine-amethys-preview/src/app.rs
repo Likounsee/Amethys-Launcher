@@ -760,13 +760,17 @@ impl App {
 
     /// Draws `draw` over a snapshot of the destination and blends the result back with `opacity`.
     fn overlay(&self, fb: &mut Framebuffer, at: (i32, i32, i32, i32), opacity: f32, draw: impl FnOnce(&mut Painter)) {
+        self.overlay_scaled(fb, at, opacity, 1.0, draw);
+    }
+
+    fn overlay_scaled(&self, fb: &mut Framebuffer, at: (i32, i32, i32, i32), opacity: f32, scale: f32, draw: impl FnOnce(&mut Painter)) {
         let (x, y, w, h) = at;
         if opacity <= 0.0 || w <= 0 || h <= 0 || x < 0 || y < 0 || x + w > fb.width() as i32 || y + h > fb.height() as i32 {
             return;
         }
         let fw = fb.width() as usize;
         let (uw, uh) = (w as usize, h as usize);
-        let mut p = Painter::new(w as u32, h as u32, self.fonts);
+        let mut p = Painter::new(w as u32, h as u32, self.fonts).with_scale(scale);
         for row in 0..uh {
             let s = (y as usize + row) * fw + x as usize;
             p.fb.pixels_mut()[row * uw..(row + 1) * uw].copy_from_slice(&fb.pixels()[s..s + uw]);
@@ -920,21 +924,24 @@ impl App {
             return;
         }
         let mut probe = Painter::new(1, 1, self.fonts);
-        let max_w = (self.win_w - self.side_px() - (32.0 * self.lay.scale).round() as i32).clamp((120.0 * self.lay.scale).round() as i32, (540.0 * self.lay.scale).round() as i32);
+        let scale = self.lay.scale;
+        let logical_w = (self.win_w as f32 / scale).round() as i32;
+        let max_w = (logical_w - self.lay.side_w - 32).clamp(120, 540);
         let text_w = max_w - 72;
         let lines = probe.wrap(&toast.text, 13.0, W::Med, text_w).len().clamp(1, 3) as i32;
         let wide = lines > 1 || probe.width(&toast.text, 13.0, W::Med) > text_w as f32;
         let w = if wide { max_w } else { (probe.width(&toast.text, 13.0, W::Med).round() as i32 + 72).max(220) };
         let h = (lines * 20 + 28).max(56);
         let slide = ((1.0 - ease_out(age / 0.22)) * 14.0).round() as i32;
-        let (x, y) = (self.side_px() + (12.0 * self.lay.scale).round() as i32, self.win_h - (12.0 * self.lay.scale).round() as i32 - h + slide);
+        let (x, y) = (self.lay.side_w + 12, (self.win_h as f32 / scale).round() as i32 - 12 - h + slide);
         let (accent, soft, icon) = match toast.kind {
             ToastKind::Success => (gfx::GREEN, gfx::GREEN_DARK, Icon::Check),
             ToastKind::Error => (gfx::RED, gfx::RED_DARK, Icon::Alert),
             ToastKind::Info => (gfx::VIO, gfx::ACT, Icon::Info),
         };
         let text = toast.text.clone();
-        self.overlay(fb, (x - 20, y - 12, w + 40, h + 40), opacity, move |p| {
+        let px = |value: i32| (value as f32 * scale).round() as i32;
+        self.overlay_scaled(fb, (px(x - 20), px(y - 12), px(w + 40), px(h + 40)), opacity, scale, move |p| {
             p.shadow(20, 12, w, h, 16, 14, 150);
             p.rrect(20, 12, w, h, 16, gfx::PANEL_HI);
             p.rrect_line(20, 12, w, h, 16, alpha(accent, 130));
