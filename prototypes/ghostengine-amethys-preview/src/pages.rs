@@ -1245,15 +1245,24 @@ pub fn remove_dialog(p: &mut Painter, lay: &Layout, game_name: &str, offset: i32
         MUT,
         3,
     );
-    let by = my + mh - 24 - BTN_H;
-    let rw = button_width(p, "Retirer", Some(Icon::Trash)) + 8;
-    let cancel_w = 120;
     let dialog_bg = Color::rgb(0x17, 0x14, 0x21);
-    let confirm = button(p, mx + mw - 24 - rw, by, Some(rw), "Retirer", Some(Icon::Trash), Btn::Danger, dialog_bg, None);
-    let cancel = button(p, mx + mw - 24 - rw - 10 - cancel_w, by, Some(cancel_w), "Annuler", None, Btn::Ghost, dialog_bg, None);
-    // These hits are page-space (they scroll with the page, which is frozen while the dialog is open).
-    p.hit_with(mx + mw - 24 - confirm, by, confirm, BTN_H, 12, Action::ConfirmRemoveGame, false, Hover::Danger);
-    p.hit_with(mx + mw - 24 - rw - 10 - cancel, by, cancel, BTN_H, 12, Action::CancelRemoveGame, false, Hover::Soft);
+    if mw < 400 {
+        let bw = mw - 48;
+        let cancel_y = my + mh - 24 - BTN_H;
+        let confirm_y = cancel_y - BTN_H - 8;
+        button(p, mx + 24, confirm_y, Some(bw), "Retirer", Some(Icon::Trash), Btn::Danger, dialog_bg, None);
+        button(p, mx + 24, cancel_y, Some(bw), "Annuler", None, Btn::Ghost, dialog_bg, None);
+        p.hit_with(mx + 24, confirm_y, bw, BTN_H, 12, Action::ConfirmRemoveGame, false, Hover::Danger);
+        p.hit_with(mx + 24, cancel_y, bw, BTN_H, 12, Action::CancelRemoveGame, false, Hover::Soft);
+    } else {
+        let by = my + mh - 24 - BTN_H;
+        let rw = button_width(p, "Retirer", Some(Icon::Trash)) + 8;
+        let cancel_w = 120;
+        let confirm = button(p, mx + mw - 24 - rw, by, Some(rw), "Retirer", Some(Icon::Trash), Btn::Danger, dialog_bg, None);
+        let cancel = button(p, mx + mw - 24 - rw - 10 - cancel_w, by, Some(cancel_w), "Annuler", None, Btn::Ghost, dialog_bg, None);
+        p.hit_with(mx + mw - 24 - confirm, by, confirm, BTN_H, 12, Action::ConfirmRemoveGame, false, Hover::Danger);
+        p.hit_with(mx + mw - 24 - rw - 10 - cancel, by, cancel, BTN_H, 12, Action::CancelRemoveGame, false, Hover::Soft);
+    }
 }
 
 #[cfg(test)]
