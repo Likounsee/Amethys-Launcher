@@ -494,6 +494,13 @@ fn game_card(p: &mut Painter, x: i32, y: i32, cw: i32, ch: i32, index: usize, ga
     }
 
     chip(p, x + 10, y + 10, &game.platform, cw - 60);
+    // Use the persistent catalogue identity for numbering, never the
+    // temporary position in a filtered or sorted Vec.
+    if let Some(number) = game.catalogue_game_id.as_deref().filter(|value| {
+        !value.is_empty() && value.chars().all(|character| character.is_ascii_digit())
+    }) {
+        chip(p, x + cw - 76, y + 38, &format!("#{number}"), 66);
+    }
     if kind != StatusKind::Ready {
         let (fg, _) = tone(kind);
         p.circle(x + cw - 21, y + 21, 11, Color::rgba(8, 6, 14, 200));
