@@ -918,7 +918,7 @@ impl App {
             return;
         }
         let mut probe = Painter::new(1, 1, self.fonts);
-        let max_w = (self.win_w - self.lay.side_w - 24).clamp(180, 540);
+        let max_w = (self.win_w - self.lay.side_w - 32).clamp(120, 540);
         let text_w = max_w - 72;
         let lines = probe.wrap(&toast.text, 13.0, W::Med, text_w).len().clamp(1, 3) as i32;
         let wide = lines > 1 || probe.width(&toast.text, 13.0, W::Med) > text_w as f32;
