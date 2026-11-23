@@ -629,11 +629,6 @@ impl App {
         }
     }
 
-    /// Reloads the library from Core without blocking the UI thread.
-    fn reload_from_core(&mut self) {
-        self.start_library_refresh();
-    }
-
     fn start_page_fade(&mut self) {
         self.page_fade = Some(Instant::now());
     }
