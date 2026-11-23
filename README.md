@@ -39,7 +39,7 @@ The published 0.1.0 release remains the experimental agent/CLI milestone describ
 
 The preview currently includes a responsive game library, search and platform filters, sorting with a locally persisted preference, game details and executable configuration, launching and removal of local entries, cover customization, supported installation discovery and explicit import, keyboard navigation, and asynchronous Core library loading, refresh, imports, executable updates and removals. It remains experimental and is not included in the 0.1.0 release archives.
 
-See [Desktop preview 0.2](doc/technical/DESKTOP-PREVIEW.md) for build instructions, current scope, validation and packaging. Do not treat the preview as a finished or production-ready launcher.
+The Windows x64 portable package has now passed all 15 manual checks, including launch from the extracted ZIP. Windows/Linux CI is green; manual Linux desktop package testing is intentionally deferred. See [Desktop preview 0.2](doc/technical/DESKTOP-PREVIEW.md) for build instructions, validation evidence, the tested archive checksum and packaging details. This remains an experimental development preview, not a finished or production-ready launcher.
 
 ## Principles
 
