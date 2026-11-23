@@ -12,7 +12,7 @@
 
 use crate::covers::CoverStore;
 use crate::gfx::{self, alpha, fb_fill, fb_fill_rrect, fb_stroke_rrect, Action, Fonts, Hit, Hover, Icon, Page, Painter, State, W};
-use crate::pages::{self, Active, DetailView, Layout, LibraryView, SettingsView, SidebarInfo, SIDE_W};
+use crate::pages::{self, Active, DetailView, Layout, LibraryView, SettingsView, SidebarInfo};
 use crate::status::{self, GameStatus};
 use amethys_ipc::IpcGameEntry;
 use ghostengine::{
@@ -37,7 +37,7 @@ enum ScanMessage {
 pub const WIN_W: u32 = 1440;
 pub const WIN_H: u32 = 900;
 /// Smallest window the layout is designed for.
-pub const MIN_W: u32 = 180;
+pub const MIN_W: u32 = 360;
 
 const PANEL_W: i32 = 520;
 const PANEL_H: i32 = 500;
