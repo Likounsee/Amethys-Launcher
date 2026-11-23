@@ -11,7 +11,7 @@ La priorité de la 0.2 est une interface de bureau complète, cohérente et soig
 - [x] Détection en arrière-plan avec progression et annulation.
 - [ ] Finaliser la direction visuelle, la typographie, les espacements et la cohérence des composants.
 - [x] Uniformiser les jaquettes des cartes au format portrait 3:4 et signaler explicitement les placeholders originaux temporaires.
-- [ ] Compléter les états vides, chargements, erreurs, confirmations et notifications.
+- [x] Compléter les états vides, chargements (y compris le chargement initial asynchrone de Core), erreurs, confirmations et notifications.
 - [x] Rendre la mise en page adaptative aux dimensions réelles de la fenêtre (mise à l'échelle, sidebar compacte et colonnes entières).
 - [x] Terminer la navigation clavier et le focus accessible des champs et dialogues (ordre Tab/Maj+Tab, focus conservé par action après réorganisation, départ depuis les activations souris et piège de focus dans la confirmation destructive).
 - [x] Afficher l'état réel de Core, le nombre de jeux locaux et le chemin du stockage média dans les paramètres.
