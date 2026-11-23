@@ -76,6 +76,7 @@ pub enum Active {
 
 pub struct SidebarInfo {
     pub core_ok: bool,
+    pub core_loading: bool,
     pub game_count: usize,
 }
 
@@ -433,6 +434,7 @@ pub struct LibraryView<'a> {
     pub statuses: &'a [GameStatus],
     pub detected: &'a [amethys_discovery::DetectedGame],
     pub scanning: bool,
+    pub loading: bool,
     pub progress: Option<&'a amethys_discovery::DiscoveryProgress>,
     /// `Some(n)` once a scan has finished: n installations were found.
     pub scan_found: Option<usize>,
@@ -521,7 +523,9 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
 
     // ---- header
     p.text(mx, 28, 42, "Bibliothèque", 34.0, W::Disp, TXT);
-    let subtitle = if games.is_empty() {
+    let subtitle = if view.loading {
+        "Connexion à Amethys Core…".to_owned()
+    } else if games.is_empty() {
         "Aucun jeu enregistré pour le moment".to_owned()
     } else {
         format!("{} · {} {}", plural(games.len(), "jeu", "jeux"), ready, if ready > 1 { "prêts à lancer" } else { "prêt à lancer" })
@@ -593,6 +597,27 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
         y += h + GAP;
     }
 
+    // ---- initial loading state
+    if view.loading && games.is_empty() && view.core_error.is_none() {
+        panel(p, mx, y, mw, 132, 18);
+        icon_badge(p, mx + 22, y + 24, 44, Icon::Refresh, VIO_HI, ACT);
+        p.text(mx + 82, y + 22, 24, "Chargement de la bibliothèque", 16.0, W::Semi, TXT);
+        p.paragraph(
+            mx + 82,
+            y + 52,
+            mw - 106,
+            42,
+            "Connexion au service local et récupération de vos jeux. Cette opération ne bloque pas l'ouverture du launcher.",
+            12.5,
+            W::Reg,
+            MUT,
+            2,
+        );
+        p.rrect(mx + 82, y + 104, mw - 104, 5, 3, alpha(Color::WHITE, 18));
+        p.gradient_rrect(mx + 82, y + 104, (mw - 104) / 3, 5, 3, 90.0, &[(0.0, VIO_LO), (1.0, VIO_HI)], PANEL);
+        y += 132 + GAP;
+    }
+
     // ---- stat tiles
     if !games.is_empty() {
         let count = |kinds: &[StatusKind]| view.statuses.iter().filter(|s| kinds.contains(&s.kind)).count();
@@ -646,7 +671,7 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
 
     // ---- grid or empty states
     let visible = visible_games(view);
-    if games.is_empty() && view.core_error.is_none() {
+    if games.is_empty() && view.core_error.is_none() && !view.loading {
         let cta = if view.scanning { None } else { Some(("Détecter les jeux", Action::ScanGames, Btn::Primary)) };
         y += empty_state(p, mx, y, mw, Icon::Gem, "Votre bibliothèque est vide", "Lancez la détection pour retrouver les jeux déjà installés sur vos plateformes prises en charge. Rien n'est modifié sur votre disque.", cta) + GAP;
     } else if !games.is_empty() && visible.is_empty() {
@@ -1123,6 +1148,7 @@ pub fn store(p: &mut Painter, lay: &Layout) -> i32 {
 // ---------------------------------------------------------------- settings
 pub struct SettingsView<'a> {
     pub core_error: Option<&'a str>,
+    pub core_loading: bool,
     pub game_count: usize,
     pub ready_count: usize,
     pub media_root: Option<&'a std::path::Path>,
@@ -1149,6 +1175,8 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
     panel(p, mx, y, mw, core_h, 20);
     let (ic, fg, bg, state) = if view.core_error.is_some() {
         (Icon::Alert, AMBER, AMBER_DARK, "Déconnecté")
+    } else if view.core_loading {
+        (Icon::Refresh, VIO_HI, ACT, "Connexion…")
     } else {
         (Icon::Check, GREEN, GREEN_DARK, "Connecté")
     };
@@ -1158,6 +1186,8 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
     p.text(mx + 102, y + 48, 22, state, 13.0, W::Semi, fg);
     if let Some(error) = view.core_error {
         p.paragraph(mx + 88, y + 76, mw - 112, 19, error, 12.5, W::Reg, MUT, 3);
+    } else if view.core_loading {
+        p.text(mx + 88, y + 76, 20, "Connexion au service local et chargement de la bibliothèque…", 12.5, W::Reg, MUT);
     } else {
         p.text(mx + 88, y + 76, 20, "La bibliothèque est chargée depuis le service local, par IPC.", 12.5, W::Reg, MUT);
     }
@@ -1362,6 +1392,7 @@ mod tests {
             statuses,
             detected: &[],
             scanning: false,
+            loading: false,
             progress: None,
             scan_found: None,
             filter,
