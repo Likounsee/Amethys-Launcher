@@ -352,6 +352,7 @@ impl<'a> Painter<'a> {
     // ---- artwork -------------------------------------------------------
     /// Draws a decoded cover image into the rectangle (mipmapped when the aspect
     /// matches, otherwise centre-cropped with bilinear sampling). False if no image.
+    #[allow(clippy::too_many_arguments)] // Explicit drawing geometry is intentional in this low-level painter API.
     pub fn draw_cover_for_game(
         &mut self,
         catalogue_game_id: &str,
@@ -404,6 +405,7 @@ impl<'a> Painter<'a> {
     }
 
     /// Real cover when available, original placeholder otherwise. True if a real cover was drawn.
+    #[allow(clippy::too_many_arguments)] // Explicit drawing geometry is intentional in this low-level painter API.
     pub fn cover_or_placeholder(
         &mut self,
         catalogue_game_id: &str,
@@ -436,6 +438,7 @@ impl<'a> Painter<'a> {
     }
 
     /// Blurs a copy of the artwork into a banner background.
+    #[allow(clippy::too_many_arguments)] // Explicit drawing geometry is intentional in this low-level painter API.
     pub fn blurred_cover_banner(
         &mut self,
         catalogue_game_id: &str,
@@ -476,6 +479,8 @@ impl<'a> Painter<'a> {
             self.fb.pixels_mut()[d0..d0 + len].copy_from_slice(&src.pixels()[s0..s0 + len]);
         }
     }
+
+    #[allow(clippy::too_many_arguments)] // Explicit drawing geometry is intentional in this low-level painter API.
 
     pub fn hit(&mut self, x: i32, y: i32, w: i32, h: i32, radius: i32, action: Action, fixed: bool) {
         self.hit_with(x, y, w, h, radius, action, fixed, Hover::Glow);
@@ -518,6 +523,7 @@ impl<'a> Painter<'a> {
     }
 
     /// Soft drop shadow under a rounded rectangle (drawn before the shape itself).
+    #[allow(clippy::too_many_arguments)] // Explicit drawing geometry is intentional in this low-level painter API.
     pub fn shadow(&mut self, x: i32, y: i32, w: i32, h: i32, r: i32, spread: i32, strength: u8) {
         for i in 0..spread {
             let t = 1.0 - i as f32 / spread as f32;
@@ -712,6 +718,7 @@ impl<'a> Painter<'a> {
     }
 
     /// Draws one line inside a line box of height `lh` starting at `y`.
+    #[allow(clippy::too_many_arguments)] // Explicit drawing geometry is intentional in this low-level painter API.
     pub fn text(&mut self, x: i32, y: i32, lh: i32, s: &str, size: f32, w: W, c: Color) -> f32 {
         let baseline = y as f32 + (lh as f32 - 1.21 * size) / 2.0 + 0.969 * size;
         let (x, baseline, size) = (self.px(x), self.px(baseline.round() as i32), self.pf(size));
@@ -719,12 +726,15 @@ impl<'a> Painter<'a> {
         draw_text(&mut self.fb, font, s, Point::new(x, baseline), size, c).width / self.scale
     }
 
+    #[allow(clippy::too_many_arguments)] // Explicit drawing geometry is intentional in this low-level painter API.
+
     pub fn text_right(&mut self, right: i32, y: i32, lh: i32, s: &str, size: f32, w: W, c: Color) {
         let tw = self.width(s, size, w);
         self.text(right - tw.round() as i32, y, lh, s, size, w, c);
     }
 
     /// Centres one line horizontally inside [x, x + w).
+    #[allow(clippy::too_many_arguments)] // Explicit drawing geometry is intentional in this low-level painter API.
     pub fn text_center(&mut self, x: i32, w: i32, y: i32, lh: i32, s: &str, size: f32, wt: W, c: Color) {
         let tw = self.width(s, size, wt).round() as i32;
         self.text(x + (w - tw) / 2, y, lh, s, size, wt, c);
