@@ -1,7 +1,7 @@
 [package]
 default-run = "amethys-launcher"
 name = "amethyst-preview"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Experimental Amethys desktop UI using the vendored GhostEngine snapshot and the real Amethys Core IPC library."
 license = "UNLICENSED"
