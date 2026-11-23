@@ -182,6 +182,13 @@ fn inset(r: Rect, d: u32) -> Rect {
 /// Loads the user's persisted desktop preferences. Unknown or malformed values
 /// safely fall back to the default sort order.
 fn load_library_sort(path: &std::path::Path) -> usize {
+    // On Windows, replacing an existing file with std::fs::rename is not
+    // supported. If the process was interrupted between moving the old file
+    // aside and installing the new one, restore the last known-good copy.
+    let backup = path.with_extension("bak");
+    if !path.exists() && backup.exists() {
+        let _ = std::fs::rename(&backup, path);
+    }
     let Ok(contents) = std::fs::read_to_string(path) else {
         return 0;
     };
@@ -220,9 +227,27 @@ fn save_library_sort(path: &std::path::Path, sort: usize) -> std::io::Result<()>
         return Err(error);
     }
     drop(file);
-    if let Err(error) = std::fs::rename(&temporary, path) {
-        let _ = std::fs::remove_file(&temporary);
-        return Err(error);
+    if let Err(first_error) = std::fs::rename(&temporary, path) {
+        // Unix rename replaces an existing destination atomically. Windows
+        // does not, so keep a recoverable backup while replacing the file.
+        if !path.exists() {
+            let _ = std::fs::remove_file(&temporary);
+            return Err(first_error);
+        }
+        let backup = path.with_extension("bak");
+        if backup.exists() {
+            std::fs::remove_file(&backup)?;
+        }
+        if let Err(error) = std::fs::rename(path, &backup) {
+            let _ = std::fs::remove_file(&temporary);
+            return Err(error);
+        }
+        if let Err(error) = std::fs::rename(&temporary, path) {
+            let _ = std::fs::rename(&backup, path);
+            let _ = std::fs::remove_file(&temporary);
+            return Err(error);
+        }
+        let _ = std::fs::remove_file(&backup);
     }
     #[cfg(unix)]
     std::fs::File::open(parent)?.sync_all()?;
@@ -1584,6 +1609,19 @@ mod tests {
         assert_eq!(load_library_sort(&path), 2);
         save_library_sort(&path, 1).expect("preferences replacement");
         assert_eq!(load_library_sort(&path), 1);
+        assert!(!path.with_extension("bak").exists(), "successful replacement cleans up its backup");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn desktop_preferences_restore_backup_after_interrupted_replacement() {
+        let nonce = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).expect("clock").as_nanos();
+        let root = std::env::temp_dir().join(format!("amethys-prefs-recovery-{}-{nonce}", std::process::id()));
+        std::fs::create_dir_all(&root).expect("test directory");
+        let path = root.join("launcher-preferences-v1");
+        std::fs::write(path.with_extension("bak"), "schema=1\\nlibrary_sort=2\\n").expect("backup");
+        assert_eq!(load_library_sort(&path), 2);
+        assert!(path.exists(), "the backup is restored to the primary preference path");
         let _ = std::fs::remove_dir_all(root);
     }
 
