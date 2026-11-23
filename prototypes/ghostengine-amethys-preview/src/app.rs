@@ -868,11 +868,6 @@ impl App {
         }
     }
 
-    /// Draws `draw` over a snapshot of the destination and blends the result back with `opacity`.
-    fn overlay(&self, fb: &mut Framebuffer, at: (i32, i32, i32, i32), opacity: f32, draw: impl FnOnce(&mut Painter)) {
-        self.overlay_scaled(fb, at, opacity, 1.0, draw);
-    }
-
     fn overlay_scaled(&self, fb: &mut Framebuffer, at: (i32, i32, i32, i32), opacity: f32, scale: f32, draw: impl FnOnce(&mut Painter)) {
         let (x, y, w, h) = at;
         if opacity <= 0.0 || w <= 0 || h <= 0 || x < 0 || y < 0 || x + w > fb.width() as i32 || y + h > fb.height() as i32 {
@@ -1069,8 +1064,8 @@ impl App {
 
     fn panel_rect(&self) -> Rect {
         let px = |value: i32| (value as f32 * self.lay.scale).round() as u32;
-        let y = (self.win_h - px(12 + 34 + 8 + PANEL_H as i32) as i32).max(px(8) as i32);
-        Rect::new(self.win_w as u32 - px(12 + PANEL_W as i32), y as u32, px(PANEL_W as i32), px(PANEL_H as i32))
+        let y = (self.win_h - px(12 + 34 + 8 + PANEL_H)).max(px(8));
+        Rect::new(self.win_w as u32 - px(12 + PANEL_W), y as u32, px(PANEL_W), px(PANEL_H))
     }
 
     fn bench_button(&self) -> Rect {
