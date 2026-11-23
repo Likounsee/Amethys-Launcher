@@ -77,6 +77,7 @@ pub enum Active {
 pub struct SidebarInfo {
     pub core_ok: bool,
     pub core_loading: bool,
+    pub core_refreshing: bool,
     pub game_count: usize,
 }
 
@@ -438,6 +439,7 @@ pub struct LibraryView<'a> {
     pub detected: &'a [amethys_discovery::DetectedGame],
     pub scanning: bool,
     pub loading: bool,
+    pub refreshing: bool,
     pub progress: Option<&'a amethys_discovery::DiscoveryProgress>,
     /// `Some(n)` once a scan has finished: n installations were found.
     pub scan_found: Option<usize>,
@@ -526,7 +528,9 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
 
     // ---- header
     p.text(mx, 28, 42, "Bibliothèque", 34.0, W::Disp, TXT);
-    let subtitle = if view.loading {
+    let subtitle = if view.refreshing {
+        "Actualisation de la bibliothèque…".to_owned()
+    } else if view.loading {
         "Connexion à Amethys Core…".to_owned()
     } else if games.is_empty() {
         "Aucun jeu enregistré pour le moment".to_owned()
@@ -1186,7 +1190,7 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
     let (ic, fg, bg, state) = if view.core_error.is_some() {
         (Icon::Alert, AMBER, AMBER_DARK, "Déconnecté")
     } else if view.core_loading {
-        (Icon::Refresh, VIO_HI, ACT, "Connexion…")
+        (Icon::Refresh, VIO_HI, ACT, if view.core_refreshing { "Actualisation…" } else { "Connexion…" })
     } else {
         (Icon::Check, GREEN, GREEN_DARK, "Connecté")
     };
@@ -1197,7 +1201,12 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
     if let Some(error) = view.core_error {
         p.paragraph(mx + 88, y + 76, mw - 112, 19, error, 12.5, W::Reg, MUT, 3);
     } else if view.core_loading {
-        p.text_fit(mx + 88, y + 76, 20, "Connexion au service local et chargement de la bibliothèque…", 12.5, W::Reg, MUT, mw - 112);
+        let message = if view.core_refreshing {
+            "Actualisation de la bibliothèque depuis Amethys Core…"
+        } else {
+            "Connexion au service local et chargement de la bibliothèque…"
+        };
+        p.text_fit(mx + 88, y + 76, 20, message, 12.5, W::Reg, MUT, mw - 112);
     } else {
         p.text(mx + 88, y + 76, 20, "La bibliothèque est chargée depuis le service local, par IPC.", 12.5, W::Reg, MUT);
     }
