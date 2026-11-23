@@ -35,7 +35,6 @@ enum ScanMessage {
 
 enum CoreMutationTask {
     Import {
-        index: usize,
         detected: amethys_discovery::DetectedGame,
         context: (String, String, std::path::PathBuf),
     },
@@ -45,7 +44,6 @@ enum CoreMutationTask {
 
 enum CoreMutationResult {
     Imported {
-        index: usize,
         context: (String, String, std::path::PathBuf),
         result: Result<IpcGameEntry, String>,
     },
@@ -484,9 +482,8 @@ impl App {
         let (sender, receiver) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
             let result = match task {
-                CoreMutationTask::Import { index, detected, context } => {
+                CoreMutationTask::Import { detected, context } => {
                     CoreMutationResult::Imported {
-                        index,
                         context,
                         result: crate::core_client::add_detected_game(&detected),
                     }
@@ -526,7 +523,7 @@ impl App {
         self.mutation_receiver = None;
         self.mutation_in_progress = false;
         match result {
-            CoreMutationResult::Imported { index, context, result } => match result {
+            CoreMutationResult::Imported { context, result } => match result {
                 Ok(game) => {
                     let name = game.name.clone();
                     let platform = context.1.clone();
@@ -538,7 +535,6 @@ impl App {
                     if self.detected_games.is_empty() {
                         self.scan_found = Some(0);
                     }
-                    let _ = index;
                     self.notify(ToastKind::Success, format!("{name} ({platform}) a été ajouté à votre bibliothèque."));
                     self.start_library_refresh();
                 }
@@ -915,10 +911,12 @@ impl App {
                     self.notify(ToastKind::Error, "Indiquez le chemin de l'exécutable avant de l'enregistrer.");
                     self.render(false);
                 } else if let Some(game) = self.selected_game.and_then(|index| self.games.get(index)) {
-                    self.start_core_mutation(CoreMutationTask::SetExecutable {
-                        id: game.id.clone(),
-                        executable: self.executable_draft.trim().to_owned(),
-                    });
+                    let id = game.id.clone();
+                    let executable = self.executable_draft.trim().to_owned();
+                    self.editing_executable = false;
+                    self.executable_focused = false;
+                    self.keyboard_focus = None;
+                    self.start_core_mutation(CoreMutationTask::SetExecutable { id, executable });
                 } else {
                     self.editing_executable = true;
                     self.executable_focused = true;
@@ -971,7 +969,7 @@ impl App {
                     return;
                 };
                 let context = (detected.name.clone(), detected.platform.to_owned(), detected.install_path.clone());
-                self.start_core_mutation(CoreMutationTask::Import { index, detected, context });
+                self.start_core_mutation(CoreMutationTask::Import { detected, context });
             }
             Action::RefreshLibrary => {
                 self.start_library_refresh();
