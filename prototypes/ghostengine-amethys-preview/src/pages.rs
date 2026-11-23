@@ -288,20 +288,20 @@ pub fn sidebar(p: &mut Painter, lay: &Layout, active: Active, info: &SidebarInfo
     if sw < 100 {
         p.icon(Icon::Gem, (sw - 30) / 2, 22, 30, VIO, SIDE);
         let entries = [
-            (104, Icon::Library, Active::Library, Page::Library),
-            (164, Icon::Gem, Active::Store, Page::Store),
-            (vh - 72, Icon::Gear, Active::Settings, Page::Settings),
+            (88, Icon::Library, Active::Library, Page::Library),
+            (136, Icon::Gem, Active::Store, Page::Store),
+            (vh - 56, Icon::Gear, Active::Settings, Page::Settings),
         ];
         for (y, icon, item, page) in entries {
             let x = 8;
             let w = sw - 16;
             if active == item {
-                p.rrect(x, y, w, 48, 12, ACT);
-                p.rrect(x, y + 14, 3, 20, 2, VIO);
+                p.rrect(x, y, w, 40, 12, ACT);
+                p.rrect(x, y + 10, 3, 20, 2, VIO);
             }
             let bg = if active == item { ACT } else { SIDE };
-            p.icon(icon, (sw - 20) / 2, y + 14, 20, if active == item { VIO_HI } else { MUT }, bg);
-            p.hit_with(x, y, w, 48, 12, Action::Go(page), true, Hover::Soft);
+            p.icon(icon, (sw - 20) / 2, y + 10, 20, if active == item { VIO_HI } else { MUT }, bg);
+            p.hit_with(x, y, w, 40, 12, Action::Go(page), true, Hover::Soft);
         }
         p.circle(sw / 2, vh - 24, 4, if info.core_ok { GREEN } else { AMBER });
         return;
@@ -1015,25 +1015,29 @@ pub fn store(p: &mut Painter, lay: &Layout) -> i32 {
     p.glow(mx + 160, y + 40, 420, Color::rgba(122, 92, 232, 55), mx + 1, y + 1, mw - 2, h - 2);
     p.round_corners(mx, y, mw, h, 22, BG);
     p.rrect_line(mx, y, mw, h, 22, alpha(Color::WHITE, 18));
-    p.gradient_rrect(mx + 32, y + 32, 64, 64, 22, 135.0, &[(0.0, ACT), (1.0, hex("#1B1432"))], PANEL);
-    p.rrect_line(mx + 32, y + 32, 64, 64, 22, alpha(VIO, 100));
-    p.icon(Icon::Gem, mx + 48, y + 48, 32, VIO_HI, ACT);
-    p.rrect(mx + 120, y + 34, 78, 24, 12, ACT);
-    p.rrect_line(mx + 120, y + 34, 78, 24, 12, alpha(VIO, 120));
-    p.text(mx + 120, y + 34, 24, "  Version 0.3", 12.0, W::Semi, VIO_HI);
-    p.text(mx + 120, y + 62, 40, "La boutique arrive avec la version 0.3", 26.0, W::Disp, TXT);
-    p.paragraph(
-        mx + 120,
-        y + 112,
-        mw - 152,
-        23,
-        "La version 0.2 se concentre sur votre bibliothèque locale. Les catalogues, prix, promotions et achats ne sont pas encore connectés : rien de tout cela n'est simulé.",
-        14.5,
-        W::Reg,
-        SOFT,
-        3,
-    );
-    button(p, mx + 120, y + h - 32 - BTN_H, None, "Ouvrir la bibliothèque", Some(Icon::Library), Btn::Secondary, PANEL, Some(Action::Go(Page::Library)));
+    if mw < 420 {
+        p.gradient_rrect(mx + 24, y + 24, 56, 56, 18, 135.0, &[(0.0, ACT), (1.0, hex("#1B1432"))], PANEL);
+        p.rrect_line(mx + 24, y + 24, 56, 56, 18, alpha(VIO, 100));
+        p.icon(Icon::Gem, mx + 38, y + 38, 28, VIO_HI, ACT);
+        p.text(mx + 94, y + 28, 22, "Version 0.3", 12.0, W::Semi, VIO_HI);
+        p.text(mx + 24, y + 96, 28, "La boutique arrive", 20.0, W::Disp, TXT);
+        p.paragraph(mx + 24, y + 132, mw - 48, 20,
+            "La version 0.2 se concentre sur votre bibliothèque locale. Les catalogues, prix, promotions et achats ne sont pas encore connectés.",
+            12.5, W::Reg, SOFT, 4);
+        button(p, mx + 24, y + h - 24 - BTN_H, Some(mw - 48), "Ouvrir la bibliothèque", Some(Icon::Library), Btn::Secondary, PANEL, Some(Action::Go(Page::Library)));
+    } else {
+        p.gradient_rrect(mx + 32, y + 32, 64, 64, 22, 135.0, &[(0.0, ACT), (1.0, hex("#1B1432"))], PANEL);
+        p.rrect_line(mx + 32, y + 32, 64, 64, 22, alpha(VIO, 100));
+        p.icon(Icon::Gem, mx + 48, y + 48, 32, VIO_HI, ACT);
+        p.rrect(mx + 120, y + 34, 78, 24, 12, ACT);
+        p.rrect_line(mx + 120, y + 34, 78, 24, 12, alpha(VIO, 120));
+        p.text(mx + 120, y + 34, 24, "  Version 0.3", 12.0, W::Semi, VIO_HI);
+        p.text(mx + 120, y + 62, 40, "La boutique arrive avec la version 0.3", 26.0, W::Disp, TXT);
+        p.paragraph(mx + 120, y + 112, mw - 152, 23,
+            "La version 0.2 se concentre sur votre bibliothèque locale. Les catalogues, prix, promotions et achats ne sont pas encore connectés : rien de tout cela n'est simulé.",
+            14.5, W::Reg, SOFT, 3);
+        button(p, mx + 120, y + h - 32 - BTN_H, None, "Ouvrir la bibliothèque", Some(Icon::Library), Btn::Secondary, PANEL, Some(Action::Go(Page::Library)));
+    }
 
     let items = [
         ("Catalogue fiable", "Les jeux et les offres viendront de fournisseurs réels, jamais de produits ou de prix inventés."),
@@ -1150,16 +1154,21 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
         ("F11", "Activer ou quitter le plein écran"),
         ("Ctrl+V", "Coller dans un champ de texte"),
     ];
-    let sh = 70 + shortcuts.len() as i32 * 38;
+    let shortcut_row_h = if mw < 420 { 56 } else { 38 };
+    let sh = 70 + shortcuts.len() as i32 * shortcut_row_h;
     panel(p, mx, y, mw, sh, 18);
     p.text(mx + 24, y + 18, 24, "Raccourcis clavier", 16.0, W::Semi, TXT);
     for (i, (keys, what)) in shortcuts.iter().enumerate() {
-        let ry = y + 56 + i as i32 * 38;
+        let ry = y + 56 + i as i32 * shortcut_row_h;
         let kw = p.width(keys, 12.0, W::Semi).round() as i32 + 22;
-        p.rrect(mx + 24, ry + 5, kw, 26, 8, PANEL_HI);
-        p.rrect_line(mx + 24, ry + 5, kw, 26, 8, alpha(Color::WHITE, 28));
-        p.text(mx + 35, ry + 5, 26, keys, 12.0, W::Semi, SOFT);
-        p.text(mx + 24 + 150, ry, 36, what, 13.0, W::Reg, MUT);
+        p.rrect(mx + 24, ry + 2, kw, 26, 8, PANEL_HI);
+        p.rrect_line(mx + 24, ry + 2, kw, 26, 8, alpha(Color::WHITE, 28));
+        p.text(mx + 35, ry + 2, 26, keys, 12.0, W::Semi, SOFT);
+        if mw < 420 {
+            p.text_fit(mx + 24, ry + 29, 24, what, 12.0, W::Reg, MUT, mw - 48);
+        } else {
+            p.text(mx + 24 + 150, ry, 36, what, 13.0, W::Reg, MUT);
+        }
     }
     y += sh + GAP;
 
@@ -1183,7 +1192,7 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
     let ah = 92;
     panel(p, mx, y, mw, ah, 18);
     p.icon(Icon::Gem, mx + 24, y + 22, 24, VIO, PANEL);
-    p.text(mx + 60, y + 16, 24, "Amethys Launcher 0.2 · version de développement", 14.0, W::Semi, TXT);
+    p.text_fit(mx + 60, y + 16, 24, "Amethys Launcher 0.2 · version de développement", 14.0, W::Semi, TXT, mw - 84);
     p.text_fit(mx + 60, y + 44, 20, "Interface rendue par GhostEngine (CPU). Le backend de fenêtre est expérimental et temporaire.", 12.5, W::Reg, MUT, mw - 84);
     y + ah + 40
 }
