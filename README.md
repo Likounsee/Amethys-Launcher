@@ -33,6 +33,14 @@ The 0.1.0 release does **not** include a graphical interface, a store/catalogue,
 
 Development is continuing beyond this first milestone. Planned work includes consolidating and hardening the core, expanding real-world testing and launcher compatibility, improving reliability and diagnostics, and progressively designing the future user experience and larger features such as a graphical interface and store/catalogue. These are future development directions, not features promised by 0.1.0; priorities and scope may evolve as the project is tested.
 
+## Current development — desktop preview 0.2 (unreleased)
+
+The published 0.1.0 release remains the experimental agent/CLI milestone described above. The `main` branch is also developing a separate, unreleased desktop preview under `prototypes/ghostengine-amethys-preview`. It uses the vendored GhostEngine UI and communicates with the existing Amethys Core through IPC; Core remains the owner of persistent game-library data.
+
+The preview currently includes a responsive game library, search and platform filters, sorting with a locally persisted preference, game details and executable configuration, launching and removal of local entries, cover customization, supported installation discovery and explicit import, keyboard navigation, and asynchronous Core library loading and refresh. It remains experimental and is not included in the 0.1.0 release archives.
+
+See [Desktop preview 0.2](doc/technical/DESKTOP-PREVIEW.md) for build instructions, current scope, validation and packaging. Do not treat the preview as a finished or production-ready launcher.
+
 ## Principles
 
 - Windows and Linux are the initial supported test targets. macOS is deferred until a Mac test machine is available.
