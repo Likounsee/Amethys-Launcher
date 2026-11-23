@@ -1198,7 +1198,7 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
 
     // ---- persisted library preference
     let sort_compact = mw < 420;
-    let sort_h = if sort_compact { 178 } else { 116 };
+    let sort_h = if sort_compact { 224 } else { 116 };
     panel(p, mx, y, mw, sort_h, 18);
     p.text(mx + 24, y + 16, 24, "Préférence de la bibliothèque", 16.0, W::Semi, TXT);
     p.text(mx + 24, y + 44, 20, "Ordre de tri conservé sur cet appareil", 12.5, W::Reg, MUT);
