@@ -1449,7 +1449,11 @@ mod tests {
     #[test]
     fn card_columns_adapt_to_window_width() {
         assert!((Layout::new(1600, 900).scale - 1.08).abs() < 0.001);
-        assert!(Layout::new(1600, 900).columns() >= 4);
+        assert_eq!(Layout::new(1280, 800).columns(), 5);
+        assert_eq!(Layout::new(1600, 900).columns(), 5);
+        assert_eq!(Layout::new(1920, 1080).columns(), 5);
+        assert_eq!(Layout::new(2560, 1440).columns(), 6);
+        assert_eq!(Layout::new(3840, 2160).columns(), 8);
         assert!(Layout::new(1100, 700).columns() < Layout::new(1600, 900).columns());
         assert!(Layout::new(960, 600).columns() >= 2);
         let wide = Layout::new(1600, 900);
