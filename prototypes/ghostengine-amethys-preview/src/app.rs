@@ -103,7 +103,11 @@ fn next_modal_focus_index(hits: &[Hit], current: Option<usize>, backwards: bool)
         .iter()
         .enumerate()
         .filter_map(|(index, hit)| {
-            matches!(hit.action, Action::CancelRemoveGame | Action::ConfirmRemoveGame).then_some(index)
+            matches!(
+                hit.action,
+                Action::CancelRemoveGame | Action::ConfirmRemoveGame
+            )
+            .then_some(index)
         })
         .collect();
     let current_modal = modal_indices.iter().position(|index| Some(*index) == current);
@@ -1500,10 +1504,17 @@ mod tests {
 
     #[test]
     fn modal_keyboard_focus_never_escapes_confirmation_actions() {
+        let hit = |action, hover| Hit {
+            rect: Rect::new(0, 0, 10, 10),
+            radius: 0,
+            action,
+            fixed: false,
+            hover,
+        };
         let hits = [
-            Hit { rect: Rect::new(0, 0, 10, 10), radius: 0, action: Action::Go(Page::Library), fixed: false, hover: Hover::Soft },
-            Hit { rect: Rect::new(0, 0, 10, 10), radius: 0, action: Action::CancelRemoveGame, fixed: false, hover: Hover::Soft },
-            Hit { rect: Rect::new(0, 0, 10, 10), radius: 0, action: Action::ConfirmRemoveGame, fixed: false, hover: Hover::Danger },
+            hit(Action::Go(Page::Library), Hover::Soft),
+            hit(Action::CancelRemoveGame, Hover::Soft),
+            hit(Action::ConfirmRemoveGame, Hover::Danger),
         ];
         assert_eq!(next_modal_focus_index(&hits, Some(1), false), Some(2));
         assert_eq!(next_modal_focus_index(&hits, Some(2), false), Some(1));
