@@ -1602,7 +1602,10 @@ impl App {
         if self.page == Page::Library
             && !self.library_loading
             && !self.mutation_in_progress
-            && self.games.iter().any(|game| game.executable.is_none())
+            && self.statuses.iter().any(|status| matches!(
+                status.kind,
+                status::StatusKind::NeedsExecutable | status::StatusKind::InvalidExecutable
+            ))
             && start.duration_since(self.last_auto_library_refresh) >= std::time::Duration::from_secs(8)
         {
             self.last_auto_library_refresh = start;
