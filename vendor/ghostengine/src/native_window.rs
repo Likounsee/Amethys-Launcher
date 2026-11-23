@@ -54,14 +54,59 @@ impl From<FramebufferError> for NativeWindowError {
 /// produced by ComponentTree can be resolved with `clipboard.resolve(&action)`.
 pub struct NativeWindowSurface;
 
+/// AMETHYS PATCH (additive): result of one frame for `run_animated`.
+///
+/// The window loop is event-driven: it only redraws on input events. An
+/// application that is mid-animation sets `redraw_soon` so the loop asks for
+/// another frame instead of freezing halfway through a transition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FrameOutcome {
+    /// `false` closes the window.
+    pub keep_running: bool,
+    /// `true` requests another frame without waiting for an input event.
+    pub redraw_soon: bool,
+}
+
+impl FrameOutcome {
+    /// Keep running and wait for the next input event.
+    pub const fn idle() -> Self {
+        Self { keep_running: true, redraw_soon: false }
+    }
+
+    /// Keep running and draw again immediately (an animation is in progress).
+    pub const fn animating() -> Self {
+        Self { keep_running: true, redraw_soon: true }
+    }
+
+    /// Close the window.
+    pub const fn quit() -> Self {
+        Self { keep_running: false, redraw_soon: false }
+    }
+}
+
 impl NativeWindowSurface {
     /// Creates and runs a native window until it is closed.
     ///
     /// This is an event-loop entry point and should normally be called from
     /// the application's main thread. Winit's event loop can only be run once.
-    pub fn run<F>(title: &str, width: u32, height: u32, draw: F) -> Result<(), NativeWindowError>
+    pub fn run<F>(title: &str, width: u32, height: u32, mut draw: F) -> Result<(), NativeWindowError>
     where
         F: FnMut(&mut Framebuffer, InputState, &mut NativeClipboard) -> bool + 'static,
+    {
+        Self::run_animated(title, width, height, move |framebuffer, input, clipboard| {
+            if draw(framebuffer, input, clipboard) {
+                FrameOutcome::idle()
+            } else {
+                FrameOutcome::quit()
+            }
+        })
+    }
+
+    /// Like [`run`](Self::run), but the callback reports whether it needs
+    /// another frame (see [`FrameOutcome`]). Behaviour is otherwise identical.
+    pub fn run_animated<F>(title: &str, width: u32, height: u32, draw: F) -> Result<(), NativeWindowError>
+    where
+        F: FnMut(&mut Framebuffer, InputState, &mut NativeClipboard) -> FrameOutcome + 'static,
     {
         if width == 0 || height == 0 {
             return Err(NativeWindowError::InvalidDimensions);
@@ -106,7 +151,7 @@ struct NativeApp<F> {
 
 impl<F> NativeApp<F>
 where
-    F: FnMut(&mut Framebuffer, InputState, &mut NativeClipboard) -> bool,
+    F: FnMut(&mut Framebuffer, InputState, &mut NativeClipboard) -> FrameOutcome,
 {
     fn resize_framebuffer(&mut self, size: PhysicalSize<u32>) {
         if size.width == 0 || size.height == 0 {
@@ -161,7 +206,7 @@ where
 
 impl<F> ApplicationHandler for NativeApp<F>
 where
-    F: FnMut(&mut Framebuffer, InputState, &mut NativeClipboard) -> bool,
+    F: FnMut(&mut Framebuffer, InputState, &mut NativeClipboard) -> FrameOutcome,
 {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_some() {
@@ -210,12 +255,19 @@ where
             }
             WindowEvent::RedrawRequested => {
                 let input = self.input.take_frame();
-                if !(self.draw)(&mut self.framebuffer, input, &mut self.clipboard) {
+                let outcome = (self.draw)(&mut self.framebuffer, input, &mut self.clipboard);
+                if !outcome.keep_running {
                     event_loop.exit();
                     return;
                 }
                 if self.present().is_err() {
                     event_loop.exit();
+                    return;
+                }
+                if outcome.redraw_soon {
+                    if let Some(window) = &self.window {
+                        window.request_redraw();
+                    }
                 }
             }
             WindowEvent::Focused(_)
@@ -223,6 +275,7 @@ where
             | WindowEvent::Ime(_)
             | WindowEvent::CursorMoved { .. }
             | WindowEvent::CursorLeft { .. }
+            | WindowEvent::MouseWheel { .. }
             | WindowEvent::MouseInput { .. } => {
                 if let Some(window) = &self.window {
                     window.request_redraw();
