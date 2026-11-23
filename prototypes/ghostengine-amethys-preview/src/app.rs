@@ -905,7 +905,10 @@ impl App {
                 self.render(false);
             }
             Action::SaveExecutable => {
-                if self.executable_draft.trim().is_empty() {
+                if self.mutation_in_progress {
+                    self.notify(ToastKind::Info, "Attendez la fin de l'opération Core en cours.");
+                    self.render(false);
+                } else if self.executable_draft.trim().is_empty() {
                     self.editing_executable = true;
                     self.executable_focused = true;
                     self.notify(ToastKind::Error, "Indiquez le chemin de l'exécutable avant de l'enregistrer.");
@@ -963,6 +966,11 @@ impl App {
                 }
             }
             Action::ImportDetectedGame(index) => {
+                if self.mutation_in_progress {
+                    self.notify(ToastKind::Info, "Attendez la fin de l'opération Core en cours.");
+                    self.render(false);
+                    return;
+                }
                 let Some(detected) = self.detected_games.get(index).cloned() else {
                     self.notify(ToastKind::Error, "Cette installation détectée n'est plus disponible.");
                     self.render(false);
@@ -1003,6 +1011,11 @@ impl App {
                 self.render(false);
             }
             Action::ConfirmRemoveGame => {
+                if self.mutation_in_progress {
+                    self.notify(ToastKind::Info, "Attendez la fin de l'opération Core en cours.");
+                    self.render(false);
+                    return;
+                }
                 self.keyboard_focus = None;
                 let Some(id) = self.pending_remove.take().and_then(|index| self.games.get(index).map(|game| game.id.clone())) else {
                     self.notify(ToastKind::Error, "Ce jeu n'existe plus dans la bibliothèque chargée.");
