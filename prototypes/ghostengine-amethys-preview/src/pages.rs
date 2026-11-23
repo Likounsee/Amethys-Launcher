@@ -524,15 +524,17 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
     search_field(p, tx, ty, search_w, view.query, view.search_focused);
     // On narrow windows, put the actions on a second row rather than forcing
     // the search field and buttons outside the content column.
-    let actions_x = if compact { mx + mw - refresh_w - 12 - scan_w } else { tx + search_w + 12 };
+    let stack_actions = compact && mw < refresh_w + scan_w + 12;
+    let actions_x = if stack_actions { mx } else if compact { mx + mw - refresh_w - 12 - scan_w } else { tx + search_w + 12 };
     let actions_y = if compact { ty + BTN_H + 12 } else { ty };
+    let scan_y = actions_y + if stack_actions { BTN_H + 8 } else { 0 };
     button(p, actions_x, actions_y, Some(refresh_w), "Actualiser", Some(Icon::Refresh), Btn::Secondary, BG, Some(Action::RefreshLibrary));
     if view.scanning {
-        button(p, actions_x + refresh_w + 12, actions_y, Some(scan_w), scan_label, Some(scan_icon), Btn::Secondary, BG, Some(Action::CancelScan));
+        button(p, if stack_actions { mx } else { actions_x + refresh_w + 12 }, scan_y, Some(scan_w), scan_label, Some(scan_icon), Btn::Secondary, BG, Some(Action::CancelScan));
     } else {
         button(p, actions_x + refresh_w + 12, actions_y, Some(scan_w), scan_label, Some(scan_icon), Btn::Primary, BG, Some(Action::ScanGames));
     }
-    let mut y = if compact { actions_y + BTN_H + 22 } else { 118 };
+    let mut y = if compact { scan_y + BTN_H + 22 } else { 118 };
 
     // ---- scan progress
     if view.scanning {
@@ -558,13 +560,21 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
 
     // ---- Core error
     if let Some(error) = view.core_error {
-        let msg_h = p.paragraph_height(mw - 200, 19, error, 12.5, W::Reg, 3);
-        let h = (msg_h + 62).max(92);
+        let narrow_error = mw < 420;
+        let msg_w = if narrow_error { mw - 40 } else { mw - 200 };
+        let msg_h = p.paragraph_height(msg_w, 19, error, 12.5, W::Reg, 3);
+        let h = if narrow_error { (msg_h + 112).max(150) } else { (msg_h + 62).max(92) };
         panel(p, mx, y, mw, h, 16);
         icon_badge(p, mx + 20, y + 20, 44, Icon::Alert, AMBER, AMBER_DARK);
-        p.text(mx + 80, y + 16, 24, "Connexion à Amethys Core impossible", 16.0, W::Semi, TXT);
-        p.paragraph(mx + 80, y + 44, mw - 240, 19, error, 12.5, W::Reg, MUT, 3);
-        button(p, mx + mw - 20 - 120, y + (h - BTN_H) / 2, Some(120), "Réessayer", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::RefreshLibrary));
+        if narrow_error {
+            p.text(mx + 76, y + 16, 24, "Core indisponible", 15.0, W::Semi, TXT);
+            p.paragraph(mx + 20, y + 72, msg_w, 19, error, 12.5, W::Reg, MUT, 3);
+            button(p, mx + 20, y + h - 20 - BTN_H, Some(120), "Réessayer", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::RefreshLibrary));
+        } else {
+            p.text(mx + 80, y + 16, 24, "Connexion à Amethys Core impossible", 16.0, W::Semi, TXT);
+            p.paragraph(mx + 80, y + 44, mw - 240, 19, error, 12.5, W::Reg, MUT, 3);
+            button(p, mx + mw - 20 - 120, y + (h - BTN_H) / 2, Some(120), "Réessayer", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::RefreshLibrary));
+        }
         y += h + GAP;
     }
 
@@ -577,7 +587,7 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
             ("À configurer", count(&[StatusKind::NeedsExecutable, StatusKind::InvalidExecutable]), AMBER),
             ("Dossiers introuvables", count(&[StatusKind::FolderMissing]), RED),
         ];
-        let per_row = if compact { 2 } else { 4 };
+        let per_row = if mw < 420 { 1 } else if compact { 2 } else { 4 };
         let tw = (mw - GAP * (per_row - 1)) / per_row;
         for (i, (label, n, color)) in tiles.iter().enumerate() {
             let (col, row) = (i as i32 % per_row, i as i32 / per_row);
@@ -734,9 +744,12 @@ pub fn game_detail(p: &mut Painter, lay: &Layout, view: &DetailView) -> i32 {
 
     // ---- hero geometry
     let hero_y = 84;
-    let (poster_w, poster_h, pad) = (200, 267, 32);
     let compact = lay.compact();
-    let cx0 = mx + pad + poster_w + 36;
+    // Hide the side poster on very narrow windows so the title and actions
+    // retain the full hero width instead of being squeezed into a thin column.
+    let (poster_w, poster_h, pad) = if mw < 420 { (0, 0, 16) } else if compact { (112, 149, 20) } else { (200, 267, 32) };
+    let poster_gap = if poster_w == 0 { 0 } else if compact { 16 } else { 36 };
+    let cx0 = mx + pad + poster_w + poster_gap;
     let cw = mx + mw - pad - cx0;
 
     // actions flow (wraps when the hero is narrow)
@@ -793,11 +806,13 @@ pub fn game_detail(p: &mut Painter, lay: &Layout, view: &DetailView) -> i32 {
     p.rrect_line(mx, hero_y, mw, hero_h, 22, alpha(Color::WHITE, 24));
 
     // poster
-    let (px, py) = (mx + pad, hero_y + (hero_h - poster_h) / 2);
-    p.shadow(px, py, poster_w, poster_h, 16, 14, 90);
-    p.cover_or_placeholder(artwork_id, &game.id, &game.name, px, py, poster_w, poster_h);
-    p.round_corners(px, py, poster_w, poster_h, 16, Color::rgb(0x0F, 0x0D, 0x16));
-    p.rrect_line(px, py, poster_w, poster_h, 16, alpha(Color::WHITE, 40));
+    if poster_w > 0 {
+        let (px, py) = (mx + pad, hero_y + (hero_h - poster_h) / 2);
+        p.shadow(px, py, poster_w, poster_h, 16, 14, 90);
+        p.cover_or_placeholder(artwork_id, &game.id, &game.name, px, py, poster_w, poster_h);
+        p.round_corners(px, py, poster_w, poster_h, 16, Color::rgb(0x0F, 0x0D, 0x16));
+        p.rrect_line(px, py, poster_w, poster_h, 16, alpha(Color::WHITE, 40));
+    }
 
     // chips, title, subtitle
     let mut ty = hero_y + pad;
@@ -1083,7 +1098,9 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
     }
     let compact = lay.compact();
     let first_button_y = if compact { y + core_h - 24 - BTN_H * 2 - 8 } else { y + core_h - 24 - BTN_H };
-    let rw = button(p, mx + 24, first_button_y, None, "Actualiser la bibliothèque", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::RefreshLibrary));
+    let refresh_label = if mw < 340 { "Actualiser" } else { "Actualiser la bibliothèque" };
+    let scan_button_label = if mw < 340 { "Détecter" } else { "Détecter les jeux installés" };
+    let rw = button(p, mx + 24, first_button_y, None, refresh_label, Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::RefreshLibrary));
     let sx = if compact { mx + 24 } else { mx + 24 + rw + 12 };
     let second_button_y = if compact { first_button_y + BTN_H + 8 } else { first_button_y };
     if view.scanning {
@@ -1096,7 +1113,7 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
             p.text_fit(sx + cw + 16, second_button_y, BTN_H, &progress, 12.0, W::Med, VIO_HI, (mx + mw - 24) - (sx + cw + 16));
         }
     } else {
-        button(p, sx, second_button_y, None, "Détecter les jeux installés", Some(Icon::Search), Btn::Primary, PANEL, Some(Action::ScanGames));
+        button(p, sx, second_button_y, None, scan_button_label, Some(Icon::Search), Btn::Primary, PANEL, Some(Action::ScanGames));
     }
     y += core_h + GAP;
 
