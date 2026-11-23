@@ -352,11 +352,14 @@ The agent starts automatically when needed.
 Use ./amethysctl --help for command-line tools.
 This is a portable development package, not an installer.
 EOF
-          find "$stage" -type f ! -name SHA256SUMS.txt -print0 | sort -z | while IFS= read -r -d '' file; do
-            sha256sum "$file"
-          done > "$stage/SHA256SUMS.txt"
+          (
+            cd "$stage"
+            find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+            sha256sum --check SHA256SUMS.txt
+          )
           mkdir -p dist/archive-check
           tar -czf dist/Amethys-Linux-x64.tar.gz -C "$stage" .
+          (cd dist && sha256sum Amethys-Linux-x64.tar.gz > Amethys-Linux-x64.tar.gz.sha256 && sha256sum --check Amethys-Linux-x64.tar.gz.sha256)
           tar -xzf dist/Amethys-Linux-x64.tar.gz -C dist/archive-check
           for binary in amethys-agent amethysctl amethys-launcher; do
             test -s "dist/archive-check/$binary"
