@@ -946,7 +946,7 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
             }
             let path_lower = relative_path.to_string_lossy().to_ascii_lowercase();
             if path_lower.contains("multiexe") || path_lower.contains("multi-exe") {
-                score -= 15;
+                score -= 20;
             }
             // Small storefront stubs often only hand off to the real game
             // binary. Keep them eligible, but prefer substantial game payloads
