@@ -71,21 +71,9 @@ La boutique personnalisée est prévue pour la version 0.3 et ne doit pas impose
 
 Aucun abonnement serveur ne doit être une dépendance pour utiliser la bibliothèque locale d'Amethys.
 
-## Version 0.3 — boutique et services en ligne
+## Version 0.3 — plan détaillé séparé
 
-- Préparer des profils de lancement versionnés et déclaratifs, séparés du moteur générique de découverte.
-- Un profil pourra décrire un point d'entrée relatif à l'installation, une méthode (exécutable direct, launcher officiel ou bootstrapper approuvé), le répertoire de travail, les arguments documentés, les dépendances et les contraintes de version/build.
-- Prévoir un canal de mise à jour/patch des profils, avec validation de provenance, versionnement, compatibilité et retour arrière. Un profil ne doit jamais contenir de code arbitraire à exécuter.
-- Traiter les prérequis anti-cheat comme des dépendances de sécurité déclarées par l'éditeur ; ne jamais contourner, désactiver ou manipuler leurs protections.
-- Intégrer des fournisseurs réels au moyen d'adaptateurs documentés et autorisés.
-- Charger le catalogue, les fiches, les médias, les prix et les offres depuis des sources fiables, avec date et provenance.
-- Ouvrir les pages d'achat officielles ou utiliser les API officielles lorsque les opérations sont autorisées.
-- Vérifier les jeux possédés uniquement via des mécanismes autorisés.
-- Ajouter les flux d'installation/téléchargement lorsque les plateformes le permettent : progression, reprise, vérification, erreurs et annulation.
-- Mettre en cache les médias du catalogue avec limites de taille, expiration, déduplication et nettoyage.
-- Charger d'abord les éléments visibles de l'accueil, puis précharger progressivement les fiches en arrière-plan.
-- Ne pas exiger un serveur privé payant pour commencer : évaluer les services gratuits, l'hébergement statique et le fonctionnement local. Ne jamais placer de secrets fournisseurs dans le client.
-- Définir les données personnelles par utilisateur et les synchroniser uniquement si un backend et une politique de confidentialité adaptés existent.
+La feuille de route de la 0.3 est désormais maintenue dans [ROADMAP-0.3.md](ROADMAP-0.3.md). Elle contient l'audit complet du dépôt (Lot 1), l'architecture cible (Lot 0), l'ordre d'implémentation des lots 2 à 10, leurs dépendances et leurs critères d'acceptation. La campagne globale Quality Check est reportée à la 0.4.
 
 ## Version 1.0 — stabilisation et préparation publique
 
