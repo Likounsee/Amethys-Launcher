@@ -1,6 +1,6 @@
 # Amethys Launcher 0.3 — Roadmap de développement détaillée
 
-**Statut :** planification figée après les Lots 1 (audit) et 0 (architecture).  
+**Statut :** Lots 0 (audit) et 1 (architecture/fondations) terminés ; Lot 2 terminé.  
 **Base :** branche `main`, commit audité `33903f17abf4772a617564dfe0c028a34c67ae9e`.  
 **Version précédente :** 0.2.0 gelée.  
 **Quality Check / CQ globale :** reportée à la version 0.4.
@@ -23,7 +23,7 @@ L'ordre de préparation demandé est respecté : **Lot 1 (audit de l'existant) a
 |---:|---|---|---|
 | 1 | Lot 1 — Audit complet de l'existant | État réel du dépôt, inventaire, réutilisation, manques et risques | Aucune |
 | 2 | Lot 0 — Architecture et fondations | Contrats, modèle métier, persistance, IPC, sécurité, frontières | Lot 1 |
-| 3 | Lot 2 — Modèle catalogue et sources | Modèles validés, catalogue versionné, cache local, capacités de sources | Lot 0 |
+| 3 | Lot 2 — Modèle catalogue et sources | <strong>Terminé</strong> — modèles validés, catalogue versionné, cache SQLite, capacités de sources et adaptateurs statiques | Lots 0 et 1 |
 | 4 | Lot 3 — Store réel | Recherche, catégories, fiches, offres et états issus de sources réelles | Lot 2 |
 | 5 | Lot 4 — Gestionnaire d'opérations | Jobs persistés, file, états, concurrence, progression, pause/reprise/annulation | Lot 0 |
 | 6 | Lot 5 — Download Manager | Téléchargement autorisé, reprise sûre, contrôle d'intégrité | Lots 2 et 4 |
@@ -75,6 +75,8 @@ Critère de fin : les lots fonctionnels disposent de contrats, dépendances et r
 
 ## Lot 2 — Modèle catalogue et sources
 
+**Statut : terminé.** Implémentation : [modèle catalogue, sources et cache](technical/LOT-2-CATALOG.md).
+
 **But :** créer les structures réelles sur lesquelles le Store reposera.
 
 Travaux :
@@ -86,6 +88,8 @@ Travaux :
 6. Ajouter un cache local avec date de dernière synchronisation et comportement hors ligne.
 7. Définir le trait d'adaptateur fournisseur et ses capacités (navigation, métadonnées, lancement officiel, installation autorisée, mise à jour autorisée).
 8. Ajouter un fournisseur de catalogue statique de référence et des fixtures ; aucune offre fictive ne doit être présentée comme réelle.
+
+Livré : crate `amethys-catalog`, validation stricte du JSON versionné, adaptateur fichier statique borné, registre de fournisseurs/capacités, cache SQLite transactionnel isolé par source, recherche locale et initialisation du schéma au démarrage du Core. Le format d’exemple est volontairement vide : aucune offre commerciale n’est inventée.
 
 Critères d'acceptation :
 - un catalogue valide est chargé et mis en cache ;
@@ -259,7 +263,7 @@ Critère :
 
 ## Dépendances critiques
 
-- Le Store dépend du modèle catalogue et des adaptateurs (Lot 2).
+- Le Store dépend du modèle catalogue et des adaptateurs (Lot 2 — terminé).
 - Le téléchargement dépend des opérations persistantes (Lot 4) et des manifestes/sources (Lot 2).
 - L'installation dépend du téléchargement vérifié et du moteur d'opérations (Lots 4-5).
 - L'intégration bibliothèque dépend du modèle d'installation (Lot 6).
