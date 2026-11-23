@@ -316,6 +316,8 @@ pub struct App {
     scan_found: Option<usize>,
     library_loading: bool,
     library_refreshing: bool,
+    /// Last automatic library refresh while Core may be discovering executables.
+    last_auto_library_refresh: Instant,
     library_receiver: Option<std::sync::mpsc::Receiver<Result<Vec<IpcGameEntry>, String>>>,
     mutation_receiver: Option<std::sync::mpsc::Receiver<CoreMutationResult>>,
     mutation_in_progress: bool,
@@ -397,6 +399,7 @@ impl App {
             scan_found: None,
             library_loading: false,
             library_refreshing: false,
+            last_auto_library_refresh: Instant::now(),
             library_receiver: None,
             mutation_receiver: None,
             mutation_in_progress: false,
@@ -1588,6 +1591,19 @@ impl App {
         self.poll_library_load();
         self.poll_core_mutation();
         self.poll_scan();
+
+        // Core discovers missing executables asynchronously. Keep the visible
+        // library synchronized so newly persisted paths become launchable
+        // without requiring the user to close and reopen Amethys.
+        if self.page == Page::Library
+            && !self.library_loading
+            && !self.mutation_in_progress
+            && self.games.iter().any(|game| game.executable.is_none())
+            && start.duration_since(self.last_auto_library_refresh) >= std::time::Duration::from_secs(8)
+        {
+            self.last_auto_library_refresh = start;
+            self.start_library_request(true);
+        }
 
         let escape = input.escape_down && !self.esc_was_down;
         self.esc_was_down = input.escape_down;
