@@ -11,6 +11,10 @@ project overview and [LICENSE](../LICENSE) for usage and ownership terms.
 - [Builds and releases](technical/RELEASES.md) — Windows/Linux test packages,
   first-run procedure, validation evidence and release information.
 
+## Desktop development preview
+
+- [Desktop preview 0.2](technical/DESKTOP-PREVIEW.md) — architecture, current capabilities, run instructions, validation and packaging. This preview is unreleased and separate from 0.1.0.
+
 ## Technical documentation
 
 - [IPC protocol and transport](technical/IPC.md) — message format, commands,
