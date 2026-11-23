@@ -165,7 +165,11 @@ fn save_library_sort(path: &std::path::Path, sort: usize) -> std::io::Result<()>
     let parent = path.parent().filter(|parent| !parent.as_os_str().is_empty())
         .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "preference path has no parent"))?;
     std::fs::create_dir_all(parent)?;
-    let temporary = path.with_extension(format!("{}.tmp", std::process::id()));
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let temporary = path.with_extension(format!("{}-{nonce}.tmp", std::process::id()));
     let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&temporary)?;
     let contents = format!("schema=1\nlibrary_sort={}\n", sort.min(2));
     if let Err(error) = file.write_all(contents.as_bytes()).and_then(|()| file.sync_all()) {
