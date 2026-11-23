@@ -7,6 +7,7 @@ rust-version.workspace = true
 
 [dependencies]
 serde_json.workspace = true
+pelite = "0.10"
 rusqlite.workspace = true
 
 [lints]
