@@ -1063,9 +1063,14 @@ impl App {
     }
 
     fn panel_rect(&self) -> Rect {
-        let px = |value: i32| (value as f32 * self.lay.scale).round() as u32;
-        let y = (self.win_h - px(12 + 34 + 8 + PANEL_H)).max(px(8));
-        Rect::new(self.win_w as u32 - px(12 + PANEL_W), y as u32, px(PANEL_W), px(PANEL_H))
+        // Keep geometry signed until it has been clamped: subtracting a scaled
+        // u32 from a small window used to underflow on compact window sizes.
+        let px = |value: i32| (value as f32 * self.lay.scale).round() as i32;
+        let width = px(PANEL_W).min(self.win_w.saturating_sub(px(24)) as i32).max(1);
+        let height = px(PANEL_H).min(self.win_h.saturating_sub(px(24)) as i32).max(1);
+        let x = (self.win_w as i32 - width - px(12)).max(px(8)).max(0);
+        let y = (self.win_h as i32 - height - px(12 + 34 + 8)).max(px(8)).max(0);
+        Rect::new(x as u32, y as u32, width as u32, height as u32)
     }
 
     fn bench_button(&self) -> Rect {
