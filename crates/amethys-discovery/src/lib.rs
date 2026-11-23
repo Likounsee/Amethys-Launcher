@@ -2506,7 +2506,9 @@ mod tests {
         };
         assert_eq!(
             super::resolve_game_executable(&detected),
-            Some(std::path::PathBuf::from("default_game/Binaries/Win64/RainbowSix.exe"))
+            Some(std::path::PathBuf::from(
+                "default_game/Binaries/Win64/RainbowSix.exe"
+            ))
         );
         std::fs::remove_dir_all(parent).unwrap();
     }
