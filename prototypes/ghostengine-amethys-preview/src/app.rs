@@ -1087,7 +1087,7 @@ impl App {
     }
 
     fn stats_panel_scale(&self) -> f32 {
-        fit_stats_panel_scale(self.win_w, self.win_h, self.lay.scale)
+        fit_stats_panel_scale(self.win_w.max(0) as u32, self.win_h.max(0) as u32, self.lay.scale)
     }
 
     fn panel_rect(&self) -> Rect {
