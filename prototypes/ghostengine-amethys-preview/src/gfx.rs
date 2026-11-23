@@ -483,24 +483,30 @@ impl<'a> Painter<'a> {
 
     #[allow(clippy::too_many_arguments)]
     pub fn hit_with(&mut self, x: i32, y: i32, w: i32, h: i32, radius: i32, action: Action, fixed: bool, hover: Hover) {
-        self.hits.push(Hit { rect: rect(self.px(x), self.px(y), self.px(w), self.px(h)), radius: self.px(radius).max(0) as u32, action, fixed, hover });
+        let scaled_rect = rect(self.px(x), self.px(y), self.px(w), self.px(h));
+        let scaled_radius = self.px(radius).max(0) as u32;
+        self.hits.push(Hit { rect: scaled_rect, radius: scaled_radius, action, fixed, hover });
     }
 
     // ---- shapes -------------------------------------------------------
     pub fn fill(&mut self, x: i32, y: i32, w: i32, h: i32, c: Color) {
-        fb_fill(&mut self.fb, self.px(x), self.px(y), self.px(w), self.px(h), c);
+        let (x, y, w, h) = (self.px(x), self.px(y), self.px(w), self.px(h));
+        fb_fill(&mut self.fb, x, y, w, h, c);
     }
 
     pub fn rrect(&mut self, x: i32, y: i32, w: i32, h: i32, r: i32, c: Color) {
-        fb_fill_rrect(&mut self.fb, self.px(x), self.px(y), self.px(w), self.px(h), self.px(r), c);
+        let (x, y, w, h, r) = (self.px(x), self.px(y), self.px(w), self.px(h), self.px(r));
+        fb_fill_rrect(&mut self.fb, x, y, w, h, r, c);
     }
 
     pub fn rrect_line(&mut self, x: i32, y: i32, w: i32, h: i32, r: i32, c: Color) {
-        fb_stroke_rrect(&mut self.fb, self.px(x), self.px(y), self.px(w), self.px(h), self.px(r), c);
+        let (x, y, w, h, r) = (self.px(x), self.px(y), self.px(w), self.px(h), self.px(r));
+        fb_stroke_rrect(&mut self.fb, x, y, w, h, r, c);
     }
 
     pub fn circle(&mut self, cx: i32, cy: i32, r: i32, c: Color) {
-        fill_circle_aa(&mut self.fb, Point::new(self.px(cx), self.px(cy)), self.px(r).max(0) as u32, c);
+        let (cx, cy, r) = (self.px(cx), self.px(cy), self.px(r).max(0) as u32);
+        fill_circle_aa(&mut self.fb, Point::new(cx, cy), r, c);
     }
 
     pub fn poly(&mut self, pts: &[(f32, f32)], c: Color) {
@@ -708,8 +714,9 @@ impl<'a> Painter<'a> {
     /// Draws one line inside a line box of height `lh` starting at `y`.
     pub fn text(&mut self, x: i32, y: i32, lh: i32, s: &str, size: f32, w: W, c: Color) -> f32 {
         let baseline = y as f32 + (lh as f32 - 1.21 * size) / 2.0 + 0.969 * size;
+        let (x, baseline, size) = (self.px(x), self.px(baseline.round() as i32), self.pf(size));
         let font = self.fonts.get(w);
-        draw_text(&mut self.fb, font, s, Point::new(self.px(x), self.px(baseline.round() as i32)), self.pf(size), c).width / self.scale
+        draw_text(&mut self.fb, font, s, Point::new(x, baseline), size, c).width / self.scale
     }
 
     pub fn text_right(&mut self, right: i32, y: i32, lh: i32, s: &str, size: f32, w: W, c: Color) {
