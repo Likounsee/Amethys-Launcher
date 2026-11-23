@@ -91,6 +91,11 @@ fn toast_opacity(age: f32, life: f32) -> f32 {
 }
 
 /// Computes the next actionable hit index for keyboard navigation.
+fn focus_index_for_action(hits: &[Hit], action: Action) -> Option<usize> {
+    hits.iter().position(|hit| hit.action == action)
+}
+
+/// Returns the next focusable hit, wrapping at either end of the page.
 fn next_focus_index(current: Option<usize>, count: usize, backwards: bool) -> Option<usize> {
     if count == 0 {
         return None;
@@ -486,6 +491,11 @@ impl App {
     /// Re-draws the current page (sidebar, content, hit regions).
     fn render(&mut self, reset_scroll: bool) {
         let t0 = Instant::now();
+        // Preserve focus by action identity, not by its old vector index: a
+        // filter, search result update, or responsive reflow can reorder hits.
+        let focused_action = self.keyboard_focus
+            .and_then(|index| self.hits.get(index))
+            .map(|hit| hit.action);
         let mut buf_h = ((self.page_h.max(self.win_h) + 600) as u32).clamp(self.win_h as u32, 30_000);
         let (hits, fb, h) = loop {
             let (hits, fb, h) = self.paint(buf_h);
@@ -498,6 +508,8 @@ impl App {
         };
         self.hits = hits;
         self.content = fb;
+        self.keyboard_focus = focused_action
+            .and_then(|action| focus_index_for_action(&self.hits, action));
         // Keep keyboard focus inside the modal and make the safe action the
         // default. Enter therefore dismisses the dialog instead of deleting.
         if self.pending_remove.is_some() && self.keyboard_focus.is_none() {
@@ -597,6 +609,8 @@ impl App {
             }
             Action::FocusLibrarySearch => {
                 self.search_focused = true;
+                // The text field participates in the same Tab order as buttons.
+                self.keyboard_focus = focus_index_for_action(&self.hits, Action::FocusLibrarySearch);
                 self.render(false);
             }
             Action::ClearSearch => {
@@ -1514,6 +1528,29 @@ mod tests {
         save_library_sort(&path, 1).expect("preferences replacement");
         assert_eq!(load_library_sort(&path), 1);
         let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn keyboard_focus_is_restored_by_action_after_hits_are_reordered() {
+        let hits = [
+            Hit {
+                rect: Rect::new(0, 0, 10, 10),
+                radius: 0,
+                action: Action::Go(Page::Settings),
+                fixed: false,
+                hover: Hover::Soft,
+            },
+            Hit {
+                rect: Rect::new(0, 0, 10, 10),
+                radius: 0,
+                action: Action::FocusLibrarySearch,
+                fixed: false,
+                hover: Hover::Soft,
+            },
+        ];
+        assert_eq!(focus_index_for_action(&hits, Action::FocusLibrarySearch), Some(1));
+        assert_eq!(focus_index_for_action(&hits, Action::Go(Page::Settings)), Some(0));
+        assert_eq!(focus_index_for_action(&hits, Action::ShowMoreGames), None);
     }
 
     #[test]
