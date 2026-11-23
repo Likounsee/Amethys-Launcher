@@ -10,7 +10,7 @@ A free, community-driven, cross-platform game library and launcher client.
 
 Amethys Launcher aims to bring game libraries, installations and platform integrations together without replacing official stores, accounts, licenses, DRM or platform policies.
 
-## Project status — first public version 0.1.0
+## Published baseline — version 0.1.0
 
 **Amethys Launcher 0.1.0 is the very first public version of the project. It is an experimental technical prototype released for testing, feedback and early evaluation only.**
 
@@ -33,13 +33,13 @@ The 0.1.0 release does **not** include a graphical interface, a store/catalogue,
 
 Development is continuing beyond this first milestone. Planned work includes consolidating and hardening the core, expanding real-world testing and launcher compatibility, improving reliability and diagnostics, and progressively designing the future user experience and larger features such as a graphical interface and store/catalogue. These are future development directions, not features promised by 0.1.0; priorities and scope may evolve as the project is tested.
 
-## Current development — desktop preview 0.2 (unreleased)
+## Current development — desktop release 0.2.0 (in preparation)
 
 The published 0.1.0 release remains the experimental agent/CLI milestone described above. The `main` branch is also developing a separate, unreleased desktop preview under `prototypes/ghostengine-amethys-preview`. It uses the vendored GhostEngine UI and communicates with the existing Amethys Core through IPC; Core remains the owner of persistent game-library data.
 
-The preview currently includes a responsive game library, search and platform filters, sorting with a locally persisted preference, game details and executable configuration, launching and removal of local entries, cover customization, supported installation discovery and explicit import, keyboard navigation, and asynchronous Core library loading, refresh, imports, executable updates and removals. It remains experimental and is not included in the 0.1.0 release archives.
+The desktop application currently includes a responsive game library, search and platform filters, sorting with a locally persisted preference, game details and executable configuration, launching and removal of local entries, cover customization, supported installation discovery and explicit import, keyboard navigation, and asynchronous Core library loading, refresh, imports, executable updates and removals. The workspace and desktop application are versioned 0.2.0. The official 0.2.0 release has not yet been published.
 
-The Windows x64 portable package has passed all 15 manual checks, including launch from the extracted ZIP. The 0.2 desktop release target is Windows x64 and Linux x86_64; CI has been extended to build and smoke-test the Linux desktop archive, but that new check still needs a successful run. Manual Linux testing is intentionally deferred. See [Desktop preview 0.2](doc/technical/DESKTOP-PREVIEW.md) for build instructions, validation evidence, the tested Windows archive checksum and packaging details. This remains an experimental development preview, not a finished or production-ready launcher.
+The Windows x64 portable package has passed all 15 manual checks, including launch from the extracted ZIP. The 0.2.0 desktop release target is Windows x64 and Linux x86_64, with portable ZIP and TAR.GZ archives. The release workflow now runs desktop Clippy and tests on both operating systems before packaging. The full release workflow still needs to pass on the versioned commit before the v0.2.0 tag and draft release can be created. Manual Linux testing is intentionally deferred. See [Desktop preview 0.2](doc/technical/DESKTOP-PREVIEW.md) for build instructions, validation evidence, the tested Windows archive checksum and packaging details. This remains an experimental development preview, not a finished or production-ready launcher.
 
 ## Principles
 
