@@ -499,6 +499,47 @@ mod tests {
     use std::sync::{Arc, atomic::AtomicU8};
     use tokio::{io::duplex, sync::Mutex};
 
+    #[tokio::test]
+    async fn startup_discovery_persists_executable_for_games_missing_one() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-startup-discovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create install directory");
+        std::fs::write(root.join("Sample Game.exe"), b"fixture").expect("create game executable");
+
+        let database = Arc::new(Mutex::new(
+            Database::open(":memory:").expect("database opens"),
+        ));
+        let game_id = database
+            .lock()
+            .await
+            .add_game(
+                "Sample Game",
+                "Test Platform",
+                &root.to_string_lossy(),
+                None,
+            )
+            .expect("game without executable is added")
+            .id;
+
+        super::resolve_missing_game_executables_on_startup(Arc::clone(&database)).await;
+
+        let game = database
+            .lock()
+            .await
+            .get_game(&game_id)
+            .expect("game can be read")
+            .expect("game remains in library");
+        assert_eq!(game.executable.as_deref(), Some("Sample Game.exe"));
+
+        std::fs::remove_dir_all(root).expect("remove fixture");
+    }
+
     #[test]
     fn detected_provider_ids_link_installations_to_existing_catalogue_games() {
         let database = Database::open(":memory:").expect("database opens");
