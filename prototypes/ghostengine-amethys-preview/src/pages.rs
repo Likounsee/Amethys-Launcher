@@ -1451,6 +1451,27 @@ mod tests {
     }
 
     #[test]
+    fn very_large_libraries_remain_filterable_and_deterministically_sorted() {
+        let games: Vec<_> = (0..4096)
+            .rev()
+            .map(|index| named(&format!("Game {index:04}"), "Steam"))
+            .collect();
+        let statuses: Vec<GameStatus> = games
+            .iter()
+            .map(|_| crate::status::classify(true, true, None))
+            .collect();
+
+        let all = visible_games(&view(&games, &statuses, 0, 0, ""));
+        assert_eq!(all.len(), 4096);
+        assert_eq!(games[all[0]].name, "Game 0000");
+        assert_eq!(games[*all.last().expect("non-empty library")].name, "Game 4095");
+
+        let exact = visible_games(&view(&games, &statuses, 0, 0, "game 4095"));
+        assert_eq!(exact.len(), 1);
+        assert_eq!(games[exact[0]].name, "Game 4095");
+    }
+
+    #[test]
     fn card_columns_adapt_to_window_width() {
         assert!((Layout::new(1600, 900).scale - 1.08).abs() < 0.001);
         assert_eq!(Layout::new(1280, 800).columns(), 5);
