@@ -709,7 +709,7 @@ impl<'a> Painter<'a> {
     pub fn text(&mut self, x: i32, y: i32, lh: i32, s: &str, size: f32, w: W, c: Color) -> f32 {
         let baseline = y as f32 + (lh as f32 - 1.21 * size) / 2.0 + 0.969 * size;
         let font = self.fonts.get(w);
-        draw_text(&mut self.fb, font, s, Point::new(self.px(x), self.px(baseline.round() as i32)), self.pf(size), c).width
+        draw_text(&mut self.fb, font, s, Point::new(self.px(x), self.px(baseline.round() as i32)), self.pf(size), c).width / self.scale
     }
 
     pub fn text_right(&mut self, right: i32, y: i32, lh: i32, s: &str, size: f32, w: W, c: Color) {
