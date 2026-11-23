@@ -553,6 +553,126 @@ pub fn resolve_game_executable_for(
     resolve_executable_from_files(install_path, game_name)
 }
 
+/// Version-resource strings embedded in a Windows Portable Executable.
+#[derive(Debug, Default)]
+struct ExecutableMetadata {
+    description: String,
+    product: String,
+    original_filename: String,
+    internal_name: String,
+    company: String,
+}
+
+/// Reads PE version resources without executing the candidate. The parser supports
+/// both PE32 and PE32+ and treats malformed or absent resources as unavailable.
+fn read_executable_metadata(path: &Path) -> ExecutableMetadata {
+    let Some(file) = pelite::FileMap::open(path).ok() else {
+        return ExecutableMetadata::default();
+    };
+    let Some(image) = pelite::PeFile::from_bytes(file.as_ref()).ok() else {
+        return ExecutableMetadata::default();
+    };
+    let Some(version) = image.resources().ok().and_then(|resources| resources.version_info().ok()) else {
+        return ExecutableMetadata::default();
+    };
+
+    let info = version.file_info();
+    let mut metadata = ExecutableMetadata::default();
+    for strings in info.strings.values() {
+        for (key, value) in strings {
+            let target = if key.eq_ignore_ascii_case("FileDescription") {
+                Some(&mut metadata.description)
+            } else if key.eq_ignore_ascii_case("ProductName") {
+                Some(&mut metadata.product)
+            } else if key.eq_ignore_ascii_case("OriginalFilename") {
+                Some(&mut metadata.original_filename)
+            } else if key.eq_ignore_ascii_case("InternalName") {
+                Some(&mut metadata.internal_name)
+            } else if key.eq_ignore_ascii_case("CompanyName") {
+                Some(&mut metadata.company)
+            } else {
+                None
+            };
+            if let Some(target) = target {
+                if target.is_empty() && !value.trim().is_empty() {
+                    *target = value.trim().to_owned();
+                }
+            }
+        }
+    }
+    metadata
+}
+
+fn normalized_detection_text(value: &str) -> String {
+    value.chars()
+        .filter(|character| character.is_ascii_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// Adds evidence from PE version resources while penalizing common non-game
+/// binaries. Metadata is evidence, not an allow-list: many legitimate games ship
+/// without version strings and remain eligible through their path/layout signals.
+fn score_executable_metadata(metadata: &ExecutableMetadata, game_name: &str) -> i32 {
+    let target = normalized_detection_text(game_name);
+    if target.is_empty() {
+        return 0;
+    }
+
+    let description = normalized_detection_text(&metadata.description);
+    let product = normalized_detection_text(&metadata.product);
+    let original = normalized_detection_text(&metadata.original_filename);
+    let internal = normalized_detection_text(&metadata.internal_name);
+    let company = normalized_detection_text(&metadata.company);
+
+    let combined = format!("{description}{product}{original}{internal}");
+    let mut score = 0;
+
+    if !product.is_empty() && product == target {
+        score += 110;
+    } else if product.len() >= 4 && (product.contains(&target) || target.contains(&product)) {
+        score += 65;
+    }
+    if !description.is_empty() && description == target {
+        score += 90;
+    } else if description.len() >= 4
+        && (description.contains(&target) || target.contains(&description))
+    {
+        score += 45;
+    }
+
+    let title_tokens: Vec<_> = game_name
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .filter(|token| token.len() >= 3)
+        .map(normalized_detection_text)
+        .filter(|token| !token.is_empty())
+        .collect();
+    if !title_tokens.is_empty() {
+        let matches = title_tokens.iter()
+            .filter(|token| combined.contains(token.as_str()))
+            .count();
+        score += ((matches * 55) / title_tokens.len()) as i32;
+    }
+
+    // A publisher/developer identity is weak corroboration only; it must never
+    // select a candidate by itself because launchers and anti-cheat tools share it.
+    if !company.is_empty() && !combined.is_empty() {
+        score += 2;
+    }
+
+    let role_text = format!("{description}{product}{original}{internal}");
+    if [
+        "anticheat", "easyanticheat", "battleye", "denuvo",
+        "crashreport", "crashpad", "crashhandler", "redistributable",
+        "prerequisite", "uninstaller", "installer", "setup",
+        "updater", "update service", "launcher",
+    ].iter().any(|marker| role_text.contains(&normalized_detection_text(marker))) {
+        score -= 100;
+    }
+
+    score
+}
+
 /// Searches a game directory without following symlinks or leaving its root.
 fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option<PathBuf> {
     const MAX_DEPTH: usize = 12;
@@ -679,6 +799,7 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
             }
 
             let normalized_stem = normalize(stem);
+            let metadata = read_executable_metadata(&canonical);
             let relative_path = path.strip_prefix(&root).ok()?;
             // Storefront libraries commonly use the game title as the install
             // directory itself (for example "Tom Clancy's Rainbow Six Siege"),
@@ -723,7 +844,7 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
                 .map(normalize)
                 .collect();
 
-            let mut score = 0i32;
+            let mut score = score_executable_metadata(&metadata, game_name);
             if normalized_stem == target {
                 score += 120;
             } else if normalized_stem.starts_with(&target) && target.len() >= 4 {
