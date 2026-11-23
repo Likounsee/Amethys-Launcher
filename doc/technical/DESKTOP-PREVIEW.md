@@ -49,7 +49,21 @@ cargo check --manifest-path .\prototypes\ghostengine-amethys-preview\Cargo.toml
 cargo test --manifest-path .\prototypes\ghostengine-amethys-preview\Cargo.toml --lib
 ```
 
-The CI workflow also builds and smoke-tests the portable Windows desktop package and captures the library and settings pages at compact, standard and 4K window sizes. A passing automated check only validates the scenarios exercised by that workflow; it is not proof of compatibility with every Windows machine, launcher or game installation.
+The CI workflow also builds and smoke-tests the portable Windows desktop package, verifies its per-file and archive SHA-256 checksums, and captures the library and settings pages at compact, standard and 4K window sizes. The latest validation run [45204643241](https://github.com/Likounsee/Amethys-Launcher/actions/runs/45204643241) completed successfully on Windows and Linux CI jobs.
+
+### Windows 0.2 package validation
+
+The Windows x64 portable package was built locally and then extracted and launched successfully on a real Windows machine. The 15-step manual checklist passed, covering startup, Core connection, library display, import, executable configuration, game launch, deletion and cancellation, sorting and persistence, refresh, keyboard navigation, window sizes/fullscreen, invalid executable paths, and launching from the extracted portable ZIP.
+
+The tested archive was `Amethys-Windows-x64.zip`. Its SHA-256 is:
+
+```text
+d02e616d99c038d3856f6d2d55840c75b16aeec0a8bab44de8cbb0034306ae59
+```
+
+This checksum identifies that exact locally generated archive; rebuilding the package may produce a different hash. The manual validation applies to the tested Windows machine and does not guarantee compatibility with every PC, launcher or game installation.
+
+Linux desktop package testing is deliberately deferred. Linux CI quality checks and desktop library tests have passed, but the Linux desktop package has not been manually validated and must not be described as tested.
 
 ## Packaging
 
