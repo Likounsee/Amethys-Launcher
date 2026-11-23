@@ -307,6 +307,72 @@ jobs:
         working-directory: Amethys-Launcher
         run: cargo test --no-default-features --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml --lib
 
+
+  desktop-linux-package:
+    name: Linux desktop package build and smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libudev-dev
+      - name: Install stable Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+      - name: Check desktop prototype
+        run: |
+          cargo clippy --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml --all-targets -- -D warnings
+          cargo test --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml --all-targets
+      - name: Build desktop launcher
+        run: cargo build --release --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml --bin amethys-launcher
+      - name: Assemble and smoke-test portable Linux package
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="dist/Amethys"
+          mkdir -p "$stage/assets"
+          cp target/release/amethys-agent "$stage/"
+          cp target/release/amethysctl "$stage/"
+          cp target/release/amethys-launcher "$stage/"
+          cp -R prototypes/ghostengine-amethys-preview/assets/fonts "$stage/assets/"
+          cp -R prototypes/ghostengine-amethys-preview/assets/covers "$stage/assets/"
+          cp README.md LICENSE "$stage/"
+          cat > "$stage/LIRE-MOI.txt" <<'EOF'
+Amethys Launcher — Linux x86_64 (development package)
+
+Run ./amethys-launcher to open the graphical launcher.
+The agent starts automatically when needed.
+Use ./amethysctl --help for command-line tools.
+This is a portable development package, not an installer.
+EOF
+          find "$stage" -type f ! -name SHA256SUMS.txt -print0 | sort -z | while IFS= read -r -d '' file; do
+            sha256sum "$file"
+          done > "$stage/SHA256SUMS.txt"
+          mkdir -p dist/archive-check
+          tar -czf dist/Amethys-Linux-x64.tar.gz -C "$stage" .
+          tar -xzf dist/Amethys-Linux-x64.tar.gz -C dist/archive-check
+          for binary in amethys-agent amethysctl amethys-launcher; do
+            test -s "dist/archive-check/$binary"
+            test -x "dist/archive-check/$binary"
+          done
+          test -d dist/archive-check/assets/fonts
+          test -d dist/archive-check/assets/covers
+          snapshot="$(mktemp -d)"
+          export AMETHYS_DATA_DIR="$(mktemp -d)"
+          if ! dist/archive-check/amethys-launcher --snapshot "$snapshot"; then
+            cat "$snapshot/snapshot-error.txt" 2>/dev/null || true
+            exit 1
+          fi
+          test -s "$snapshot/01-bibliotheque.png"
+          test -s "$snapshot/18-parametres.png"
+          rm -rf "$snapshot" "$AMETHYS_DATA_DIR"
+          (cd dist && sha256sum Amethys-Linux-x64.tar.gz > Amethys-Linux-x64.tar.gz.sha256)
+
   desktop-integration:
     name: GhostEngine desktop integration
     runs-on: windows-latest
