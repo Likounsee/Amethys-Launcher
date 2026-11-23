@@ -674,17 +674,29 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
         p.text_right(mx + mw, y, 30, &format!("{} à importer", view.detected.len()), 13.0, W::Reg, MUT);
         y += 46;
         for (index, game) in view.detected.iter().take(DETECTED_LIMIT).enumerate() {
-            panel(p, mx, y, mw, 66, 14);
-            let pw = p.width(game.platform, 11.5, W::Semi).round() as i32 + 20;
-            p.rrect(mx + 18, y + 22, pw, 22, 11, ACT);
-            p.text(mx + 28, y + 22, 22, game.platform, 11.5, W::Semi, VIO_HI);
-            let text_x = mx + 18 + pw + 16;
-            let max_w = mw - (text_x - mx) - 150;
-            p.text_fit(text_x, y + 10, 24, &game.name, 14.5, W::Semi, TXT, max_w);
-            let path = p.ellipsize_path(&game.install_path.to_string_lossy(), 11.5, W::Reg, max_w);
-            p.text(text_x, y + 34, 18, &path, 11.5, W::Reg, FAINT);
-            button(p, mx + mw - 18 - 112, y + 13, Some(112), "Importer", None, Btn::Primary, PANEL, Some(Action::ImportDetectedGame(index)));
-            y += 66 + 10;
+            if mw < 420 {
+                panel(p, mx, y, mw, 96, 14);
+                let pw = p.width(game.platform, 11.5, W::Semi).round() as i32 + 20;
+                p.rrect(mx + 18, y + 10, pw, 22, 11, ACT);
+                p.text(mx + 28, y + 10, 22, game.platform, 11.5, W::Semi, VIO_HI);
+                button(p, mx + mw - 18 - 92, y + 8, Some(92), "Importer", None, Btn::Primary, PANEL, Some(Action::ImportDetectedGame(index)));
+                p.text_fit(mx + 18, y + 38, 22, &game.name, 13.0, W::Semi, TXT, mw - 36);
+                let path = p.ellipsize_path(&game.install_path.to_string_lossy(), 10.5, W::Reg, mw - 36);
+                p.text(mx + 18, y + 64, 16, &path, 10.5, W::Reg, FAINT);
+                y += 96 + 10;
+            } else {
+                panel(p, mx, y, mw, 66, 14);
+                let pw = p.width(game.platform, 11.5, W::Semi).round() as i32 + 20;
+                p.rrect(mx + 18, y + 22, pw, 22, 11, ACT);
+                p.text(mx + 28, y + 22, 22, game.platform, 11.5, W::Semi, VIO_HI);
+                let text_x = mx + 18 + pw + 16;
+                let max_w = mw - (text_x - mx) - 150;
+                p.text_fit(text_x, y + 10, 24, &game.name, 14.5, W::Semi, TXT, max_w);
+                let path = p.ellipsize_path(&game.install_path.to_string_lossy(), 11.5, W::Reg, max_w);
+                p.text(text_x, y + 34, 18, &path, 11.5, W::Reg, FAINT);
+                button(p, mx + mw - 18 - 112, y + 13, Some(112), "Importer", None, Btn::Primary, PANEL, Some(Action::ImportDetectedGame(index)));
+                y += 66 + 10;
+            }
         }
         if view.detected.len() > DETECTED_LIMIT {
             p.text(mx, y + 2, 20, &format!("{DETECTED_LIMIT} premières installations affichées sur {}. Importez-les pour faire apparaître les suivantes.", view.detected.len()), 12.0, W::Reg, MUT);
@@ -847,7 +859,8 @@ pub fn game_detail(p: &mut Painter, lay: &Layout, view: &DetailView) -> i32 {
     let mut y = hero_y + hero_h + GAP + 4;
 
     if view.editing_executable {
-        let h = 168;
+        let narrow_edit = mw < 420;
+        let h = if narrow_edit { 220 } else { 168 };
         panel(p, mx, y, mw, h, 18);
         p.text(mx + 24, y + 18, 24, "Configurer l'exécutable", 16.0, W::Semi, TXT);
         p.text_fit(mx + 24, y + 44, 20, "Chemin relatif au dossier du jeu (ex. bin/game.exe), ou chemin absolu situé dans ce dossier.", 12.5, W::Reg, MUT, mw - 48);
@@ -864,8 +877,14 @@ pub fn game_detail(p: &mut Painter, lay: &Layout, view: &DetailView) -> i32 {
             p.rrect(fx + 15 + tw, fy + 11, 2, 18, 1, VIO_HI);
         }
         let bw = 130;
-        button(p, mx + mw - 24 - bw, y + 74 + BTN_H + 14, Some(bw), "Enregistrer", Some(Icon::Check), Btn::Primary, PANEL, Some(Action::SaveExecutable));
-        button(p, mx + mw - 24 - bw - 10 - 110, y + 74 + BTN_H + 14, Some(110), "Annuler", None, Btn::Ghost, PANEL, Some(Action::CancelExecutableEdit));
+        if narrow_edit {
+            let by = y + 74 + BTN_H + 14;
+            button(p, mx + 24, by, Some(120), "Enregistrer", Some(Icon::Check), Btn::Primary, PANEL, Some(Action::SaveExecutable));
+            button(p, mx + 24, by + BTN_H + 8, Some(110), "Annuler", None, Btn::Ghost, PANEL, Some(Action::CancelExecutableEdit));
+        } else {
+            button(p, mx + mw - 24 - bw, y + 74 + BTN_H + 14, Some(bw), "Enregistrer", Some(Icon::Check), Btn::Primary, PANEL, Some(Action::SaveExecutable));
+            button(p, mx + mw - 24 - bw - 10 - 110, y + 74 + BTN_H + 14, Some(110), "Annuler", None, Btn::Ghost, PANEL, Some(Action::CancelExecutableEdit));
+        }
         y += h + GAP;
     }
 
