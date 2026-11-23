@@ -232,11 +232,11 @@ fn configured_executable_is_usable(install_path: &str, executable: &str) -> bool
     })
 }
 
-/// Retries executable discovery for every library entry that still has no configured path.
+/// Retries executable discovery for every library entry with a missing or unusable path.
 ///
 /// The filesystem scan runs on Tokio's blocking pool and never holds the
 /// database mutex. Successful results are persisted only if the entry is
-/// still present and still has no executable when the scan completes.
+/// still present and still has the same missing or stale path when the scan completes.
 async fn resolve_missing_game_executables_on_startup(database: Arc<Mutex<Database>>) {
     let missing_games = {
         let database = database.lock().await;
@@ -267,7 +267,7 @@ async fn resolve_missing_game_executables_on_startup(database: Arc<Mutex<Databas
     };
 
     if missing_games.is_empty() {
-        tracing::debug!("Executable discovery skipped: every game already has an executable");
+        tracing::debug!("Executable discovery skipped: every game has a usable executable path");
         return;
     }
 
