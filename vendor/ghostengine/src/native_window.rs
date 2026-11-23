@@ -11,7 +11,7 @@ use std::{error::Error, fmt, num::NonZeroU32, sync::Arc};
 use winit::{
     application::ApplicationHandler,
     dpi::PhysicalSize,
-    event::WindowEvent,
+    event::{ElementState, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop, OwnedDisplayHandle},
     window::{Fullscreen, Window, WindowAttributes, WindowId},
     keyboard::{KeyCode, PhysicalKey},
