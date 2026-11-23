@@ -380,3 +380,25 @@ jobs:
           if (-not (Test-Path $settingsShot -PathType Leaf)) {
             throw "Desktop snapshot did not reach or capture the settings page."
           }
+
+          # Exercise the responsive layout at both ends of the supported range.
+          foreach ($size in @("360x420", "1920x1080", "3840x2160")) {
+            $sizeTag = $size.Replace("x", "-")
+            $sizeSnapshot = Join-Path $env:RUNNER_TEMP "amethys-desktop-smoke-$sizeTag"
+            New-Item -ItemType Directory -Force $sizeSnapshot | Out-Null
+            $sizeArguments = '--snapshot "' + $sizeSnapshot + '" --size ' + $size
+            $sizeDesktop = Start-Process -FilePath $app -ArgumentList $sizeArguments -PassThru
+            if (-not $sizeDesktop.WaitForExit(120000)) {
+              Stop-Process -Id $sizeDesktop.Id -Force -ErrorAction SilentlyContinue
+              throw "Desktop snapshot at $size did not exit within 120 seconds."
+            }
+            $sizeDesktop.Refresh()
+            if ($sizeDesktop.ExitCode -ne 0) {
+              throw "Desktop snapshot at $size failed with exit code $($sizeDesktop.ExitCode)."
+            }
+            foreach ($shot in @("01-bibliotheque.png", "18-parametres.png")) {
+              if (-not (Test-Path (Join-Path $sizeSnapshot $shot) -PathType Leaf)) {
+                throw "Desktop snapshot at $size did not produce $shot."
+              }
+            }
+          }
