@@ -542,9 +542,10 @@ pub fn resolve_game_executable_for(
 
     if platform.eq_ignore_ascii_case("Epic Games") {
         if let Some(app_id) = platform_id {
-            if let Some(executable) = epic_manifest_roots().iter().find_map(|root| {
-                epic_launch_executable(root, app_id, install_path)
-            }) {
+            if let Some(executable) = epic_manifest_roots()
+                .iter()
+                .find_map(|root| epic_launch_executable(root, app_id, install_path))
+            {
                 return Some(executable);
             }
         }
@@ -572,7 +573,11 @@ fn read_executable_metadata(path: &Path) -> ExecutableMetadata {
     let Some(image) = pelite::PeFile::from_bytes(file.as_ref()).ok() else {
         return ExecutableMetadata::default();
     };
-    let Some(version) = image.resources().ok().and_then(|resources| resources.version_info().ok()) else {
+    let Some(version) = image
+        .resources()
+        .ok()
+        .and_then(|resources| resources.version_info().ok())
+    else {
         return ExecutableMetadata::default();
     };
 
@@ -604,7 +609,8 @@ fn read_executable_metadata(path: &Path) -> ExecutableMetadata {
 }
 
 fn normalized_detection_text(value: &str) -> String {
-    value.chars()
+    value
+        .chars()
         .filter(|character| character.is_ascii_alphanumeric())
         .flat_map(char::to_lowercase)
         .collect()
@@ -648,7 +654,8 @@ fn score_executable_metadata(metadata: &ExecutableMetadata, game_name: &str) -> 
         .filter(|token| !token.is_empty())
         .collect();
     if !title_tokens.is_empty() {
-        let matches = title_tokens.iter()
+        let matches = title_tokens
+            .iter()
             .filter(|token| combined.contains(token.as_str()))
             .count();
         score += ((matches * 55) / title_tokens.len()) as i32;
@@ -662,11 +669,25 @@ fn score_executable_metadata(metadata: &ExecutableMetadata, game_name: &str) -> 
 
     let role_text = format!("{description}{product}{original}{internal}");
     if [
-        "anticheat", "easyanticheat", "battleye", "denuvo",
-        "crashreport", "crashpad", "crashhandler", "redistributable",
-        "prerequisite", "uninstaller", "installer", "setup",
-        "updater", "update service", "launcher",
-    ].iter().any(|marker| role_text.contains(&normalized_detection_text(marker))) {
+        "anticheat",
+        "easyanticheat",
+        "battleye",
+        "denuvo",
+        "crashreport",
+        "crashpad",
+        "crashhandler",
+        "redistributable",
+        "prerequisite",
+        "uninstaller",
+        "installer",
+        "setup",
+        "updater",
+        "update service",
+        "launcher",
+    ]
+    .iter()
+    .any(|marker| role_text.contains(&normalized_detection_text(marker)))
+    {
         score -= 100;
     }
 
@@ -690,7 +711,9 @@ fn find_root_game_launcher(root: &Path, game_name: &str, publisher: &str) -> Opt
             continue;
         };
         if !file_type.is_file()
-            || !path.extension().and_then(|value| value.to_str())
+            || !path
+                .extension()
+                .and_then(|value| value.to_str())
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
         {
             continue;
@@ -730,7 +753,8 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
     const MAX_CANDIDATES: usize = 10_000;
 
     fn normalize(value: &str) -> String {
-        value.chars()
+        value
+            .chars()
             .filter(|character| character.is_ascii_alphanumeric())
             .flat_map(char::to_lowercase)
             .collect()
@@ -739,20 +763,54 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
     fn ignored_directory(name: &str) -> bool {
         let name = normalize(name);
         [
-            "redist", "redistributable", "commonredist", "support",
-            "easyanticheat", "battleye", "crashreporter", "crashhandler",
-            "uninstall", "directx", "vcredist", "prerequisite",
-        ].iter().any(|part| name.contains(part))
+            "redist",
+            "redistributable",
+            "commonredist",
+            "support",
+            "easyanticheat",
+            "battleye",
+            "crashreporter",
+            "crashhandler",
+            "uninstall",
+            "directx",
+            "vcredist",
+            "prerequisite",
+        ]
+        .iter()
+        .any(|part| name.contains(part))
     }
 
     fn ignored_executable(stem: &str) -> bool {
         let stem = normalize(stem);
         [
-            "uninstall", "unins", "setup", "install", "update", "updater",
-            "crash", "report", "redist", "vcredist", "directx", "dxsetup",
-            "unitycrash", "crashhandler", "easyanticheat", "battleye",
-            "startprotectedgame", "launcher", "bootstrap", "bootstrapper", "startgame", "eac", "repair", "benchmark", "helper",
-        ].iter().any(|part| stem.contains(part))
+            "uninstall",
+            "unins",
+            "setup",
+            "install",
+            "update",
+            "updater",
+            "crash",
+            "report",
+            "redist",
+            "vcredist",
+            "directx",
+            "dxsetup",
+            "unitycrash",
+            "crashhandler",
+            "easyanticheat",
+            "battleye",
+            "startprotectedgame",
+            "launcher",
+            "bootstrap",
+            "bootstrapper",
+            "startgame",
+            "eac",
+            "repair",
+            "benchmark",
+            "helper",
+        ]
+        .iter()
+        .any(|part| stem.contains(part))
     }
 
     fn path_matches_token(words: &[String], normalized_path: &str, token: &str) -> bool {
@@ -766,9 +824,11 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
         // maintaining a per-game alias table.
         if (3..=5).contains(&token.len()) {
             words.windows(token.len()).any(|window| {
-                window.iter()
+                window
+                    .iter()
                     .filter_map(|word| word.chars().next())
-                    .collect::<String>() == token
+                    .collect::<String>()
+                    == token
             })
         } else {
             false
@@ -791,14 +851,17 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
     let mut candidates: Vec<(PathBuf, i32)> = Vec::new();
 
     while let Some((directory, depth)) = pending.pop() {
-        if visited_directories >= MAX_DIRECTORIES || visited_files >= MAX_FILES
+        if visited_directories >= MAX_DIRECTORIES
+            || visited_files >= MAX_FILES
             || candidates.len() >= MAX_CANDIDATES
         {
             break;
         }
         visited_directories += 1;
 
-        let Ok(entries) = fs::read_dir(&directory) else { continue; };
+        let Ok(entries) = fs::read_dir(&directory) else {
+            continue;
+        };
         let mut entries: Vec<_> = entries.flatten().collect();
         entries.sort_by_key(|entry| entry.file_name());
 
@@ -807,7 +870,9 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
                 break;
             }
             let path = entry.path();
-            let Ok(kind) = entry.file_type() else { continue; };
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
 
             if kind.is_dir() && depth < MAX_DEPTH {
                 let directory_name = entry.file_name().to_string_lossy().into_owned();
@@ -821,13 +886,17 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
             }
             visited_files += 1;
 
-            let is_windows_executable = path.extension()
+            let is_windows_executable = path
+                .extension()
                 .and_then(|extension| extension.to_str())
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"));
             #[cfg(unix)]
             let is_unix_executable = {
                 use std::os::unix::fs::PermissionsExt;
-                entry.metadata().ok().is_some_and(|metadata| metadata.permissions().mode() & 0o111 != 0)
+                entry
+                    .metadata()
+                    .ok()
+                    .is_some_and(|metadata| metadata.permissions().mode() & 0o111 != 0)
                     && path.extension().is_none()
             };
             #[cfg(not(unix))]
@@ -837,12 +906,17 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
                 continue;
             }
 
-            let stem = path.file_stem().and_then(|value| value.to_str()).unwrap_or("");
+            let stem = path
+                .file_stem()
+                .and_then(|value| value.to_str())
+                .unwrap_or("");
             if ignored_executable(stem) {
                 continue;
             }
 
-            let Ok(canonical) = path.canonicalize() else { continue; };
+            let Ok(canonical) = path.canonicalize() else {
+                continue;
+            };
             if !canonical.is_file() || !canonical.starts_with(&root) {
                 continue;
             }
@@ -856,23 +930,28 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
             // Include that directory name in the matching context: it is part
             // of the detected installation identity even though it is not part
             // of the path relative to the install root.
-            let normalized_root_name = root.file_name()
+            let normalized_root_name = root
+                .file_name()
                 .and_then(|value| value.to_str())
                 .map(normalize)
                 .unwrap_or_default();
             let normalized_relative_path = normalize(&relative_path.to_string_lossy());
             let normalized_install_context =
                 format!("{normalized_root_name}{normalized_relative_path}");
-            let mut install_path_words: Vec<String> = root.file_name()
+            let mut install_path_words: Vec<String> = root
+                .file_name()
                 .into_iter()
-                .chain(relative_path.components().filter_map(|component| {
-                    match component {
-                        std::path::Component::Normal(value) => Some(value),
-                        _ => None,
-                    }
-                }))
+                .chain(
+                    relative_path
+                        .components()
+                        .filter_map(|component| match component {
+                            std::path::Component::Normal(value) => Some(value),
+                            _ => None,
+                        }),
+                )
                 .flat_map(|component| {
-                    component.to_string_lossy()
+                    component
+                        .to_string_lossy()
                         .split(|character: char| !character.is_ascii_alphanumeric())
                         .filter(|word| !word.is_empty())
                         .map(normalize)
@@ -916,13 +995,10 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
                     .count();
                 score += ((matched_stem * 45) / target_tokens.len()) as i32;
 
-                let matched_path = target_tokens.iter()
+                let matched_path = target_tokens
+                    .iter()
                     .filter(|token| {
-                        path_matches_token(
-                            &install_path_words,
-                            &normalized_install_context,
-                            token,
-                        )
+                        path_matches_token(&install_path_words, &normalized_install_context, token)
                     })
                     .count();
                 score += ((matched_path * 35) / target_tokens.len()) as i32;
