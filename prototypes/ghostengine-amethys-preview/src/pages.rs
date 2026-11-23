@@ -15,6 +15,10 @@ const GAP: i32 = 18;
 const BTN_H: i32 = 40;
 const MIN_CARD_W: i32 = 188;
 const FOOTER_H: i32 = 58;
+/// Portrait artwork uses a fixed 3:4 width-to-height ratio on every card.
+fn cover_height(width: i32) -> i32 {
+    width.max(1) * 4 / 3
+}
 /// How many installations discovered by a scan are listed at once.
 const DETECTED_LIMIT: usize = 24;
 
@@ -470,8 +474,13 @@ fn game_card(p: &mut Painter, x: i32, y: i32, cw: i32, ch: i32, index: usize, ga
     p.shadow(x, y, cw, total_h, 14, 9, 40);
     p.fill(x, y, cw, total_h, PANEL);
     let artwork_id = game.catalogue_game_id.as_deref().unwrap_or(&game.id);
-    p.cover_or_placeholder(artwork_id, &game.id, &game.name, x, y, cw, ch);
+    let has_cover = p.cover_or_placeholder(artwork_id, &game.id, &game.name, x, y, cw, ch);
     p.scrim(x, y, cw, ch, 0.62, 225);
+    if !has_cover {
+        // Make it clear that this is an original temporary placeholder, not
+        // a provider-supplied game image.
+        chip(p, x + 10, y + 38, "VISUEL TEMPORAIRE", cw - 20);
+    }
 
     chip(p, x + 10, y + 10, &game.platform, cw - 60);
     if kind != StatusKind::Ready {
@@ -653,7 +662,7 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
         }
         let cols = lay.columns();
         let cw = lay.card_width();
-        let ch = cw * 4 / 3;
+        let ch = cover_height(cw);
         let row_h = ch + FOOTER_H + GAP;
         let shown = visible.len().min(view.limit.max(1));
         for (n, &index) in visible.iter().take(shown).enumerate() {
@@ -1359,6 +1368,14 @@ mod tests {
             search_focused: false,
             core_error: None,
             limit: 48,
+        }
+    }
+
+    #[test]
+    fn card_cover_height_keeps_a_fixed_portrait_ratio() {
+        for width in [1, 188, 240, 320, 400, 640] {
+            assert_eq!(cover_height(width), width * 4 / 3);
+            assert!(cover_height(width) >= width);
         }
     }
 
