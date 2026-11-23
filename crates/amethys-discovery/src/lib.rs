@@ -747,7 +747,10 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
     // from the storefront title. With several candidates, require a clear
     // title-derived lead to avoid choosing launchers, tools or secondary apps.
     if candidates.len() > 1 {
-        let second_score = candidates.get(1).map(|candidate| candidate.1).unwrap_or(i32::MIN);
+        let second_score = candidates
+            .get(1)
+            .map(|candidate| candidate.1)
+            .unwrap_or(i32::MIN);
         if *best_score < 55 || *best_score - second_score < 18 {
             return None;
         }
@@ -2415,13 +2418,20 @@ mod tests {
         let root = std::env::temp_dir().join(format!(
             "amethys-executable-match-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         ));
         let game_bin = root.join("Binaries/Win64");
         let support = root.join("EasyAntiCheat");
         std::fs::create_dir_all(&game_bin).unwrap();
         std::fs::create_dir_all(&support).unwrap();
-        std::fs::write(game_bin.join("ExampleAdventure-Win64-Shipping.exe"), b"game").unwrap();
+        std::fs::write(
+            game_bin.join("ExampleAdventure-Win64-Shipping.exe"),
+            b"game",
+        )
+        .unwrap();
         std::fs::write(support.join("EasyAntiCheat_EOS_Setup.exe"), b"setup").unwrap();
 
         let detected = super::DetectedGame {
@@ -2432,7 +2442,9 @@ mod tests {
         };
         assert_eq!(
             super::resolve_game_executable(&detected),
-            Some(std::path::PathBuf::from("Binaries/Win64/ExampleAdventure-Win64-Shipping.exe"))
+            Some(std::path::PathBuf::from(
+                "Binaries/Win64/ExampleAdventure-Win64-Shipping.exe"
+            ))
         );
         std::fs::remove_dir_all(root).unwrap();
     }
@@ -2442,7 +2454,10 @@ mod tests {
         let root = std::env::temp_dir().join(format!(
             "amethys-executable-deep-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         ));
         let game_bin = root.join("The Finals/Client/Win64/Binaries/Shipping/Release/x64");
         std::fs::create_dir_all(&game_bin).unwrap();
@@ -2470,7 +2485,10 @@ mod tests {
         let parent = std::env::temp_dir().join(format!(
             "amethys-executable-root-context-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         ));
         let root = parent.join("Tom Clancy's Rainbow Six Siege");
         let game_bin = root.join("default_game/Binaries/Win64");
@@ -2498,7 +2516,10 @@ mod tests {
         let root = std::env::temp_dir().join(format!(
             "amethys-executable-launcher-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         ));
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join("Launcher.exe"), b"launcher").unwrap();
@@ -2517,7 +2538,10 @@ mod tests {
         let root = std::env::temp_dir().join(format!(
             "amethys-executable-ambiguous-{}-{}",
             std::process::id(),
-            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
         ));
         std::fs::create_dir_all(root.join("bin")).unwrap();
         std::fs::write(root.join("bin/first.exe"), b"one").unwrap();
