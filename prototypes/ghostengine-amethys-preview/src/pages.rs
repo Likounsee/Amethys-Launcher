@@ -1115,6 +1115,7 @@ pub struct SettingsView<'a> {
     pub game_count: usize,
     pub ready_count: usize,
     pub media_root: Option<&'a std::path::Path>,
+    pub library_sort: usize,
     pub scanning: bool,
     pub progress: Option<&'a amethys_discovery::DiscoveryProgress>,
 }
@@ -1194,6 +1195,31 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
         p.text(x2 + 24, y2 + 84, 20, "Le stockage local n'a pas été initialisé.", 12.5, W::Reg, MUT);
     }
     y = if two { y1 + h + GAP } else { y2 + h + GAP };
+
+    // ---- persisted library preference
+    let sort_compact = mw < 420;
+    let sort_h = if sort_compact { 178 } else { 116 };
+    panel(p, mx, y, mw, sort_h, 18);
+    p.text(mx + 24, y + 16, 24, "Préférence de la bibliothèque", 16.0, W::Semi, TXT);
+    p.text(mx + 24, y + 44, 20, "Ordre de tri conservé sur cet appareil", 12.5, W::Reg, MUT);
+    let sort_options = [
+        ("Nom", 0usize),
+        ("Plateforme", 1usize),
+        ("État de lancement", 2usize),
+    ];
+    let mut sort_x = mx + 24;
+    let mut sort_y = y + if sort_compact { 78 } else { 68 };
+    for (label, value) in sort_options {
+        let kind = if view.library_sort == value { Btn::Primary } else { Btn::Secondary };
+        let bw = button(p, sort_x, sort_y, None, label, None, kind, PANEL, Some(Action::SetLibrarySort(value)));
+        if sort_compact {
+            sort_y += BTN_H + 8;
+            sort_x = mx + 24;
+        } else {
+            sort_x += bw + 10;
+        }
+    }
+    y += sort_h + GAP;
 
     // ---- keyboard shortcuts
     let shortcuts = [
