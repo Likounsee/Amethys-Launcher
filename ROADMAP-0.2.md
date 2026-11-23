@@ -11,7 +11,7 @@
 
 La 0.2 est gelée comme version expérimentale de bibliothèque locale, découverte en lecture seule, vérification de chemins et lancement direct. Elle ne promet ni compatibilité universelle ni intégration de tous les anti-cheats. Les finitions visuelles, préférences supplémentaires et validations matérielles non disponibles sont explicitement reportées : elles ne doivent pas entraîner une succession infinie de changements dans la 0.2.
 
-**Attention à la distribution :** l'archive publiée sous le tag `v0.2.0` correspond à l'état du tag, pas aux 50 commits supplémentaires présents sur `main`. Le dernier état source ne doit pas être présenté comme une nouvelle archive officielle tant qu'une release correspondante n'a pas été créée et validée.
+**Attention à la distribution :** l'archive publiée sous le tag `v0.2.0` correspond à l'état du tag, pas aux plusieurs dizaines de commits supplémentaires présents sur `main`. Le dernier état source ne doit pas être présenté comme une nouvelle archive officielle tant qu'une release correspondante n'a pas été créée et validée.
 
 La priorité de la 0.2 était une interface de bureau cohérente reposant sur la vraie bibliothèque locale. La boutique commerciale n'était pas un objectif de cette version.
 
