@@ -546,6 +546,86 @@ mod tests {
     use tokio::{io::duplex, sync::Mutex};
 
     #[tokio::test]
+    async fn importing_game_after_core_start_wakes_background_executable_discovery() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-import-discovery-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create install directory");
+        std::fs::write(root.join("Sample Game.exe"), b"fixture")
+            .expect("create game executable");
+
+        let database = Arc::new(Mutex::new(
+            Database::open(":memory:").expect("database opens"),
+        ));
+        let state = Arc::new(AtomicU8::new(super::STATE_RUNNING));
+        let notify = Arc::new(Notify::new());
+        let worker = tokio::spawn(super::run_game_executable_discovery(
+            Arc::clone(&database),
+            Arc::clone(&notify),
+        ));
+
+        let (mut client, mut server) = duplex(64 * 1024);
+        let request = IpcEnvelope::new(IpcRequest::new(IpcCommand::AddGame {
+            name: "Sample Game".to_owned(),
+            platform: "Test Platform".to_owned(),
+            install_path: root.to_string_lossy().into_owned(),
+            executable: None,
+        }));
+        let server_database = Arc::clone(&database);
+        let server_state = Arc::clone(&state);
+        let server_notify = Arc::clone(&notify);
+        let server_task = tokio::spawn(async move {
+            serve_database_connection(
+                &mut server,
+                &server_state,
+                &server_database,
+                &server_notify,
+            )
+            .await
+            .expect("serve game import");
+        });
+
+        write_message(&mut client, &request)
+            .await
+            .expect("send game import");
+        let response: IpcResponse = read_message(&mut client)
+            .await
+            .expect("read game import response");
+        server_task.await.expect("server task");
+        let game_id = match response.result.expect("game import succeeds") {
+            amethys_ipc::IpcResponsePayload::GameAdded { game } => game.id.clone(),
+            other => panic!("unexpected import response: {other:?}"),
+        };
+
+        let discovered = tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            loop {
+                let game = database
+                    .lock()
+                    .await
+                    .get_game(&game_id)
+                    .expect("game can be read")
+                    .expect("game remains in library");
+                if game.executable.is_some() {
+                    break game;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("background discovery should finish after import");
+
+        assert_eq!(discovered.executable.as_deref(), Some("Sample Game.exe"));
+        worker.abort();
+        let _ = worker.await;
+        std::fs::remove_dir_all(root).expect("remove fixture");
+    }
+
+    #[tokio::test]
     async fn startup_discovery_persists_executable_for_games_missing_one() {
         let root = std::env::temp_dir().join(format!(
             "amethys-startup-discovery-{}-{}",
