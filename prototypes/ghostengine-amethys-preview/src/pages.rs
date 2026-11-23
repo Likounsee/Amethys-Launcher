@@ -608,7 +608,7 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
     if view.loading && games.is_empty() && view.core_error.is_none() {
         panel(p, mx, y, mw, 132, 18);
         icon_badge(p, mx + 22, y + 24, 44, Icon::Refresh, VIO_HI, ACT);
-        p.text(mx + 82, y + 22, 24, "Chargement de la bibliothèque", 16.0, W::Semi, TXT);
+        p.text_fit(mx + 82, y + 22, 24, "Chargement de la bibliothèque", 16.0, W::Semi, TXT, mw - 106);
         p.paragraph(
             mx + 82,
             y + 52,
@@ -1194,7 +1194,7 @@ pub fn settings(p: &mut Painter, lay: &Layout, view: &SettingsView) -> i32 {
     if let Some(error) = view.core_error {
         p.paragraph(mx + 88, y + 76, mw - 112, 19, error, 12.5, W::Reg, MUT, 3);
     } else if view.core_loading {
-        p.text(mx + 88, y + 76, 20, "Connexion au service local et chargement de la bibliothèque…", 12.5, W::Reg, MUT);
+        p.text_fit(mx + 88, y + 76, 20, "Connexion au service local et chargement de la bibliothèque…", 12.5, W::Reg, MUT, mw - 112);
     } else {
         p.text(mx + 88, y + 76, 20, "La bibliothèque est chargée depuis le service local, par IPC.", 12.5, W::Reg, MUT);
     }
