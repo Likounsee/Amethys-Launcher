@@ -35,7 +35,7 @@ impl Layout {
     pub fn new(w: i32, h: i32) -> Self {
         // Keep a consistent gutter while allowing the content area to shrink
         // with the actual client width instead of overflowing at compact sizes.
-        let side_w = if w < 900 { 72 } else { SIDE_W };
+        let side_w = if w < 900 || h < 520 { 72 } else { SIDE_W };
         let gutter = if w < 520 { 12 } else { 20 };
         let mx = side_w + gutter;
         let mw = (w - mx - gutter).max(160);
@@ -1054,7 +1054,7 @@ pub fn store(p: &mut Painter, lay: &Layout) -> i32 {
     p.text(mx, 72, 22, "Le catalogue n'est pas encore connecté", 13.5, W::Reg, MUT);
 
     let y = 118;
-    let h = 252;
+    let h = if mw < 420 { 300 } else { 252 };
     panel(p, mx, y, mw, h, 22);
     p.glow(mx + 160, y + 40, 420, Color::rgba(122, 92, 232, 55), mx + 1, y + 1, mw - 2, h - 2);
     p.round_corners(mx, y, mw, h, 22, BG);
@@ -1256,7 +1256,7 @@ pub fn remove_dialog(p: &mut Painter, lay: &Layout, game_name: &str, offset: i32
     p.rrect(mx, my, mw, mh, 20, Color::rgb(0x17, 0x14, 0x21));
     p.rrect_line(mx, my, mw, mh, 20, alpha(Color::WHITE, 34));
     icon_badge(p, mx + 24, my + 24, 44, Icon::Trash, RED, RED_DARK);
-    p.text(mx + 84, my + 24, 24, "Retirer de la bibliothèque ?", 17.0, W::Semi, TXT);
+    p.text_fit(mx + 84, my + 24, 24, "Retirer de la bibliothèque ?", 17.0, W::Semi, TXT, mw - 108);
     let name = p.ellipsize(game_name, 13.5, W::Med, mw - 108);
     p.text(mx + 84, my + 50, 20, &name, 13.5, W::Med, VIO_HI);
     p.paragraph(
@@ -1397,7 +1397,9 @@ mod tests {
         assert!(compact.card_width() >= MIN_CARD_W);
         let tiny = Layout::new(360, 420);
         assert_eq!(tiny.columns(), 1);
+        assert_eq!(tiny.side_w, 72);
         assert!(tiny.mw < compact.mw);
+        assert_eq!(Layout::new(1200, 400).side_w, 72);
     }
 
     #[test]
