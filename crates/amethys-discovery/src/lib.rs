@@ -691,9 +691,8 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
                 .map(normalize)
                 .unwrap_or_default();
             let normalized_relative_path = normalize(&relative_path.to_string_lossy());
-            let normalized_install_context = format!(
-                "{normalized_root_name}{normalized_relative_path}"
-            );
+            let normalized_install_context =
+                format!("{normalized_root_name}{normalized_relative_path}");
             let mut install_path_words: Vec<String> = root.file_name()
                 .into_iter()
                 .chain(relative_path.components().filter_map(|component| {
@@ -711,7 +710,8 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
                 })
                 .collect();
             install_path_words.retain(|word| !word.is_empty());
-            let normalized_parent = path.parent()
+            let normalized_parent = path
+                .parent()
                 .and_then(Path::file_name)
                 .and_then(|value| value.to_str())
                 .map(normalize)
@@ -740,7 +740,8 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
                 score += 70;
             }
             if !target_tokens.is_empty() {
-                let matched_stem = target_tokens.iter()
+                let matched_stem = target_tokens
+                    .iter()
                     .filter(|token| normalized_stem.contains(token.as_str()))
                     .count();
                 score += ((matched_stem * 45) / target_tokens.len()) as i32;
@@ -758,8 +759,10 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
             }
             if normalized_parent == target {
                 score += 35;
-            } else if !normalized_parent.is_empty() && target.len() >= 4
-                && (normalized_parent.starts_with(&target) || target.starts_with(&normalized_parent))
+            } else if !normalized_parent.is_empty()
+                && target.len() >= 4
+                && (normalized_parent.starts_with(&target)
+                    || target.starts_with(&normalized_parent))
             {
                 score += 15;
             }
@@ -781,9 +784,7 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
     if candidates.is_empty() {
         return None;
     }
-    candidates.sort_by(|left, right| {
-        right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0))
-    });
+    candidates.sort_by(|left, right| right.1.cmp(&left.1).then_with(|| left.0.cmp(&right.0)));
 
     let (best_path, best_score) = candidates.first()?;
     // A single plausible executable is useful even when its filename differs
