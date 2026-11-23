@@ -13,6 +13,20 @@ if (-not (Test-Path (Join-Path $RepoRoot "vendor/ghostengine/Cargo.toml"))) {
 $env:CARGO_TARGET_DIR = $TargetDir
 Push-Location $RepoRoot
 try {
+    # Packaging is a release-like operation: refuse to produce an archive from
+    # a tree that fails formatting, linting or tests.
+    cargo fmt --all -- --check
+    if ($LASTEXITCODE -ne 0) { throw "Rust formatting check failed." }
+
+    cargo clippy --workspace --all-targets -- -D warnings
+    if ($LASTEXITCODE -ne 0) { throw "Workspace Clippy checks failed." }
+
+    cargo test --workspace --all-targets
+    if ($LASTEXITCODE -ne 0) { throw "Workspace tests failed." }
+
+    cargo test --manifest-path $Manifest --bin amethys-launcher
+    if ($LASTEXITCODE -ne 0) { throw "Desktop launcher tests failed." }
+
     cargo build --release -p amethys-agent
     if ($LASTEXITCODE -ne 0) { throw "Building amethys-agent failed." }
 
@@ -31,10 +45,32 @@ try {
     Copy-Item (Join-Path $TargetDir "release/amethys-agent.exe") $StageDir
     Copy-Item (Join-Path $TargetDir "release/amethysctl.exe") $StageDir
     Copy-Item (Join-Path $TargetDir "release/amethys-launcher.exe") $StageDir
-    Copy-Item (Join-Path $RepoRoot "prototypes/ghostengine-amethys-preview/assets/fonts") (Join-Path $StageDir "assets") -Recurse
-    Copy-Item (Join-Path $RepoRoot "prototypes/ghostengine-amethys-preview/assets/covers") (Join-Path $StageDir "assets") -Recurse
+    $FontSource = Join-Path $RepoRoot "prototypes/ghostengine-amethys-preview/assets/fonts"
+    $CoverSource = Join-Path $RepoRoot "prototypes/ghostengine-amethys-preview/assets/covers"
+    foreach ($RequiredDir in @($FontSource, $CoverSource)) {
+        if (-not (Test-Path $RequiredDir -PathType Container)) {
+            throw "Required desktop assets are missing: $RequiredDir"
+        }
+    }
+    Copy-Item $FontSource (Join-Path $StageDir "assets") -Recurse
+    Copy-Item $CoverSource (Join-Path $StageDir "assets") -Recurse
     Copy-Item (Join-Path $RepoRoot "README.md") $StageDir
     Copy-Item (Join-Path $RepoRoot "LICENSE") $StageDir
+
+    # Include checksums for every staged file so a copied portable package can
+    # be verified without relying on the build machine.
+    $ManifestLines = Get-ChildItem -LiteralPath $StageDir -File -Recurse |
+        Sort-Object FullName |
+        ForEach-Object {
+            $Relative = $_.FullName.Substring($StageDir.Length + 1).Replace("\", "/")
+            $Hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$Hash  $Relative"
+        }
+    [System.IO.File]::WriteAllLines(
+        (Join-Path $StageDir "SHA256SUMS.txt"),
+        [string[]]$ManifestLines,
+        [System.Text.UTF8Encoding]::new($false)
+    )
 
     @'
 Amethys Launcher — Windows x64 (development build)
@@ -49,7 +85,14 @@ This is a portable development package, not an MSI installer or a production rel
     New-Item -ItemType Directory -Force $DistDir | Out-Null
     if (Test-Path $Archive) { Remove-Item -LiteralPath $Archive -Force }
     Compress-Archive -Path (Join-Path $StageDir "*") -DestinationPath $Archive -CompressionLevel Optimal
+    $ArchiveHash = (Get-FileHash -LiteralPath $Archive -Algorithm SHA256).Hash.ToLowerInvariant()
+    [System.IO.File]::WriteAllText(
+        "$Archive.sha256",
+        "$ArchiveHash  $(Split-Path -Leaf $Archive)" + [Environment]::NewLine,
+        [System.Text.UTF8Encoding]::new($false)
+    )
     Write-Host "Package created: $Archive"
+    Write-Host "SHA-256: $ArchiveHash"
 }
 finally {
     Pop-Location
