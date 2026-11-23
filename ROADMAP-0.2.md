@@ -7,8 +7,11 @@
 - [Release v0.2.0](https://github.com/Likounsee/Amethys-Launcher/releases/tag/v0.2.0)
 - [Notes de version et téléchargements](doc/releases/0.2.0-release-notes.md)
 - [Détails techniques de la release](doc/technical/RELEASES.md)
+- [Rapport de compatibilité 0.2](doc/technical/COMPATIBILITY-REPORT-0.2.md)
 
-La publication ne signifie pas que toutes les ambitions initiales de la 0.2 sont terminées. Les tâches non cochées ci-dessous restent des travaux à poursuivre. En particulier, les tests manuels sur une vraie machine Linux sont encore à faire. La boutique commerciale, les achats et les téléchargements restent hors périmètre 0.2 et sont prévus pour une étape ultérieure.
+La 0.2 est gelée comme version expérimentale de bibliothèque locale, découverte en lecture seule, vérification de chemins et lancement direct. Elle ne promet ni compatibilité universelle ni intégration de tous les anti-cheats. Les finitions visuelles, préférences supplémentaires et validations matérielles non disponibles sont explicitement reportées : elles ne doivent pas entraîner une succession infinie de changements dans la 0.2.
+
+**Attention à la distribution :** l'archive publiée sous le tag `v0.2.0` correspond à l'état du tag, pas aux 50 commits supplémentaires présents sur `main`. Le dernier état source ne doit pas être présenté comme une nouvelle archive officielle tant qu'une release correspondante n'a pas été créée et validée.
 
 La priorité de la 0.2 était une interface de bureau cohérente reposant sur la vraie bibliothèque locale. La boutique commerciale n'était pas un objectif de cette version.
 
@@ -19,7 +22,6 @@ La priorité de la 0.2 était une interface de bureau cohérente reposant sur la
 - [x] Bibliothèque réelle connectée à Amethys Core par IPC.
 - [x] Recherche, filtres, tri, fiches de jeux, import et lancement sécurisé.
 - [x] Détection en arrière-plan avec progression et annulation.
-- [ ] Finaliser la direction visuelle, la typographie, les espacements et la cohérence des composants.
 - [x] Uniformiser les jaquettes des cartes au format portrait 3:4 et signaler explicitement les placeholders originaux temporaires.
 - [x] Compléter les états vides, chargements (y compris le chargement initial asynchrone de Core), erreurs, confirmations et notifications.
 - [x] Rendre la mise en page adaptative aux dimensions réelles de la fenêtre (mise à l'échelle, sidebar compacte et colonnes entières).
@@ -38,17 +40,21 @@ La priorité de la 0.2 était une interface de bureau cohérente reposant sur la
 - [x] Transmettre le Game ID catalogue et les métadonnées de catalogue au client de bureau via IPC ; les afficher dans la fiche de jeu.
 - [x] Stocker localement les illustrations personnalisées des jeux, indépendamment du dossier d'installation, avec remplacement et retour à l'image par défaut.
 - [x] Enregistrer localement le tri de bibliothèque et l'exposer dans Paramètres.
-- [ ] Étendre les préférences persistantes aux autres réglages utilisateur réellement pris en charge.
 - [x] Utiliser des illustrations originales de remplacement pendant le développement ; aucun visuel de jeu non autorisé ne doit être distribué.
 - [x] Améliorer le rapport d'import et les erreurs par installation (jeu, plateforme, chemin et erreur technique visibles).
 
 ### Qualité
-- [ ] Éliminer les hypothèses de résolution fixe et vérifier les tailles de bibliothèque importantes.
-- [ ] Stabiliser les interactions et les états d'erreur.
 - [x] Tests unitaires/intégration exécutés en CI, packaging portable vérifié et documentation de la release publiée.
 - [x] Conserver Core comme propriétaire des données persistantes ; l'interface utilise exclusivement le client IPC et ne dépend pas directement de SQLite.
 
-**Hors périmètre 0.2 :** catalogue commercial connecté, prix, promotions, achats, licences, téléchargement et installation depuis une boutique. Les écrans futurs peuvent être présentés comme indisponibles, jamais avec des données commerciales fictives.
+**Travaux volontairement reportés après le gel de la 0.2 :**
+- Direction visuelle finale, typographie et harmonisation complète des espacements.
+- Persistance de préférences supplémentaires au-delà du tri déjà enregistré.
+- Validation approfondie des très grandes bibliothèques et des tailles extrêmes de fenêtre.
+- Polissage supplémentaire des interactions et états d'erreur, au-delà des parcours couverts par les tests actuels.
+- Tests manuels sur une vraie machine Linux ; macOS reste hors support de la 0.2.
+
+**Hors périmètre 0.2 :** catalogue commercial connecté, prix, promotions, achats, licences, téléchargement et installation depuis une boutique. Les écrans futurs peuvent être présentés comme indisponibles, jamais avec des données commerciales fictives. Les profils éditeur par jeu, les mises à jour de profils et la coordination officielle des prérequis anti-cheat sont également des travaux ultérieurs.
 
 ## Architecture future — boutique personnalisée sans serveur obligatoire
 
@@ -67,6 +73,10 @@ Aucun abonnement serveur ne doit être une dépendance pour utiliser la biblioth
 
 ## Version 0.3 — boutique et services en ligne
 
+- Préparer des profils de lancement versionnés et déclaratifs, séparés du moteur générique de découverte.
+- Un profil pourra décrire un point d'entrée relatif à l'installation, une méthode (exécutable direct, launcher officiel ou bootstrapper approuvé), le répertoire de travail, les arguments documentés, les dépendances et les contraintes de version/build.
+- Prévoir un canal de mise à jour/patch des profils, avec validation de provenance, versionnement, compatibilité et retour arrière. Un profil ne doit jamais contenir de code arbitraire à exécuter.
+- Traiter les prérequis anti-cheat comme des dépendances de sécurité déclarées par l'éditeur ; ne jamais contourner, désactiver ou manipuler leurs protections.
 - Intégrer des fournisseurs réels au moyen d'adaptateurs documentés et autorisés.
 - Charger le catalogue, les fiches, les médias, les prix et les offres depuis des sources fiables, avec date et provenance.
 - Ouvrir les pages d'achat officielles ou utiliser les API officielles lorsque les opérations sont autorisées.
