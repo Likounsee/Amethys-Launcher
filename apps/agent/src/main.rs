@@ -207,6 +207,31 @@ where
     Ok(())
 }
 
+/// Checks whether a saved executable still points to a real file inside its game installation.
+fn configured_executable_is_usable(install_path: &str, executable: &str) -> bool {
+    let root = match std::path::Path::new(install_path).canonicalize() {
+        Ok(root) if root.is_dir() => root,
+        _ => return false,
+    };
+    let candidate = std::path::Path::new(executable);
+    let candidate = if candidate.is_absolute() {
+        candidate.to_path_buf()
+    } else {
+        if executable.trim().is_empty()
+            || executable.starts_with(['/', '\\\\'])
+            || executable.split(['/', '\\\\']).any(|part| {
+                part.is_empty() || part == "." || part == ".." || part.contains(':')
+            })
+        {
+            return false;
+        }
+        root.join(executable)
+    };
+    candidate.canonicalize().is_ok_and(|resolved| {
+        resolved.is_file() && resolved.starts_with(&root)
+    })
+}
+
 /// Retries executable discovery for every library entry that still has no configured path.
 ///
 /// The filesystem scan runs on Tokio's blocking pool and never holds the
@@ -218,7 +243,11 @@ async fn resolve_missing_game_executables_on_startup(database: Arc<Mutex<Databas
         match database.list_games() {
             Ok(games) => games
                 .into_iter()
-                .filter(|game| game.executable.is_none())
+                .filter(|game| {
+                    game.executable.as_deref().is_none_or(|executable| {
+                        !configured_executable_is_usable(&game.install_path, executable)
+                    })
+                })
                 .map(|game| {
                     (
                         game.id,
@@ -226,6 +255,7 @@ async fn resolve_missing_game_executables_on_startup(database: Arc<Mutex<Databas
                         game.platform,
                         game.platform_id,
                         game.install_path,
+                        game.executable,
                     )
                 })
                 .collect::<Vec<_>>(),
@@ -249,14 +279,18 @@ async fn resolve_missing_game_executables_on_startup(database: Arc<Mutex<Databas
     let scanned = tokio::task::spawn_blocking(move || {
         missing_games
             .into_iter()
-            .filter_map(|(id, name, platform, platform_id, install_path)| {
+            .filter_map(|(id, name, platform, platform_id, install_path, previous_executable)| {
                 let executable = amethys_discovery::resolve_game_executable_for(
                     &platform,
                     platform_id.as_deref(),
                     std::path::Path::new(&install_path),
                     &name,
                 )?;
-                Some((id, executable.to_string_lossy().into_owned()))
+                Some((
+                    id,
+                    previous_executable,
+                    executable.to_string_lossy().into_owned(),
+                ))
             })
             .collect::<Vec<_>>()
     })
@@ -271,10 +305,10 @@ async fn resolve_missing_game_executables_on_startup(database: Arc<Mutex<Databas
     };
 
     let mut saved = 0usize;
-    for (id, executable) in resolved {
+    for (id, previous_executable, executable) in resolved {
         let database = database.lock().await;
         match database.get_game(&id) {
-            Ok(Some(game)) if game.executable.is_none() => {
+            Ok(Some(game)) if game.executable == previous_executable => {
                 match database.set_game_executable(&id, &executable) {
                     Ok(Some(_)) => saved += 1,
                     Ok(None) => tracing::debug!(game_id = %id, "Game disappeared before executable could be saved"),
@@ -282,7 +316,7 @@ async fn resolve_missing_game_executables_on_startup(database: Arc<Mutex<Databas
                 }
             }
             Ok(Some(_)) => {
-                // Preserve a path configured manually while discovery was running.
+                // Preserve a path changed manually while discovery was running.
             }
             Ok(None) => {
                 // The game was removed while discovery was running.
