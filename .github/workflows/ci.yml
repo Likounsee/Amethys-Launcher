@@ -340,7 +340,7 @@ jobs:
           mkdir -p "$stage/assets"
           cp target/release/amethys-agent "$stage/"
           cp target/release/amethysctl "$stage/"
-          cp target/release/amethys-launcher "$stage/"
+          cp prototypes/ghostengine-amethys-preview/target/release/amethys-launcher "$stage/"
           cp -R prototypes/ghostengine-amethys-preview/assets/fonts "$stage/assets/"
           cp -R prototypes/ghostengine-amethys-preview/assets/covers "$stage/assets/"
           cp README.md LICENSE "$stage/"
