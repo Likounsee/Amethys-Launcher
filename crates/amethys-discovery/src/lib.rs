@@ -521,21 +521,36 @@ pub fn epic_launch_executable(
 /// using the detected title and directory layout. Ambiguous installations are
 /// deliberately left unconfigured rather than launching an arbitrary helper.
 pub fn resolve_game_executable(game: &DetectedGame) -> Option<PathBuf> {
-    if !is_existing_absolute_directory(&game.install_path) {
+    resolve_game_executable_for(
+        game.platform,
+        game.platform_id.as_deref(),
+        &game.install_path,
+        &game.name,
+    )
+}
+
+/// Shared resolver for both newly detected and previously imported installations.
+pub fn resolve_game_executable_for(
+    platform: &str,
+    platform_id: Option<&str>,
+    install_path: &Path,
+    game_name: &str,
+) -> Option<PathBuf> {
+    if !is_existing_absolute_directory(install_path) {
         return None;
     }
 
-    if game.platform.eq_ignore_ascii_case("Epic Games") {
-        if let Some(app_id) = game.platform_id.as_deref() {
+    if platform.eq_ignore_ascii_case("Epic Games") {
+        if let Some(app_id) = platform_id {
             if let Some(executable) = epic_manifest_roots().iter().find_map(|root| {
-                epic_launch_executable(root, app_id, &game.install_path)
+                epic_launch_executable(root, app_id, install_path)
             }) {
                 return Some(executable);
             }
         }
     }
 
-    resolve_executable_from_files(&game.install_path, &game.name)
+    resolve_executable_from_files(install_path, game_name)
 }
 
 /// Searches a game directory without following symlinks or leaving its root.
