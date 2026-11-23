@@ -510,6 +510,7 @@ impl App {
         let info = SidebarInfo {
             core_ok: self.core_error.is_none() && !self.library_loading,
             core_loading: self.library_loading,
+            core_refreshing: self.library_refreshing,
             game_count: self.games.len(),
         };
         let active = match self.page {
