@@ -33,6 +33,29 @@ enum ScanMessage {
     Finished(amethys_discovery::DiscoveryOutcome),
 }
 
+enum CoreMutationTask {
+    Import {
+        index: usize,
+        detected: amethys_discovery::DetectedGame,
+        context: (String, String, std::path::PathBuf),
+    },
+    Remove { id: String },
+    SetExecutable { id: String, executable: String },
+}
+
+enum CoreMutationResult {
+    Imported {
+        index: usize,
+        context: (String, String, std::path::PathBuf),
+        result: Result<IpcGameEntry, String>,
+    },
+    Removed(Result<bool, String>),
+    ExecutableUpdated {
+        id: String,
+        result: Result<IpcGameEntry, String>,
+    },
+}
+
 /// Default window size (the window itself can be resized freely).
 pub const WIN_W: u32 = 1440;
 pub const WIN_H: u32 = 900;
@@ -296,6 +319,8 @@ pub struct App {
     library_loading: bool,
     library_refreshing: bool,
     library_receiver: Option<std::sync::mpsc::Receiver<Result<Vec<IpcGameEntry>, String>>>,
+    mutation_receiver: Option<std::sync::mpsc::Receiver<CoreMutationResult>>,
+    mutation_in_progress: bool,
     pub core_error: Option<String>,
     toast: Option<Toast>,
     pub selected_game: Option<usize>,
@@ -375,6 +400,8 @@ impl App {
             library_loading: false,
             library_refreshing: false,
             library_receiver: None,
+            mutation_receiver: None,
+            mutation_in_progress: false,
             core_error,
             toast: None,
             selected_game: None,
@@ -445,6 +472,122 @@ impl App {
     fn start_library_refresh(&mut self) {
         self.st.lib_filter = 0;
         self.start_library_request(true);
+    }
+
+    /// Runs a Core write operation away from the window thread.
+    fn start_core_mutation(&mut self, task: CoreMutationTask) {
+        if self.mutation_in_progress {
+            self.notify(ToastKind::Info, "Une opération sur la bibliothèque est déjà en cours.");
+            self.render(false);
+            return;
+        }
+        let (sender, receiver) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let result = match task {
+                CoreMutationTask::Import { index, detected, context } => {
+                    CoreMutationResult::Imported {
+                        index,
+                        context,
+                        result: crate::core_client::add_detected_game(&detected),
+                    }
+                }
+                CoreMutationTask::Remove { id } => {
+                    CoreMutationResult::Removed(crate::core_client::remove_game(&id))
+                }
+                CoreMutationTask::SetExecutable { id, executable } => {
+                    CoreMutationResult::ExecutableUpdated {
+                        id: id.clone(),
+                        result: crate::core_client::set_game_executable(&id, &executable),
+                    }
+                }
+            };
+            let _ = sender.send(result);
+        });
+        self.mutation_receiver = Some(receiver);
+        self.mutation_in_progress = true;
+        self.notify(ToastKind::Info, "Opération transmise à Amethys Core…");
+        self.render(false);
+    }
+
+    /// Applies completed Core write operations on the UI thread.
+    fn poll_core_mutation(&mut self) {
+        let result = match self.mutation_receiver.as_ref().map(|receiver| receiver.try_recv()) {
+            Some(Ok(result)) => Some(result),
+            Some(Err(std::sync::mpsc::TryRecvError::Disconnected)) => {
+                self.mutation_receiver = None;
+                self.mutation_in_progress = false;
+                self.notify(ToastKind::Error, "L'opération Amethys Core s'est interrompue de manière inattendue.");
+                self.render(false);
+                return;
+            }
+            Some(Err(std::sync::mpsc::TryRecvError::Empty)) | None => None,
+        };
+        let Some(result) = result else { return };
+        self.mutation_receiver = None;
+        self.mutation_in_progress = false;
+        match result {
+            CoreMutationResult::Imported { index, context, result } => match result {
+                Ok(game) => {
+                    let name = game.name.clone();
+                    let platform = context.1.clone();
+                    self.detected_games.retain(|candidate| {
+                        !(candidate.name == context.0
+                            && candidate.platform == context.1
+                            && candidate.install_path == context.2)
+                    });
+                    if self.detected_games.is_empty() {
+                        self.scan_found = Some(0);
+                    }
+                    let _ = index;
+                    self.notify(ToastKind::Success, format!("{name} ({platform}) a été ajouté à votre bibliothèque."));
+                    self.start_library_refresh();
+                }
+                Err(error) => {
+                    self.notify(ToastKind::Error, format!(
+                        "Import de {} ({}) impossible depuis {} : {error}",
+                        context.0, context.1, context.2.display()
+                    ));
+                }
+            },
+            CoreMutationResult::Removed(result) => match result {
+                Ok(true) => {
+                    self.st.lib_filter = 0;
+                    self.page = Page::Library;
+                    self.selected_game = None;
+                    self.pending_remove = None;
+                    self.start_page_fade();
+                    self.notify(ToastKind::Success, "Jeu retiré de la bibliothèque. Ses fichiers n'ont pas été supprimés.");
+                    self.start_library_refresh();
+                }
+                Ok(false) => {
+                    self.pending_remove = None;
+                    self.notify(ToastKind::Info, "Le jeu n'était déjà plus présent dans la bibliothèque.");
+                }
+                Err(error) => {
+                    self.pending_remove = None;
+                    self.notify(ToastKind::Error, format!("Impossible de retirer le jeu : {error}"));
+                }
+            },
+            CoreMutationResult::ExecutableUpdated { id, result } => match result {
+                Ok(updated) => {
+                    if let Some(index) = self.games.iter().position(|game| game.id == id) {
+                        self.games[index] = updated;
+                        self.statuses = status::statuses_of(&self.games);
+                        self.executable_draft = self.games[index].executable.clone().unwrap_or_default();
+                    }
+                    self.editing_executable = false;
+                    self.executable_focused = false;
+                    self.keyboard_focus = None;
+                    self.notify(ToastKind::Success, "Chemin de l'exécutable enregistré dans Amethys Core.");
+                }
+                Err(error) => {
+                    self.editing_executable = true;
+                    self.executable_focused = true;
+                    self.notify(ToastKind::Error, format!("Impossible d'enregistrer l'exécutable : {error}"));
+                }
+            },
+        }
+        self.render(false);
     }
 
     /// Applies a Core library response on the UI thread.
@@ -766,33 +909,22 @@ impl App {
                 self.render(false);
             }
             Action::SaveExecutable => {
-                let result = match self.selected_game.and_then(|index| self.games.get(index).map(|game| (index, game))) {
-                    Some(_) if self.executable_draft.trim().is_empty() => {
-                        Err("Indiquez le chemin de l'exécutable avant de l'enregistrer.".to_owned())
-                    }
-                    Some((index, game)) => {
-                        crate::core_client::set_game_executable(&game.id, self.executable_draft.trim())
-                            .map(|updated| (index, updated))
-                    }
-                    None => Err("Aucun jeu n'est sélectionné.".to_owned()),
-                };
-                match result {
-                    Ok((index, updated)) => {
-                        self.games[index] = updated;
-                        self.statuses = status::statuses_of(&self.games);
-                        self.executable_draft = self.games[index].executable.clone().unwrap_or_default();
-                        self.editing_executable = false;
-                        self.executable_focused = false;
-                        self.keyboard_focus = None;
-                        self.notify(ToastKind::Success, "Chemin de l'exécutable enregistré dans Amethys Core.");
-                    }
-                    Err(error) => {
-                        self.editing_executable = true;
-                        self.executable_focused = true;
-                        self.notify(ToastKind::Error, format!("Impossible d'enregistrer l'exécutable : {error}"));
-                    }
+                if self.executable_draft.trim().is_empty() {
+                    self.editing_executable = true;
+                    self.executable_focused = true;
+                    self.notify(ToastKind::Error, "Indiquez le chemin de l'exécutable avant de l'enregistrer.");
+                    self.render(false);
+                } else if let Some(game) = self.selected_game.and_then(|index| self.games.get(index)) {
+                    self.start_core_mutation(CoreMutationTask::SetExecutable {
+                        id: game.id.clone(),
+                        executable: self.executable_draft.trim().to_owned(),
+                    });
+                } else {
+                    self.editing_executable = true;
+                    self.executable_focused = true;
+                    self.notify(ToastKind::Error, "Aucun jeu n'est sélectionné.");
+                    self.render(false);
                 }
-                self.render(false);
             }
             Action::CancelExecutableEdit => {
                 self.executable_draft = self
@@ -833,34 +965,13 @@ impl App {
                 }
             }
             Action::ImportDetectedGame(index) => {
-                let context = self.detected_games.get(index).map(|detected| {
-                    (detected.name.clone(), detected.platform.to_owned(), detected.install_path.clone())
-                });
-                let result = match self.detected_games.get(index) {
-                    Some(detected) => crate::core_client::add_detected_game(detected),
-                    None => Err("Cette installation détectée n'est plus disponible.".to_owned()),
+                let Some(detected) = self.detected_games.get(index).cloned() else {
+                    self.notify(ToastKind::Error, "Cette installation détectée n'est plus disponible.");
+                    self.render(false);
+                    return;
                 };
-                match result {
-                    Ok(game) => {
-                        let name = game.name.clone();
-                        let platform = context.as_ref().map_or("plateforme inconnue", |(_, platform, _)| platform.as_str());
-                        self.reload_from_core();
-                        self.detected_games.remove(index);
-                        if self.detected_games.is_empty() {
-                            self.scan_found = Some(0);
-                        }
-                        self.notify(ToastKind::Success, format!("{name} ({platform}) a été ajouté à votre bibliothèque."));
-                    }
-                    Err(error) => {
-                        let message = if let Some((name, platform, path)) = context {
-                            format!("Import de {name} ({platform}) impossible depuis {} : {error}", path.display())
-                        } else {
-                            format!("Import impossible : {error}")
-                        };
-                        self.notify(ToastKind::Error, message);
-                    }
-                }
-                self.render(false);
+                let context = (detected.name.clone(), detected.platform.to_owned(), detected.install_path.clone());
+                self.start_core_mutation(CoreMutationTask::Import { index, detected, context });
             }
             Action::RefreshLibrary => {
                 self.start_library_refresh();
@@ -895,23 +1006,13 @@ impl App {
             }
             Action::ConfirmRemoveGame => {
                 self.keyboard_focus = None;
-                let result = match self.pending_remove.take().and_then(|index| self.games.get(index).map(|game| game.id.clone())) {
-                    Some(id) => crate::core_client::remove_game(&id),
-                    None => Err("Ce jeu n'existe plus dans la bibliothèque chargée.".to_owned()),
+                let Some(id) = self.pending_remove.take().and_then(|index| self.games.get(index).map(|game| game.id.clone())) else {
+                    self.notify(ToastKind::Error, "Ce jeu n'existe plus dans la bibliothèque chargée.");
+                    self.render(false);
+                    return;
                 };
-                match result {
-                    Ok(true) => {
-                        self.st.lib_filter = 0;
-                        self.page = Page::Library;
-                        self.selected_game = None;
-                        self.start_page_fade();
-                        self.reload_from_core();
-                        self.notify(ToastKind::Success, "Jeu retiré de la bibliothèque. Ses fichiers n'ont pas été supprimés.");
-                    }
-                    Ok(false) => self.notify(ToastKind::Info, "Le jeu n'était déjà plus présent dans la bibliothèque."),
-                    Err(error) => self.notify(ToastKind::Error, format!("Impossible de retirer le jeu : {error}")),
-                }
-                self.render(true);
+                self.pending_remove = None;
+                self.start_core_mutation(CoreMutationTask::Remove { id });
             }
         }
     }
@@ -1478,6 +1579,7 @@ impl App {
         }
 
         self.poll_library_load();
+        self.poll_core_mutation();
         self.poll_scan();
 
         let escape = input.escape_down && !self.esc_was_down;
@@ -1569,7 +1671,8 @@ impl App {
             || self.page_fade_alpha().is_some()
             || self.toast.is_some()
             || self.scan_in_progress
-            || self.library_loading;
+            || self.library_loading
+            || self.mutation_in_progress;
         if animating {
             // The window loop does not wait for vsync: keep animation near 60 images/s.
             if let Some(rest) = FRAME_BUDGET.checked_sub(start.elapsed()) {
