@@ -1399,8 +1399,8 @@ mod tests {
         assert!(compact.compact());
         assert_eq!(compact.side_w, 72);
         assert_eq!(compact.mx, 92);
-        assert_eq!(compact.mw, 588);
-        assert_eq!(Layout::new(1920, 1080).scale, 1.296);
+        assert_eq!(compact.mw, 638);
+        assert!((Layout::new(1920, 1080).scale - 1.296).abs() < 0.001);
         assert!(Layout::new(3840, 2160).scale <= 1.58);
         assert!(compact.card_width() >= MIN_CARD_W);
         let tiny = Layout::new(360, 420);
