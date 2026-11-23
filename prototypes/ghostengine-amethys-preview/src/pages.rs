@@ -32,8 +32,11 @@ pub struct Layout {
 
 impl Layout {
     pub fn new(w: i32, h: i32) -> Self {
-        let mx = SIDE_W + 40;
-        Self { w, h, mx, mw: (w - mx - 40).max(520) }
+        // Keep a consistent gutter while allowing the content area to shrink
+        // with the actual client width instead of overflowing at compact sizes.
+        let mx = SIDE_W + 24;
+        let mw = (w - mx - 24).max(280);
+        Self { w, h, mx, mw }
     }
 
     /// Narrow windows stack toolbars and columns instead of placing them side by side.
@@ -488,17 +491,21 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
     let scan_label = if view.scanning { "Annuler" } else { "Détecter les jeux" };
     let scan_icon = if view.scanning { Icon::Close } else { Icon::Search };
     let scan_w = button_width(p, scan_label, Some(scan_icon));
-    let search_w = if compact { (mw - refresh_w - scan_w - 24).max(200) } else { 300 };
+    let search_w = if compact { mw } else { 300 };
     let toolbar_w = search_w + 12 + refresh_w + 12 + scan_w;
     let (tx, ty) = if compact { (mx, 108) } else { (mx + mw - toolbar_w, 30) };
     search_field(p, tx, ty, search_w, view.query, view.search_focused);
-    button(p, tx + search_w + 12, ty, Some(refresh_w), "Actualiser", Some(Icon::Refresh), Btn::Secondary, BG, Some(Action::RefreshLibrary));
+    // On narrow windows, put the actions on a second row rather than forcing
+    // the search field and buttons outside the content column.
+    let actions_x = if compact { mx + mw - refresh_w - 12 - scan_w } else { tx + search_w + 12 };
+    let actions_y = if compact { ty + BTN_H + 12 } else { ty };
+    button(p, actions_x, actions_y, Some(refresh_w), "Actualiser", Some(Icon::Refresh), Btn::Secondary, BG, Some(Action::RefreshLibrary));
     if view.scanning {
-        button(p, tx + search_w + 12 + refresh_w + 12, ty, Some(scan_w), scan_label, Some(scan_icon), Btn::Secondary, BG, Some(Action::CancelScan));
+        button(p, actions_x + refresh_w + 12, actions_y, Some(scan_w), scan_label, Some(scan_icon), Btn::Secondary, BG, Some(Action::CancelScan));
     } else {
-        button(p, tx + search_w + 12 + refresh_w + 12, ty, Some(scan_w), scan_label, Some(scan_icon), Btn::Primary, BG, Some(Action::ScanGames));
+        button(p, actions_x + refresh_w + 12, actions_y, Some(scan_w), scan_label, Some(scan_icon), Btn::Primary, BG, Some(Action::ScanGames));
     }
-    let mut y = if compact { ty + BTN_H + 22 } else { 118 };
+    let mut y = if compact { actions_y + BTN_H + 22 } else { 118 };
 
     // ---- scan progress
     if view.scanning {
