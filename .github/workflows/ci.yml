@@ -135,7 +135,7 @@ jobs:
           }
           trap cleanup EXIT
           ready=false
-          for attempt in $(seq 1 30); do
+          for ((attempt = 1; attempt <= 30; attempt++)); do
             if ! kill -0 "$agent_pid" 2>/dev/null; then
               echo "Amethys agent exited during startup."
               exit 1
@@ -276,7 +276,7 @@ jobs:
           }
           trap cleanup EXIT
           ready=false
-          for attempt in $(seq 1 30); do
+          for ((attempt = 1; attempt <= 30; attempt++)); do
             if ! kill -0 "$agent_pid" 2>/dev/null; then
               echo "Packaged Linux agent exited during startup."
               exit 1
@@ -354,7 +354,8 @@ jobs:
           EOF
           (
             cd "$stage"
-            find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+            find . -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > "$RUNNER_TEMP/amethys-sha256.txt"
+            mv "$RUNNER_TEMP/amethys-sha256.txt" SHA256SUMS.txt
             sha256sum --check SHA256SUMS.txt
           )
           mkdir -p dist/archive-check
@@ -368,7 +369,8 @@ jobs:
           test -d dist/archive-check/assets/fonts
           test -d dist/archive-check/assets/covers
           snapshot="$(mktemp -d)"
-          export AMETHYS_DATA_DIR="$(mktemp -d)"
+          AMETHYS_DATA_DIR="$(mktemp -d)"
+          export AMETHYS_DATA_DIR
           if ! dist/archive-check/amethys-launcher --snapshot "$snapshot"; then
             cat "$snapshot/snapshot-error.txt" 2>/dev/null || true
             exit 1
