@@ -91,4 +91,4 @@ Aucun abonnement serveur ne doit être une dépendance pour utiliser la biblioth
 - Les temps de jeu et l'historique des sessions ne sont pas fournis par Core.
 - Le lancement est encore effectué côté client de bureau.
 - Le backend de fenêtre/rendu GhostEngine est expérimental et temporaire.
-- Le prototype d'interface utilise encore une mise en page conçue autour de 1600×900.
+- Le prototype utilise une base logique de 1280×800 avec mise à l'échelle, sidebar compacte et grille entière ; certains espacements et composants restent à valider sur les tailles extrêmes.
