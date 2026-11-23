@@ -702,7 +702,7 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
             "uninstall", "unins", "setup", "install", "update", "updater",
             "crash", "report", "redist", "vcredist", "directx", "dxsetup",
             "unitycrash", "crashhandler", "easyanticheat", "battleye",
-            "startprotectedgame", "launcher", "bootstrap", "bootstrapper", "startgame", "eac", "repair", "benchmark",
+            "startprotectedgame", "launcher", "bootstrap", "bootstrapper", "startgame", "eac", "repair", "benchmark", "helper",
         ].iter().any(|part| stem.contains(part))
     }
 
@@ -890,7 +890,24 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
 
             let relative_depth = relative_path.components().count();
             score -= (relative_depth.saturating_sub(1) as i32) * 2;
+            // Prefer the canonical root entry point over copied compatibility
+            // binaries in helper/multi-executable subdirectories.
+            if relative_depth == 1 {
+                score += 20;
+            }
             let path_lower = relative_path.to_string_lossy().to_ascii_lowercase();
+            if path_lower.contains("multiexe") || path_lower.contains("multi-exe") {
+                score -= 15;
+            }
+            // Small storefront stubs often only hand off to the real game
+            // binary. Keep them eligible, but prefer substantial game payloads
+            // when version metadata and directory layout provide no better clue.
+            if fs::metadata(&canonical).is_ok_and(|metadata| metadata.len() < 2 * 1024 * 1024)
+                && metadata.description.is_empty()
+                && metadata.product.is_empty()
+            {
+                score -= 30;
+            }
             if path_lower.contains("binaries\\win64") || path_lower.contains("binaries/win64") {
                 score += 12;
             }
