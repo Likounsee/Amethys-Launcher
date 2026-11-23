@@ -36,7 +36,7 @@ La priorité de la 0.2 est une interface de bureau complète, cohérente et soig
 - [ ] Éliminer les hypothèses de résolution fixe et vérifier les tailles de bibliothèque importantes.
 - [ ] Stabiliser les interactions et les états d'erreur.
 - [ ] Tests unitaires/intégration, packaging portable reproductible et documentation.
-- [ ] Conserver Core comme propriétaire des données persistantes ; l'interface ne doit pas accéder directement à SQLite.
+- [x] Conserver Core comme propriétaire des données persistantes ; l'interface utilise exclusivement le client IPC et ne dépend pas directement de SQLite.
 
 **Hors périmètre 0.2 :** catalogue commercial connecté, prix, promotions, achats, licences, téléchargement et installation depuis une boutique. Les écrans futurs peuvent être présentés comme indisponibles, jamais avec des données commerciales fictives.
 
