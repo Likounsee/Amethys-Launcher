@@ -358,3 +358,7 @@ jobs:
             if (Test-Path $diagnostic) { Get-Content $diagnostic | Write-Error }
             throw "Packaged desktop application did not produce its headless smoke-test image."
           }
+          $settingsShot = Join-Path $snapshot "18-parametres.png"
+          if (-not (Test-Path $settingsShot -PathType Leaf)) {
+            throw "Desktop snapshot did not reach or capture the settings page."
+          }
