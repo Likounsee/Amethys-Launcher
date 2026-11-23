@@ -1434,9 +1434,9 @@ mod tests {
         let path = root.join("preferences");
         assert_eq!(load_library_sort(&path), 0);
         std::fs::create_dir_all(&root).expect("test directory");
-        std::fs::write(&path, "schema=2\\nlibrary_sort=2\\n").expect("future schema");
+        std::fs::write(&path, "schema=2\nlibrary_sort=2\n").expect("future schema");
         assert_eq!(load_library_sort(&path), 0);
-        std::fs::write(&path, "schema=1\\nlibrary_sort=9\\n").expect("invalid sort");
+        std::fs::write(&path, "schema=1\nlibrary_sort=9\n").expect("invalid sort");
         assert_eq!(load_library_sort(&path), 0);
         let _ = std::fs::remove_dir_all(root);
     }
