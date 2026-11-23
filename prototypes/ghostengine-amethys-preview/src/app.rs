@@ -224,6 +224,7 @@ impl App {
         height: u32,
     ) -> Self {
         let (win_w, win_h) = (width.max(MIN_W) as i32, height.max(200) as i32);
+        let lay = Layout::new(win_w, win_h);
         let (games, core_error) = match library {
             Ok(games) => (games, None),
             Err(error) => (Vec::new(), Some(error)),
@@ -256,12 +257,12 @@ impl App {
             editing_executable: false,
             win_w,
             win_h,
-            lay: Layout::new(win_w, win_h),
+            lay,
             content: Framebuffer::new(win_w as u32, win_h as u32, gfx::BG).expect("framebuffer"),
             page_h: win_h,
             hits: Vec::new(),
             scroll: ScrollViewport::new(
-                Rect::new(app.lay.side_w as u32, 0, (win_w - app.lay.side_w).max(1) as u32, win_h as u32),
+                Rect::new(lay.side_w as u32, 0, (win_w - lay.side_w).max(1) as u32, win_h as u32),
                 LayoutDirection::Vertical,
                 win_h as u32,
             ),
