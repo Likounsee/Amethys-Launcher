@@ -582,7 +582,7 @@ fn resolve_executable_from_files(install_path: &Path, game_name: &str) -> Option
             "uninstall", "unins", "setup", "install", "update", "updater",
             "crash", "report", "redist", "vcredist", "directx", "dxsetup",
             "unitycrash", "crashhandler", "easyanticheat", "battleye",
-            "startprotectedgame", "eac", "repair", "benchmark",
+            "startprotectedgame", "launcher", "bootstrap", "bootstrapper", "startgame", "eac", "repair", "benchmark",
         ].iter().any(|part| stem.contains(part))
     }
 
@@ -2405,6 +2405,25 @@ mod tests {
             super::resolve_game_executable(&detected),
             Some(std::path::PathBuf::from("Binaries/Win64/ExampleAdventure-Win64-Shipping.exe"))
         );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn generic_executable_resolver_rejects_a_launcher_as_the_only_candidate() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-executable-launcher-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("Launcher.exe"), b"launcher").unwrap();
+        let detected = super::DetectedGame {
+            platform_id: None,
+            name: "Some Game".to_owned(),
+            install_path: root.clone(),
+            platform: "Unknown Store",
+        };
+        assert_eq!(super::resolve_game_executable(&detected), None);
         std::fs::remove_dir_all(root).unwrap();
     }
 
