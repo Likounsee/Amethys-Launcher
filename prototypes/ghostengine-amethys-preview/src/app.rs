@@ -606,22 +606,32 @@ impl App {
                 }
             }
             Action::ImportDetectedGame(index) => {
-                let result = self
-                    .detected_games
-                    .get(index)
-                    .ok_or_else(|| "Cette installation détectée n'est plus disponible.".to_owned())
-                    .and_then(crate::core_client::add_detected_game);
+                let context = self.detected_games.get(index).map(|detected| {
+                    (detected.name.clone(), detected.platform.to_owned(), detected.install_path.clone())
+                });
+                let result = match self.detected_games.get(index) {
+                    Some(detected) => crate::core_client::add_detected_game(detected),
+                    None => Err("Cette installation détectée n'est plus disponible.".to_owned()),
+                };
                 match result {
                     Ok(game) => {
                         let name = game.name.clone();
+                        let platform = context.as_ref().map_or("plateforme inconnue", |(_, platform, _)| platform.as_str());
                         self.reload_from_core();
                         self.detected_games.remove(index);
                         if self.detected_games.is_empty() {
                             self.scan_found = Some(0);
                         }
-                        self.notify(ToastKind::Success, format!("{name} a été ajouté à votre bibliothèque."));
+                        self.notify(ToastKind::Success, format!("{name} ({platform}) a été ajouté à votre bibliothèque."));
                     }
-                    Err(error) => self.notify(ToastKind::Error, format!("Import impossible : {error}")),
+                    Err(error) => {
+                        let message = if let Some((name, platform, path)) = context {
+                            format!("Import de {name} ({platform}) impossible depuis {} : {error}", path.display())
+                        } else {
+                            format!("Import impossible : {error}")
+                        };
+                        self.notify(ToastKind::Error, message);
+                    }
                 }
                 self.render(false);
             }
@@ -633,7 +643,10 @@ impl App {
                         self.core_error = None;
                         self.notify(ToastKind::Success, "Bibliothèque actualisée.");
                     }
-                    Err(error) => self.core_error = Some(error),
+                    Err(error) => {
+                        self.core_error = Some(error.clone());
+                        self.notify(ToastKind::Error, format!("Actualisation impossible : {error}"));
+                    }
                 }
                 self.render(false);
             }
