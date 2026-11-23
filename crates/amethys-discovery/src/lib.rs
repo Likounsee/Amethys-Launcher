@@ -686,7 +686,10 @@ fn find_root_game_launcher(root: &Path, game_name: &str, publisher: &str) -> Opt
     let mut launchers = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
-        if !entry.file_type().ok()?.is_file()
+        let Ok(file_type) = entry.file_type() else {
+            continue;
+        };
+        if !file_type.is_file()
             || !path.extension().and_then(|value| value.to_str())
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
         {
@@ -5204,5 +5207,56 @@ HKEY_CURRENT_USER\Software\Valve\Steam
         assert_eq!(games[1].install_path, second);
 
         std::fs::remove_dir_all(root).expect("cleanup");
+    }
+}
+
+
+#[cfg(test)]
+mod executable_metadata_detection_tests {
+    use super::{ExecutableMetadata, normalized_detection_text, score_executable_metadata};
+
+    #[test]
+    fn normalizes_titles_and_metadata_without_locale_assumptions() {
+        assert_eq!(
+            normalized_detection_text("Clair Obscur: Expedition 33"),
+            "clairobscurexpedition33"
+        );
+    }
+
+    #[test]
+    fn exact_product_metadata_is_strong_positive_evidence() {
+        let metadata = ExecutableMetadata {
+            description: "Apex Legends".to_owned(),
+            product: "Apex Legends".to_owned(),
+            original_filename: "r5apex.exe".to_owned(),
+            internal_name: "r5apex".to_owned(),
+            company: "Electronic Arts".to_owned(),
+        };
+        assert!(
+            score_executable_metadata(&metadata, "Apex Legends") >= 200,
+            "matching game product metadata should strongly rank the real game binary"
+        );
+    }
+
+    #[test]
+    fn launcher_and_anticheat_metadata_are_penalized() {
+        let launcher = ExecutableMetadata {
+            description: "Embark Game Launcher".to_owned(),
+            product: "Embark Game Launcher".to_owned(),
+            original_filename: "EmbarkGameBoot.exe".to_owned(),
+            internal_name: "EmbarkGameBoot".to_owned(),
+            company: "Embark Studios AB".to_owned(),
+        };
+        let game = ExecutableMetadata {
+            description: "THE FINALS".to_owned(),
+            product: "THE FINALS".to_owned(),
+            original_filename: "Discovery.exe".to_owned(),
+            internal_name: "Discovery".to_owned(),
+            company: "Embark Studios AB".to_owned(),
+        };
+        assert!(
+            score_executable_metadata(&game, "THE FINALS")
+                > score_executable_metadata(&launcher, "THE FINALS")
+        );
     }
 }
