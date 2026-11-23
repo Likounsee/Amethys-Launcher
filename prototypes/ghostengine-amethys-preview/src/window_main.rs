@@ -20,6 +20,9 @@ use std::path::PathBuf;
 
 const ASSETS: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/assets");
 
+type SnapshotResult = Result<(), Box<dyn std::error::Error>>;
+type SnapshotShot<'a> = dyn FnMut(&mut App, &str, InputState) -> SnapshotResult + 'a;
+
 fn arg_value(args: &[String], name: &str) -> Option<String> {
     args.iter().position(|a| a == name).and_then(|i| args.get(i + 1)).cloned()
 }
@@ -38,7 +41,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .enumerate()
         .filter(|(i, a)| {
             !a.starts_with("--")
-                && args.get(i.wrapping_sub(1)).map_or(true, |p| p != "--snapshot" && p != "--size")
+                && args.get(i.wrapping_sub(1)).is_none_or(|p| p != "--snapshot" && p != "--size")
         })
         .map(|(_, a)| a.clone())
         .next()
@@ -108,7 +111,7 @@ fn replay(app: &mut App, dir: PathBuf, width: u32, height: u32) -> Result<(), Bo
     let mut fb = Framebuffer::new(width, height, BG)?;
     // One frame with the real input, then idle frames at the same pointer position until
     // every animation (hover fade, page fade, toast slide) has settled.
-    let mut shot = |app: &mut App, name: &str, input: InputState| -> Result<(), Box<dyn std::error::Error>> {
+    let mut shot = |app: &mut App, name: &str, input: InputState| -> SnapshotResult {
         let pointer = input.mouse_position;
         app.frame(&mut fb, &input);
         let rest = InputState { mouse_position: pointer, ..Default::default() };
@@ -120,7 +123,7 @@ fn replay(app: &mut App, dir: PathBuf, width: u32, height: u32) -> Result<(), Bo
         save_png(&fb, height, &dir.join(format!("{name}.png")))?;
         Ok(())
     };
-    let click = |app: &mut App, shot: &mut dyn FnMut(&mut App, &str, InputState) -> Result<(), Box<dyn std::error::Error>>, name: &str, target: Option<Point>| -> Result<bool, Box<dyn std::error::Error>> {
+    let click = |app: &mut App, shot: &mut SnapshotShot<'_>, name: &str, target: Option<Point>| -> Result<bool, Box<dyn std::error::Error>> {
         let Some(point) = target else { return Ok(false) };
         shot(app, &format!("{name}-press"), press(point))?;
         shot(app, name, release(point))?;
