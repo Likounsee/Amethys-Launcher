@@ -218,8 +218,8 @@ fn configured_executable_is_usable(install_path: &str, executable: &str) -> bool
         candidate.to_path_buf()
     } else {
         if executable.trim().is_empty()
-            || executable.starts_with('/') || executable.starts_with('\\\\')
-            || executable.split(['/', '\\\\']).any(|part| {
+            || executable.starts_with('/') || executable.starts_with('\\')
+            || executable.split(['/', '\\']).any(|part| {
                 part.is_empty() || part == "." || part == ".." || part.contains(':')
             })
         {
