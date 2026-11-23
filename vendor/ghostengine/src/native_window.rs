@@ -215,7 +215,8 @@ where
         }
         let attributes = WindowAttributes::default()
             .with_title(self.title.clone())
-            .with_inner_size(self.initial_size);
+            .with_inner_size(self.initial_size)
+            .with_min_inner_size(PhysicalSize::new(360, 240));
         let Ok(window) = event_loop.create_window(attributes) else {
             event_loop.exit();
             return;
