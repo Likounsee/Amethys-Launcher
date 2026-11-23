@@ -424,6 +424,7 @@ impl App {
                     game_count: self.games.len(),
                     ready_count: self.statuses.iter().filter(|s| s.is_ready()).count(),
                     media_root: self.media_store.map(|store| store.root()),
+                    library_sort: self.library_sort,
                     scanning: self.scan_in_progress,
                     progress: self.scan_progress.as_ref(),
                 },
