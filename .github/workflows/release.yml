@@ -181,14 +181,16 @@ EOF
           archive="amethys-${RELEASE_TAG}-${{ matrix.target }}.tar.gz"
           tar -czf "$archive" -C dist amethys-agent amethysctl amethys-launcher README.md LICENSE RELEASES.md LIRE-MOI.txt assets
           tar -tzf "$archive" | sort > archive-contents.txt
-          printf '%s\n' LICENSE README.md RELEASES.md amethys-agent amethysctl | sort > expected-contents.txt
-          diff -u expected-contents.txt archive-contents.txt
           mkdir archive-check
           tar -xzf "$archive" -C archive-check
-          test -s archive-check/amethys-agent
-          test -s archive-check/amethysctl
+          for required in LICENSE README.md RELEASES.md LIRE-MOI.txt amethys-agent amethysctl amethys-launcher; do
+            test -s "archive-check/$required" || { echo "Archive is missing $required"; exit 1; }
+          done
           test -x archive-check/amethys-agent
           test -x archive-check/amethysctl
+          test -x archive-check/amethys-launcher
+          test -d archive-check/assets/fonts
+          test -d archive-check/assets/covers
           version_output="$(archive-check/amethysctl --version)"
           test "$version_output" = "Amethys Launcher $(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
           archive-check/amethysctl --help | grep -Fq "games scan"
