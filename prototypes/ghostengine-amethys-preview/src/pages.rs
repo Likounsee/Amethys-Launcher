@@ -1430,6 +1430,23 @@ mod tests {
     }
 
     #[test]
+    fn large_libraries_keep_all_games_filterable_and_name_sorted() {
+        let games: Vec<_> = (0..256)
+            .rev()
+            .map(|index| named(&format!("Game {index:03}"), "Steam"))
+            .collect();
+        let statuses: Vec<GameStatus> = games
+            .iter()
+            .map(|_| crate::status::classify(true, true, None))
+            .collect();
+        let visible = visible_games(&view(&games, &statuses, 0, 0, ""));
+        assert_eq!(visible.len(), 256);
+        assert_eq!(games[visible[0]].name, "Game 000");
+        assert_eq!(games[*visible.last().expect("non-empty library")].name, "Game 255");
+        assert_eq!(visible_games(&view(&games, &statuses, 0, 0, "game 25")).len(), 6);
+    }
+
+    #[test]
     fn card_columns_adapt_to_window_width() {
         assert!((Layout::new(1600, 900).scale - 1.08).abs() < 0.001);
         assert!(Layout::new(1600, 900).columns() >= 4);
