@@ -539,9 +539,10 @@ impl App {
                 let query = self.store_query.trim().to_owned();
                 let (sender, receiver) = std::sync::mpsc::channel();
                 std::thread::spawn(move || {
-                    let _ = sender.send(crate::core_client::search_master_catalog(&query, 48));
+                    let result = crate::core_client::search_master_catalog(&query, 48);
+                    let _ = sender.send(StoreTaskResult::Search(result));
                 });
-                self.store_receiver = Some(receiver.map(StoreTaskResult::Search));
+                self.store_receiver = Some(receiver);
                 self.store_loading = true;
             }
             StoreTaskResult::Synchronized(Err(error)) => self.store_error = Some(error),
@@ -889,6 +890,9 @@ impl App {
     fn apply(&mut self, action: Action) {
         if !matches!(action, Action::FocusLibrarySearch) {
             self.search_focused = false;
+        }
+        if !matches!(action, Action::FocusStoreSearch) {
+            self.store_search_focused = false;
         }
         if !matches!(action, Action::EditExecutable | Action::SaveExecutable | Action::CancelExecutableEdit) {
             self.editing_executable = false;

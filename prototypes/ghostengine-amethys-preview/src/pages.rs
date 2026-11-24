@@ -7,7 +7,7 @@
 
 use crate::gfx::*;
 use crate::status::{GameStatus, StatusKind};
-use amethys_ipc::IpcGameEntry;
+use amethys_ipc::{IpcCatalogSearchEntry, IpcGameEntry};
 use ghostengine::Color;
 
 pub const SIDE_W: i32 = 240;
