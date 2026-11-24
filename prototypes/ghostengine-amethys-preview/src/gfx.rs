@@ -84,7 +84,6 @@ pub enum Action {
     SelectCatalogGame(u64),
     BackToStore,
     OpenCatalogStore(usize),
-    OpenPromotionDeal(usize),
 }
 
 /// How a hit region reacts when the pointer (or keyboard focus) is on it.
