@@ -25,7 +25,9 @@ Construire une chaîne de distribution gérée par Amethys, de la fiche catalogu
 
 Les concepts suivants doivent rester distincts :
 
-- **CatalogGame** : fiche Amethys canonique (titre, description, genres, éditeur, médias, etc.).
+- **CatalogGame** : fiche Amethys canonique, issue du catalogue maître commun à tous les utilisateurs (titre, description, genres, éditeur, médias, etc.). Son `amethys_id` est attribué exclusivement par le pipeline central du catalogue.
+- **Bibliothèque Store** : vue de découverte du catalogue maître complet ; elle contient les jeux connus, qu’ils soient possédés, installés ou non.
+- **Bibliothèque locale** : vue des seules installations détectées, importées ou gérées sur ce PC ; elle ne crée jamais de fiche ni d’ID maître.
 - **CatalogOffer** : offre disponible dans une source (provider, identifiant externe, prix/devise si vérifiés, disponibilité, URL officielle).
 - **DistributionSource** : origine et méthode d'accès aux métadonnées/paquets ; type et capacités documentés.
 - **DistributionManifest** : document versionné qui décrit les fichiers autorisés d'une build et leurs empreintes.
@@ -152,7 +154,7 @@ Exposer au minimum les octets reçus/total connus, le nombre de fichiers traité
 
 Ajouter des migrations numérotées après la version 5. La migration et chaque opération d'écriture doivent être transactionnelles lorsque plusieurs entités changent ensemble.
 
-Tables conceptuelles à introduire progressivement :
+La base publique `catalog.db.zst` ne contient que le catalogue maître et ses identités de boutiques (`games`, `game_stores`, `catalog_meta`). Elle ne contient aucune donnée utilisateur, chemin local, installation ou entitlement.\n\nDans la base privée du Core, les tables locales restent séparées : `games` (installations locales historiques), `local_game_locations` (emplacements), `local_game_metadata` et les références facultatives vers un `amethys_id` maître. Un import local non rapproché reste valide sans `amethys_id`. Les métadonnées locales ne doivent pas être écrites dans le catalogue partagé.\n\nTables conceptuelles à introduire progressivement :
 
 - `catalog_sources` / `catalog_offers` ou équivalent normalisé ;
 - `distribution_manifests` (référence/version/provenance, pas nécessairement le binaire entier) ;
@@ -205,7 +207,7 @@ Le desktop reste une vue du Core. Pages et états :
 - Store : chargement, vide, erreur, hors ligne/cache, résultats, détails, offre indisponible, redirection vers source officielle ;
 - téléchargements : file, progression, pause, reprise, annulation, échec, reprise après redémarrage ;
 - installation : emplacement, espace requis, confirmation, étape, résultat ;
-- bibliothèque : badge de provenance (importé / géré), version, état, action de lancement ;
+- Store : catalogue global complet, indépendant de l’installation et de la possession ;\n- Ma bibliothèque : uniquement les installations locales de ce PC, badge de provenance (importé / géré), version, état, action de lancement ;
 - mise à jour/réparation : disponibilité, plan, progression, résultat et rapport ;
 - paramètres : racine d'installation, concurrence, réseau/cache, espace.
 
