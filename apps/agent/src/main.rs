@@ -1,7 +1,7 @@
 use amethys_events::EventBus;
 use amethys_ipc::{
     IpcCommand, IpcCoreStatus, IpcEnvelope, IpcGameEntry, IpcRemoteError, IpcRequest, IpcResponse,
-    IpcResponsePayload, IpcCatalogSearchEntry, IpcCatalogGameDetail, IpcCatalogStoreIdentity,
+    IpcResponsePayload, IpcCatalogSearchEntry, IpcCatalogGameDetail, IpcCatalogStoreIdentity, IpcOwnedGameEntry,
     read_envelope, transport::IpcListener, write_message,
 };
 use amethys_runtime::{CoreRuntime, RuntimeState};
@@ -212,6 +212,8 @@ where
                 | IpcCommand::AddDetectedGame { .. }
                 | IpcCommand::SetGameExecutable { .. }
                 | IpcCommand::RemoveGame { .. }
+                | IpcCommand::AddOwnedGame { .. }
+                | IpcCommand::RemoveOwnedGame { .. }
                 | IpcCommand::SyncMasterCatalog
         )
     {
@@ -235,6 +237,13 @@ where
         command => {
             let database = database.lock().await;
             match command {
+                IpcCommand::ListOwnedGames => database.list_owned_games().map(|entries| IpcResponsePayload::OwnedGames {
+                    games: entries.into_iter().map(|game| IpcOwnedGameEntry { amethys_id: game.amethys_id, name: game.name, genres: game.genres, added_at: game.added_at }).collect(),
+                }),
+                IpcCommand::AddOwnedGame { amethys_id, name, genres } => database.add_owned_game(amethys_id, &name, &genres).map(|game| IpcResponsePayload::OwnedGameAdded {
+                    game: IpcOwnedGameEntry { amethys_id: game.amethys_id, name: game.name, genres: game.genres, added_at: game.added_at },
+                }),
+                IpcCommand::RemoveOwnedGame { amethys_id } => database.remove_owned_game(amethys_id).map(|removed| IpcResponsePayload::OwnedGameRemoved { removed }),
                 IpcCommand::ListGames => database.list_games().and_then(|entries| {
                     entries
                         .into_iter()
