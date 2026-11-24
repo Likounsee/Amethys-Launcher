@@ -78,6 +78,7 @@ pub enum Action {
     SelectGame(usize),
     FocusStoreSearch,
     ClearStoreSearch,
+    SetStoreMode(bool),
     SearchStore,
     SyncMasterCatalog,
     SelectCatalogGame(u64),
