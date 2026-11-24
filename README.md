@@ -46,7 +46,7 @@ The 0.1.0 packages and their original limitations are documented in [the 0.1.0 r
 
 The public master game catalogue is maintained separately in [Amethys-Catalog](https://github.com/Likounsee/Amethys-Catalog). Its static catalogue endpoint distributes a compact search index and on-demand detail shards; per-PC installations remain private in the launcher database.
 
-The Core can synchronize the verified search index and search it offline through IPC. Use `amethysctl catalog sync` to download the current index, then `amethysctl catalog search <term>` to search it. The default provider is GitHub Pages; `AMETHYS_CATALOG_URL` can point to another compatible HTTPS static host. See [master catalogue integration](doc/technical/MASTER-CATALOG-INTEGRATION.md).
+The Core can synchronize the verified search index and search it offline through IPC. Use `amethysctl catalog sync` to download the current index, then `amethysctl catalog search <term>` to search it. Use `amethysctl catalog show <amethys-id>` to retrieve a game's full metadata and store identities. The default provider is GitHub Pages; `AMETHYS_CATALOG_URL` can point to another compatible HTTPS static host. See [master catalogue integration](doc/technical/MASTER-CATALOG-INTEGRATION.md).
 
 ## Development roadmap — 0.3
 

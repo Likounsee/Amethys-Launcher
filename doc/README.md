@@ -36,7 +36,7 @@ This directory contains the project's documentation. Start with the root [README
 
 ## Assets
 
-- `asset/` — project logos and visual assets.
+- `asset/` — project logos, visual assets and preserved desktop UI previews (`asset/desktop-previews/`).
 
 ## CI and release automation
 
