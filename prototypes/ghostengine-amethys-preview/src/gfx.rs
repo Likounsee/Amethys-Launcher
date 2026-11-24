@@ -600,11 +600,11 @@ impl<'a> Painter<'a> {
         if r == 0 { return; }
         let rf = r as f32;
         for corner in 0..4 {
-            let (ox, oy, cx, cy, sx, sy) = match corner {
-                0 => (x, y, x + r, y + r, x - 1, 0),
-                1 => (x + w - r, y, x + w - r, y + r, x + w, 0),
-                2 => (x, y + h - r, x + r, y + h - r, x - 1, 0),
-                _ => (x + w - r, y + h - r, x + w - r, y + h - r, x + w, 0),
+            let (ox, oy, cx, cy) = match corner {
+                0 => (x, y, x + r, y + r),
+                1 => (x + w - r, y, x + w - r, y + r),
+                2 => (x, y + h - r, x + r, y + h - r),
+                _ => (x + w - r, y + h - r, x + w - r, y + h - r),
             };
             for py in oy..oy + r {
                 for px in ox..ox + r {
@@ -637,7 +637,6 @@ impl<'a> Painter<'a> {
                     }
                 }
             }
-            let _ = (sx, sy);
         }
     }
 
