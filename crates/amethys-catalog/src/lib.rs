@@ -919,12 +919,22 @@ impl CatalogRepository {
 
     /// Resolves the stable numeric Amethys ID from the internal catalogue key.
     pub fn amethys_id_for_game(database: &Database, game_id: &str) -> CatalogResult<Option<u64>> {
-        let value: Option<i64> = database.connection().query_row(
-            "SELECT amethys_id FROM catalogue_game_id_registry WHERE catalogue_game_id = ?1",
-            [game_id],
-            |row| row.get(0),
-        ).optional().map_err(db_error)?;
-        value.map(|id| u64::try_from(id).map_err(|_| CatalogError::Database("negative Amethys ID in registry".into()))).transpose()
+        let value: Option<i64> = database
+            .connection()
+            .query_row(
+                "SELECT amethys_id FROM catalogue_game_id_registry WHERE catalogue_game_id = ?1",
+                [game_id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(db_error)?;
+        value
+            .map(|id| {
+                u64::try_from(id).map_err(|_| {
+                    CatalogError::Database("negative Amethys ID in registry".into())
+                })
+            })
+            .transpose()
     }
 
     /// Resolves a platform-specific game ID without relying on its display name.
@@ -935,23 +945,29 @@ impl CatalogRepository {
     ) -> CatalogResult<Option<ExternalGameIdentity>> {
         validate_identifier(platform_id, "platform ID")?;
         validate_text(external_game_id, 512, "external game ID")?;
-        let row: Option<(i64, String, String)> = database.connection().query_row(
-            "SELECT registry.amethys_id, offer.provider_id, offer.external_id
-             FROM catalog_offers AS offer
-             INNER JOIN catalogue_game_id_registry AS registry
-                ON registry.catalogue_game_id = offer.catalogue_game_id
-             WHERE offer.provider_id = ?1 COLLATE NOCASE AND offer.external_id = ?2",
-            params![platform_id, external_game_id],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        ).optional().map_err(db_error)?;
+        let row: Option<(i64, String, String)> = database
+            .connection()
+            .query_row(
+                "SELECT registry.amethys_id, offer.provider_id, offer.external_id
+                 FROM catalog_offers AS offer
+                 INNER JOIN catalogue_game_id_registry AS registry
+                    ON registry.catalogue_game_id = offer.catalogue_game_id
+                 WHERE offer.provider_id = ?1 COLLATE NOCASE AND offer.external_id = ?2",
+                params![platform_id, external_game_id],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .optional()
+            .map_err(db_error)?;
         row.map(|(amethys_id, platform_id, external_game_id)| {
             Ok(ExternalGameIdentity {
-                amethys_id: u64::try_from(amethys_id)
-                    .map_err(|_| CatalogError::Database("negative Amethys ID in registry".into()))?,
+                amethys_id: u64::try_from(amethys_id).map_err(|_| {
+                    CatalogError::Database("negative Amethys ID in registry".into())
+                })?,
                 platform_id,
                 external_game_id,
             })
-        }).transpose()
+        })
+        .transpose()
     }
 
     pub fn list_offers_for_game(
@@ -1168,6 +1184,19 @@ mod tests {
         let mut invalid = document;
         invalid.games[0].offers[0].capabilities.official_launch = true;
         assert!(validate_document(&invalid, &providers).is_err());
+    }
+
+    #[test]
+    fn rejects_zero_and_duplicate_amethys_ids() {
+        let providers = ProviderRegistry::with_baseline_providers();
+        let mut duplicate = valid_document();
+        duplicate.games.push(duplicate.games[0].clone());
+        duplicate.games[1].id = "another-game".into();
+        assert!(validate_document(&duplicate, &providers).is_err());
+
+        let mut zero_id = valid_document();
+        zero_id.games[0].amethys_id = 0;
+        assert!(validate_document(&zero_id, &providers).is_err());
     }
 
     #[test]
