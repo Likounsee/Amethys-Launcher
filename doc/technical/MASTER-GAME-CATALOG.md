@@ -1,66 +1,33 @@
 # Catalogue maître mondial des jeux Amethys
 
-## Règle fondamentale
+## Source de vérité
 
-Le catalogue maître est une donnée versionnée du projet Amethys, identique pour tous les utilisateurs. Il ne doit jamais être construit à partir des jeux installés localement, de l'ordre de découverte sur un PC ou des comptes Steam/Epic/GOG d'un utilisateur.
+Le catalogue mondial est maintenu dans le dépôt dédié [Likounsee/Amethys-Catalog](https://github.com/Likounsee/Amethys-Catalog). Amethys-Launcher ne conserve aucune copie complète du catalogue ni registre local d'attribution des identifiants.
 
-Un jeu reçoit un identifiant Amethys permanent, attribué dans le dépôt central. Le même jeu conserve cet identifiant sur tous les appareils et pour tous les utilisateurs.
+Le dépôt catalogue publie des fichiers statiques versionnés via GitHub Pages :
+- `manifest.json` : version, compteurs, schémas, tailles et empreintes SHA-256 ;
+- `index/games-index.json.zst` : index compact pour la recherche ;
+- `shards/*.json.zst` : fiches détaillées et identités de boutiques chargées à la demande ;
+- `metadata/genres.json` : métadonnées partagées.
 
-## Identifiants
+Voir le [format publié](https://github.com/Likounsee/Amethys-Catalog#published-format) et la [documentation du dépôt catalogue](https://github.com/Likounsee/Amethys-Catalog/tree/main/doc).
 
-- `amethys_id` : entier positif, global, attribué une seule fois par Amethys.
-- `platform_id` : identifiant textuel stable de la plateforme (`steam`, `epic-games`, `gog`, etc.).
-- `external_game_id` : valeur opaque fournie par la plateforme. Elle reste une chaîne, même si elle ne contient que des chiffres.
+## Identifiants et gouvernance
 
-Le couple plateforme + identifiant externe relie un jeu de plateforme à un jeu Amethys. Un jeu Amethys peut avoir plusieurs liens externes.
+- Chaque jeu reçoit un Amethys ID global, positif, stable et attribué dans le dépôt central.
+- Les IDs publiés ne sont jamais réattribués, même lorsqu'une fiche disparaît du catalogue courant.
+- Les identifiants de boutiques sont des chaînes opaques et sont associés à un fournisseur explicite.
+- Une identité de boutique ne doit jamais être devinée à partir du titre d'un jeu.
+- Les éditions, remakes, remasters et DLC restent des fiches distinctes lorsque la source les distingue.
 
-## Source de vérité et synchronisation
+## Séparation avec la bibliothèque locale
 
-Le fichier `catalogs/master-games-v1.json` est la source versionnée du catalogue maître. Il est distribué avec l'application et pourra être mis à jour via des versions de catalogue signées. Le cache SQLite local est une copie consultable, jamais l'autorité d'attribution des IDs.
+Le catalogue maître décrit les jeux disponibles dans l'univers Amethys. Il ne représente ni les jeux possédés par l'utilisateur ni les jeux installés sur son PC.
 
-Les utilisateurs peuvent ajouter des jeux locaux à leur bibliothèque, mais cela ne crée pas automatiquement une nouvelle entrée dans le catalogue mondial. Les propositions d'ajout doivent être examinées et fusionnées dans le catalogue central avant attribution d'un nouvel ID.
+La bibliothèque locale reste privée dans la base SQLite du Core. Elle conserve les installations détectées ou importées, leurs chemins, leurs exécutables et leur état. Les deux ensembles ne sont reliés qu'avec des identifiants stables vérifiés, jamais par le seul nom du jeu.
 
-## Attribution et gouvernance
+## Consommation par le launcher
 
-- Les IDs sont attribués explicitement dans le dépôt, de manière déterministe et sans réutilisation.
-- Une suppression ou un retrait du Store ne libère jamais un ID.
-- Les titres alternatifs, éditions, remasters, bundles et DLC sont modélisés explicitement ; ils ne sont pas fusionnés par simple ressemblance de nom.
-- Chaque lien externe doit conserver sa provenance et être vérifié depuis une source officielle ou fiable.
-- Aucun ID externe n'est deviné ou fabriqué.
-- Les doublons de plateforme + ID externe sont interdits.
+Le Core utilise l'abstraction `CatalogProvider`. L'adaptateur GitHub Pages télécharge l'index, vérifie son SHA-256 et sa taille, puis récupère les fragments de détails à la demande. Le cache permet la recherche hors ligne. Un hébergement compatible différent pourra être utilisé sans réécrire la Store.
 
-## Format
-
-```json
-{
-  "schema_version": 1,
-  "catalog_id": "amethys.global-games",
-  "catalog_version": 1,
-  "games": [
-    {
-      "amethys_id": 1,
-      "canonical_name": "Nom du jeu",
-      "platform_ids": [
-        { "platform_id": "steam", "external_game_id": "12345" },
-        { "platform_id": "gog", "external_game_id": "987654" }
-      ]
-    }
-  ]
-}
-```
-
-L'exemple est illustratif, pas une fiche de jeu réelle. Le fichier contient désormais une première sélection de 30 jeux reliés à leurs App IDs Steam vérifiés. Les IDs Epic Games et GOG seront ajoutés séparément lorsqu'ils seront confirmés.
-
-## Ordre de travail avant le Store
-
-1. Définir le schéma et les règles de validation du catalogue maître.
-2. Constituer la liste de jeux et attribuer leurs IDs Amethys dans le dépôt.
-3. Rattacher les IDs des plateformes, avec provenance vérifiée.
-4. Détecter les doublons et les éditions distinctes.
-5. Importer/synchroniser le catalogue maître dans le cache Core.
-6. Faire consommer ce catalogue par le Store ; ne jamais y générer d'IDs.
-
-
-## Première sélection intégrée
-
-Le fichier `catalogs/master-games-v1.json` contient une première sélection de 30 jeux, avec IDs Amethys attribués dans le dépôt et IDs Steam conservés comme chaînes. Les offres sont de type `external_link` uniquement : aucun droit de téléchargement direct, aucune licence et aucun prix ne sont supposés. Les IDs des autres plateformes seront ajoutés au même jeu Amethys après vérification, sans créer une nouvelle fiche du jeu.
+Le catalogue fournit des métadonnées et des liens de boutiques ; il n'accorde aucun droit de distribution, de téléchargement, de lancement, de licence ou de contournement des protections des plateformes.
