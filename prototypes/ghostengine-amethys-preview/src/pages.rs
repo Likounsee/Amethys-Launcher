@@ -1171,7 +1171,10 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
 
     let mut y = sync_y + 100;
     if let Some(detail) = view.detail {
-        let detail_height = if detail.stores.is_empty() { 174 } else { 174 + (detail.stores.len().min(6) as i32 * 44) };
+        let has_summary = detail.summary.as_deref().is_some();
+        let store_y_offset = if has_summary { 158 } else { 116 };
+        let detail_height = (if has_summary { 200 } else { 160 })
+            + (detail.stores.len().min(6) as i32 * 44);
         panel(p, mx, y, mw, detail_height, 18);
         p.text(mx + 18, y + 14, 28, &detail.name, 19.0, W::Semi, TXT);
         let meta = detail.release_date.as_deref().unwrap_or("Date de sortie inconnue");
@@ -1181,7 +1184,7 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
         if let Some(summary) = detail.summary.as_deref() {
             p.paragraph(mx + 18, y + 94, mw - 36, 19, summary, 12.0, W::Reg, SOFT, 3);
         }
-        let mut store_y = y + 132;
+        let mut store_y = y + store_y_offset;
         for (store_index, store) in detail.stores.iter().take(6).enumerate() {
             let label = store.name.as_deref().unwrap_or(&store.store);
             p.text(mx + 18, store_y, 18, &format!("{} · {}", store.store, label), 11.5, W::Semi, TXT);

@@ -303,15 +303,26 @@ fn normalized_install_path(path: &std::path::Path) -> String {
 }
 
 
-/// Opens a catalogue-provided store URL only when it is a plain HTTP(S) URL.
-fn open_external_url(url: &str) -> Result<(), String> {
+fn validate_external_url(url: &str) -> Result<&str, String> {
     let url = url.trim();
-    if !(url.starts_with("https://") || url.starts_with("http://"))
-        || url.chars().any(|character| character.is_control() || character.is_whitespace())
-        || url.split_once("://").map_or(true, |(_, host)| host.is_empty() || host.starts_with('/'))
+    let Some((scheme, remainder)) = url.split_once("://") else {
+        return Err("URL HTTP(S) invalide ou non autorisée.".to_owned());
+    };
+    if !matches!(scheme, "http" | "https")
+        || url.chars().any(|character| character.is_control() || character.is_whitespace() || character == '\\')
     {
         return Err("URL HTTP(S) invalide ou non autorisée.".to_owned());
     }
+    let host = remainder.split(|character| character == '/' || character == '?' || character == '#').next().unwrap_or_default();
+    if host.is_empty() || host.starts_with(':') || host.starts_with('@') {
+        return Err("URL HTTP(S) invalide ou non autorisée.".to_owned());
+    }
+    Ok(url)
+}
+
+/// Opens a catalogue-provided store URL only when it is a plain HTTP(S) URL.
+fn open_external_url(url: &str) -> Result<(), String> {
+    let url = validate_external_url(url)?;
     #[cfg(windows)]
     let mut command = {
         let mut command = std::process::Command::new("rundll32.exe");
@@ -1899,6 +1910,23 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn catalogue_store_urls_only_allow_http_and_https_hosts() {
+        assert_eq!(validate_external_url("https://store.example/game").unwrap(), "https://store.example/game");
+        assert_eq!(validate_external_url("http://store.example").unwrap(), "http://store.example");
+        for url in [
+            "javascript:alert(1)",
+            "file:///etc/passwd",
+            "https:///missing-host",
+            "https://",
+            "https://bad host/path",
+            "https://bad\\host/path",
+            "https://?query=only",
+        ] {
+            assert!(validate_external_url(url).is_err(), "unexpectedly accepted {url}");
+        }
+    }
 
     #[test]
     fn stats_panel_scale_fits_compact_and_large_windows() {
