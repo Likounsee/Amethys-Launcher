@@ -41,7 +41,6 @@ Pour tester un autre hébergement statique compatible, définir `AMETHYS_CATALOG
 
 ## Limites actuelles
 
-- La recherche du catalogue maître est disponible via Core IPC et CLI ; l'écran Store graphique doit encore être raccordé à ces commandes.
-- Les détails de jeux sont accessibles via IPC et CLI ; l'écran Store graphique et la présentation interactive des identités de boutiques restent à intégrer.
+- La recherche et les fiches détaillées sont disponibles via Core IPC et CLI ; l'écran Store graphique doit encore être raccordé à ces commandes.
 - Les métadonnées du catalogue distant ne sont pas fusionnées avec les installations locales.
 - Une entrée du catalogue n'implique ni achat, ni propriété, ni installation, ni autorisation de téléchargement.

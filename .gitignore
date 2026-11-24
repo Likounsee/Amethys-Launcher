@@ -1,8 +1,23 @@
-/target
-/.idea
-/.vscode
-*.log
+# Rust build output
+/target/
+/prototypes/**/target/
+/dist/
+
+# IDE and editor state
+/.idea/
+/.vscode/
+
+# Local runtime data and logs
 .amethys/
+*.log
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+
+# Python-generated files
+__pycache__/
+*.py[cod]
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db

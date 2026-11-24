@@ -21,6 +21,7 @@ This directory contains the project's documentation. Start with the root [README
 ## Product and technical documentation
 
 - [Product roadmap](../ROADMAP-0.2.md) — delivered 0.2 scope, remaining work and future directions.
+- [Master game catalogue integration](technical/MASTER-CATALOG-INTEGRATION.md) — remote index, verified cache, detail shards, Core IPC and CLI.
 - [IPC protocol and transport](technical/IPC.md) — message format, commands, endpoints and security considerations.
 - [Game discovery](technical/game-discovery.md) — supported launchers, detection methods, identifier rules and current limitations.
 - [Launcher discovery coverage](discovery/LAUNCHER-COVERAGE.md) — evidence and real-install validation status for each adapter.

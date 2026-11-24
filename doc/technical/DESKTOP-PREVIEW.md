@@ -8,7 +8,7 @@ Amethys Launcher 0.2.0 is the first published desktop preview. The release is av
 
 ## Architecture
 
-- The desktop UI is rendered with the vendored GhostEngine snapshot in `prototypes/ghostengine-amethys-preview` and `amethys-launcher-ui/vendor/ghostengine`.
+- The desktop UI is rendered with the vendored GhostEngine source snapshot in `vendor/ghostengine`, consumed by the isolated desktop prototype in `prototypes/ghostengine-amethys-preview`.
 - The desktop client communicates with Amethys Core through the existing versioned IPC protocol.
 - Core remains the only owner of persistent game-library data and its SQLite database. The desktop application does not open the database directly.
 - Desktop-only preferences and imported media are stored in the user's local Amethys data directory.
