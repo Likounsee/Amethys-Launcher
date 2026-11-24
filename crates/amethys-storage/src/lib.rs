@@ -1201,7 +1201,7 @@ fn storage_error(message: impl Into<String>) -> AmethysError {
 
 #[cfg(test)]
 mod tests {
-    use super::Database;
+    use super::{CatalogueGame, Database};
 
     fn temporary_database() -> (Database, std::path::PathBuf) {
         let path = std::env::temp_dir().join(format!("amethys-{}.sqlite", uuid::Uuid::new_v4()));
