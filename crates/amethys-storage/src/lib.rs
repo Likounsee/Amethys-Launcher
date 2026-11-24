@@ -1240,7 +1240,7 @@ mod tests {
     #[test]
     fn local_metadata_and_verified_master_store_ids_are_separate() {
         let database = Database::open(":memory:").expect("database opens");
-        database.register_catalogue_game(8123, "Example", false).unwrap();
+        database.register_catalogue_game("igdb-example-8123", 8123, "Example", false).unwrap();
         let game = database.add_game("Example", "Steam", "/games/example", None).unwrap();
         assert!(database.set_game_catalogue_id(&game.id, "8123").unwrap());
         let metadata = super::GameMetadata {
