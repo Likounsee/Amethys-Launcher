@@ -578,6 +578,9 @@ impl App {
             StoreTaskResult::Detail(Ok(detail)) => {
                 self.store_detail = Some(detail);
                 self.store_error = None;
+                self.page = Page::StoreProduct;
+                self.keyboard_focus = None;
+                self.start_page_fade();
             }
             StoreTaskResult::Detail(Err(error)) => self.store_error = Some(error),
             StoreTaskResult::Synchronized(Ok((version, count))) => {
@@ -791,12 +794,14 @@ impl App {
         let active = match self.page {
             Page::Store => Active::Store,
             Page::Library | Page::Product => Active::Library,
+            Page::StoreProduct => Active::Store,
             Page::Settings => Active::Settings,
         };
         pages::sidebar(&mut p, &lay, active, &info);
         let side_ms = t_side.elapsed().as_secs_f64() * 1000.0;
         let t_page = Instant::now();
         let h = match self.page {
+            Page::StoreProduct => pages::store_product(&mut p, &lay, self.store_detail.as_ref(), self.store_loading, self.store_error.as_deref()),
             Page::Store => pages::store(&mut p, &lay, &pages::StoreView {
                 query: &self.store_query,
                 focused: self.store_search_focused,
@@ -993,8 +998,17 @@ impl App {
                     self.store_loading = true;
                     self.store_error = None;
                     self.store_detail = None;
-                    self.render(false);
+                    self.page = Page::StoreProduct;
+                    self.keyboard_focus = None;
+                    self.start_page_fade();
+                    self.render(true);
                 }
+            }
+            Action::BackToStore => {
+                self.page = Page::Store;
+                self.keyboard_focus = None;
+                self.start_page_fade();
+                self.render(true);
             }
             Action::SelectGame(index) => {
                 if let Some(game) = self.games.get(index) {
@@ -1824,6 +1838,8 @@ impl App {
                 self.render(false);
             } else if self.stats_open {
                 self.stats_open = false;
+            } else if self.page == Page::StoreProduct {
+                self.apply(Action::BackToStore);
             } else if self.page == Page::Product {
                 self.apply(Action::Go(Page::Library));
             } else {
