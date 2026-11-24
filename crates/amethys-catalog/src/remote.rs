@@ -126,6 +126,8 @@ pub struct CatalogSearchEntry {
     pub amethys_id: u64,
     pub name: String,
     pub slug: Option<String>,
+    #[serde(default)]
+    pub genres: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -198,7 +200,9 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         ).await?;
         verify_size(descriptor.compressed_size, compressed.len())?;
         let decoded = decompress_bounded(&compressed)?;
-        let rows: Vec<(u64, String, Option<String>)> = serde_json::from_slice(&decoded)
+        // Accept both the legacy three-field rows and the genre-aware
+        // four-field format so existing published catalogues remain readable.
+        let rows: Vec<serde_json::Value> = serde_json::from_slice(&decoded)
             .map_err(|error| RemoteCatalogError::InvalidData(format!("search index JSON: {error}")))?;
         if rows.len() as u64 != manifest.game_count {
             return Err(RemoteCatalogError::InvalidData(format!(
@@ -207,14 +211,28 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         }
         let mut previous_id = 0;
         let mut entries = Vec::with_capacity(rows.len());
-        for (id, name, slug) in rows {
+        for row in rows {
+            let fields = row.as_array().ok_or_else(|| RemoteCatalogError::InvalidData(
+                "search index rows must be arrays".into()
+            ))?;
+            if !(3..=4).contains(&fields.len()) {
+                return Err(RemoteCatalogError::InvalidData("search index row has an unsupported field count".into()));
+            }
+            let id = fields[0].as_u64().ok_or_else(|| RemoteCatalogError::InvalidData("search index ID is invalid".into()))?;
+            let name = fields[1].as_str().ok_or_else(|| RemoteCatalogError::InvalidData("search index name is invalid".into()))?.to_owned();
+            let slug = if fields[2].is_null() { None } else {
+                Some(fields[2].as_str().ok_or_else(|| RemoteCatalogError::InvalidData("search index slug is invalid".into()))?.to_owned())
+            };
+            let genres = fields.get(3).and_then(serde_json::Value::as_array)
+                .map(|items| items.iter().filter_map(serde_json::Value::as_str).map(str::to_owned).collect())
+                .unwrap_or_default();
             if id == 0 || id <= previous_id || name.trim().is_empty() || name.len() > 512 {
                 return Err(RemoteCatalogError::InvalidData(
                     "search index IDs must be unique, ascending and nonzero; names must be valid".into()
                 ));
             }
             previous_id = id;
-            entries.push(CatalogSearchEntry { amethys_id: id, name, slug });
+            entries.push(CatalogSearchEntry { amethys_id: id, name, slug, genres });
         }
         let cache_path = self.cache_dir.join("index").join("games-index.json");
         let json = serde_json::to_vec(&entries)
