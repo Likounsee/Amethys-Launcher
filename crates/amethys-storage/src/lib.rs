@@ -2291,7 +2291,8 @@ mod tests {
             Some(CatalogueGame { id: "42".into(), name: "Master Game".into() })
         );
         assert!(database.register_catalogue_game(0, "Invalid", false).is_err());
-        assert!(database.register_catalogue_game(42, "Conflicting", false).is_err());
+        database.register_catalogue_game(42, "Updated Master Name", false).unwrap();
+        assert_eq!(database.get_catalogue_game("42").unwrap().unwrap().name, "Updated Master Name");
         drop(database);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
