@@ -1207,12 +1207,16 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
     p.hit_with(switch_x + switch_w / 2, switch_y, switch_w / 2, switch_h, 10, Action::SetStoreMode(true), false, Hover::Glow);
 
     let search_y = 112;
-    let sync_w = button_width(p, "Actualiser", Some(Icon::Refresh));
-    let search_w = (mw - sync_w - 12).max(120);
-    redraw_store_search(p, lay, view.query, view.focused);
-    button(p, mx + search_w + 12, search_y, Some(sync_w), "Actualiser", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::SyncMasterCatalog));
-
-    let mut y = search_y + BTN_H + 26;
+    let mut y = if view.promotions { 98 } else {
+        let sync_w = button_width(p, "Actualiser", Some(Icon::Refresh));
+        let search_w = (mw - sync_w - 12).max(120);
+        redraw_store_search(p, lay, view.query, view.focused);
+        button(p, mx + search_w + 12, search_y, Some(sync_w), "Actualiser", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::SyncMasterCatalog));
+        search_y + BTN_H + 26
+    };
+    if view.promotions {
+        p.text(mx, 82, 20, "Offres et baisses de prix vérifiées", 13.0, W::Reg, MUT);
+    }
     if let Some(error) = view.error {
         panel(p, mx, y, mw, 76, 14);
         p.text(mx + 18, y + 11, 20, "Boutique indisponible", 14.0, W::Semi, AMBER);
