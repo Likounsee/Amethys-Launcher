@@ -44,6 +44,7 @@ enum CoreMutationTask {
 
 enum StoreTaskResult {
     Search(Result<Vec<IpcCatalogSearchEntry>, String>),
+    Promotions(Result<Vec<amethys_catalog::remote::CheapSharkDeal>, String>),
     Detail(Result<IpcCatalogGameDetail, String>),
     Synchronized(Result<(String, u64), String>),
 }
@@ -379,6 +380,7 @@ pub struct App {
     store_query: String,
     store_search_focused: bool,
     store_promotions: bool,
+    promotion_results: Vec<amethys_catalog::remote::CheapSharkDeal>,
     store_results: Vec<IpcCatalogSearchEntry>,
     store_detail: Option<IpcCatalogGameDetail>,
     store_loading: bool,
@@ -472,6 +474,7 @@ impl App {
             store_query: String::new(),
             store_search_focused: false,
             store_promotions: false,
+            promotion_results: Vec::new(),
             store_results: Vec::new(),
             store_detail: None,
             store_loading: false,
@@ -543,10 +546,14 @@ impl App {
         let query = self.store_query.trim().to_owned();
         let (genres, owned_ids, owned_names) = self.recommendation_profile();
         let personalized = query.is_empty() && (!owned_ids.is_empty() || !owned_names.is_empty());
+        let promotions = self.store_promotions;
         std::thread::spawn(move || {
             if synchronize {
                 let result = crate::core_client::sync_master_catalog();
                 let _ = sender.send(StoreTaskResult::Synchronized(result));
+            } else if promotions {
+                let result = crate::core_client::fetch_store_promotions();
+                let _ = sender.send(StoreTaskResult::Promotions(result));
             } else if personalized {
                 let result = crate::core_client::recommend_master_catalog(
                     genres, owned_ids, owned_names, 48,
@@ -584,6 +591,19 @@ impl App {
                 self.store_error = None;
             }
             StoreTaskResult::Search(Err(error)) => self.store_error = Some(error),
+            StoreTaskResult::Promotions(Ok(deals)) => {
+                self.promotion_results = deals;
+                self.store_error = None;
+                if !self.store_promotions {
+                    self.start_store_task(false);
+                }
+            }
+            StoreTaskResult::Promotions(Err(error)) => {
+                self.store_error = Some(error);
+                if !self.store_promotions {
+                    self.start_store_task(false);
+                }
+            }
             StoreTaskResult::Detail(Ok(detail)) => {
                 self.store_detail = Some(detail);
                 self.store_error = None;
@@ -830,6 +850,7 @@ impl App {
                 query: &self.store_query,
                 focused: self.store_search_focused,
                 results: &self.store_results,
+                promotion_results: &self.promotion_results,
                 recommended: self.store_query.trim().is_empty() && self.has_recommendation_profile(),
                 promotions: self.store_promotions,
                 loading: self.store_loading,
@@ -1023,6 +1044,9 @@ impl App {
                     self.store_search_focused = false;
                     self.keyboard_focus = None;
                     self.render(true);
+                    if promotions || self.store_results.is_empty() {
+                        self.start_store_task(false);
+                    }
                 }
             }
             Action::SearchStore => self.start_store_task(false),
@@ -1034,6 +1058,14 @@ impl App {
                 {
                     if let Err(error) = open_external_url(url) {
                         self.notify(ToastKind::Error, format!("Impossible d'ouvrir la boutique : {error}"));
+                    }
+                }
+                self.render(false);
+            }
+            Action::OpenPromotionDeal(index) => {
+                if let Some(url) = self.promotion_results.get(index).map(|deal| deal.url.as_str()) {
+                    if let Err(error) = open_external_url(url) {
+                        self.notify(ToastKind::Error, format!("Impossible d'ouvrir l'offre : {error}"));
                     }
                 }
                 self.render(false);
