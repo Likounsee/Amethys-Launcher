@@ -709,7 +709,7 @@ impl Database {
         retired: bool,
     ) -> Result<(), AmethysError> {
         let name = name.trim();
-        if amethys_id == 0 || name.is_empty() || name.len() > MAX_GAME_NAME_BYTES || name.contains('\0') {
+        if amethys_id == 0 || amethys_id > i64::MAX as u64 || name.is_empty() || name.len() > MAX_GAME_NAME_BYTES || name.contains('\0') {
             return Err(storage_error("Master catalogue identity or name is invalid."));
         }
         let id = amethys_id.to_string();
@@ -2257,5 +2257,44 @@ mod tests {
         );
         drop(database);
         let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn local_imports_do_not_allocate_global_catalogue_ids() {
+        let path = std::env::temp_dir().join(format!("amethys-local-only-{}.sqlite", uuid::Uuid::new_v4()));
+        let database = Database::open(&path).expect("database opens");
+        let game = database.add_game("Unmatched Local Game", "Unknown", "/games/local", None)
+            .expect("local import succeeds");
+        assert_eq!(database.get_catalogue_game_id(&game.id).unwrap(), None);
+        let count: i64 = database.connection.query_row(
+            "SELECT COUNT(*) FROM catalogue_games", [], |row| row.get(0)
+        ).unwrap();
+        assert_eq!(count, 0, "local imports must not populate the shared catalogue");
+        drop(database);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
+    }
+
+    #[test]
+    fn master_catalogue_ids_are_explicit_and_external_ids_are_global() {
+        let path = std::env::temp_dir().join(format!("amethys-master-{}.sqlite", uuid::Uuid::new_v4()));
+        let database = Database::open(&path).expect("database opens");
+        database.register_catalogue_game(42, "Master Game", false).unwrap();
+        assert_eq!(
+            database.get_catalogue_game("42").unwrap(),
+            Some(CatalogueGame { id: "42".into(), name: "Master Game".into() })
+        );
+        assert!(database.set_catalogue_external_id(42, "steam", "0000570").unwrap());
+        assert_eq!(
+            database.get_catalogue_game_by_external_id("steam", "0000570").unwrap(),
+            Some(CatalogueGame { id: "42".into(), name: "Master Game".into() })
+        );
+        assert!(database.register_catalogue_game(0, "Invalid", false).is_err());
+        assert!(database.register_catalogue_game(42, "Conflicting", false).is_err());
+        drop(database);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(format!("{}-wal", path.display()));
+        let _ = std::fs::remove_file(format!("{}-shm", path.display()));
     }
 }
