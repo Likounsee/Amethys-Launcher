@@ -60,6 +60,7 @@ fn search_master_catalog(query: &str, limit: usize) -> Result<IpcResponsePayload
             amethys_id: entry.amethys_id,
             name: entry.name,
             slug: entry.slug,
+            genres: entry.genres,
         })
         .collect();
     Ok(IpcResponsePayload::CatalogSearchResults { games })
