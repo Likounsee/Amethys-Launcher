@@ -1,3 +1,5 @@
+-- Distributed Store master catalogue only.
+-- Never add per-user installations, local paths, ownership or download state here.
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE games (
