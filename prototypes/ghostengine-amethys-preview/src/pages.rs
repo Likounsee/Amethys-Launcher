@@ -1229,7 +1229,7 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
         chip(p, x + 12, cy + 12, "PC", card_w - 24);
         p.paragraph(x + 14, cy + art_h + 10, card_w - 28, 21, &game.name, 14.0, W::Semi, TXT, 2);
         p.text(x + 14, cy + card_h - 29, 11, "Consulter la fiche produit", 11.5, W::Med, VIO_HI);
-        p.icon(Icon::ArrowRight, x + card_w - 30, cy + card_h - 28, 14, VIO_HI, PANEL);
+        p.icon(Icon::Info, x + card_w - 30, cy + card_h - 28, 14, VIO_HI, PANEL);
         p.hit_with(x, cy, card_w, card_h, 14, Action::SelectCatalogGame(game.amethys_id), false, Hover::Card);
         displayed += 1;
         if displayed >= 48 { break; }
