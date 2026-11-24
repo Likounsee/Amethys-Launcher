@@ -751,7 +751,7 @@ impl Database {
     ) -> Result<bool, AmethysError> {
         let provider = validate_provider_key(provider)?;
         let external_id = external_id.trim();
-        if amethys_id == 0 || external_id.is_empty()
+        if amethys_id == 0 || amethys_id > i64::MAX as u64 || external_id.is_empty()
             || external_id.len() > MAX_PLATFORM_ID_BYTES || external_id.contains('\0') {
             return Err(storage_error("Master catalogue external identity is invalid."));
         }
