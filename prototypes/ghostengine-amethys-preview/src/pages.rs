@@ -1131,6 +1131,7 @@ pub struct StoreView<'a> {
     pub query: &'a str,
     pub focused: bool,
     pub results: &'a [IpcCatalogSearchEntry],
+    pub recommended: bool,
     pub loading: bool,
     pub catalog_version: Option<&'a str>,
     pub game_count: Option<u64>,
@@ -1225,8 +1226,14 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
             p.hit_with(mx, y, mw, hero_h, 20, Action::SelectCatalogGame(featured.amethys_id), false, Hover::Card);
             y += hero_h + 28;
         }
-        p.text(mx, y, 28, "À découvrir", 21.0, W::Semi, TXT);
-        p.text(mx, y + 30, 20, "Une sélection du catalogue Amethys", 12.5, W::Reg, MUT);
+        let heading = if view.recommended { "Recommandés pour vous" } else { "À découvrir" };
+        let subtitle = if view.recommended {
+            "Sélection basée sur les genres de vos jeux possédés"
+        } else {
+            "Une sélection du catalogue Amethys"
+        };
+        p.text(mx, y, 28, heading, 21.0, W::Semi, TXT);
+        p.text(mx, y + 30, 20, subtitle, 12.5, W::Reg, MUT);
         y += 62;
     } else {
         p.text(mx, y, 28, "Résultats de recherche", 21.0, W::Semi, TXT);
