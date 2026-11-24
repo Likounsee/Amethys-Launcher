@@ -313,7 +313,7 @@ fn validate_external_url(url: &str) -> Result<&str, String> {
     {
         return Err("URL HTTP(S) invalide ou non autorisée.".to_owned());
     }
-    let host = remainder.split(|character| character == '/' || character == '?' || character == '#').next().unwrap_or_default();
+    let host = remainder.split(['/', '?', '#']).next().unwrap_or_default();
     if host.is_empty() || host.starts_with(':') || host.starts_with('@') {
         return Err("URL HTTP(S) invalide ou non autorisée.".to_owned());
     }
@@ -907,7 +907,7 @@ impl App {
         let mut painter = Painter::from_framebuffer(old, self.fonts).with_scale(self.lay.scale);
         pages::redraw_store_search(&mut painter, &self.lay, &self.store_query, self.store_search_focused);
         self.hits.retain(|hit| !matches!(hit.action, Action::FocusStoreSearch | Action::ClearStoreSearch));
-        self.hits.extend(painter.hits.drain(..));
+        self.hits.append(&mut painter.hits);
         self.content = painter.fb;
     }
 
