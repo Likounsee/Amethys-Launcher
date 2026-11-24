@@ -425,7 +425,7 @@ impl Database {
                  CREATE INDEX idx_local_game_locations_game ON local_game_locations(game_id);
                  INSERT INTO local_game_locations (id, game_id, path, is_primary)
                      SELECT 'legacy-' || id, id, install_path, 1 FROM games;
-                 INSERT OR IGNORE INTO schema_migrations (version) VALUES (6);",
+                 INSERT OR IGNORE INTO schema_migrations (version) VALUES (8);",
                 )
                 .map_err(|error| {
                     AmethysError::new(
@@ -1406,7 +1406,7 @@ mod tests {
     fn deleting_an_installation_preserves_its_master_catalogue_record() {
         let database = Database::open(":memory:").expect("database opens");
         database
-            .register_catalogue_game("igdb-master-7000", 7000, "Master Game", false)
+            .register_catalogue_game("7000", 7000, "Master Game", false)
             .unwrap();
         let game = database
             .add_game("Master Game", "Steam", "/games/master", None)
@@ -1428,7 +1428,7 @@ mod tests {
         assert_eq!(database.get_game_metadata(&game.id).unwrap(), None);
         assert_eq!(
             database
-                .get_catalogue_game("igdb-master-7000")
+                .get_catalogue_game("7000")
                 .unwrap()
                 .unwrap()
                 .name,
@@ -1440,7 +1440,7 @@ mod tests {
                 .unwrap()
                 .unwrap()
                 .id,
-            "igdb-master-7000"
+            "7000"
         );
     }
 
@@ -1466,7 +1466,7 @@ mod tests {
     fn local_metadata_and_verified_master_store_ids_are_separate() {
         let database = Database::open(":memory:").expect("database opens");
         database
-            .register_catalogue_game("igdb-example-8123", 8123, "Example", false)
+            .register_catalogue_game("8123", 8123, "Example", false)
             .unwrap();
         let game = database
             .add_game("Example", "Steam", "/games/example", None)
@@ -1635,7 +1635,7 @@ mod tests {
                 row.get(0)
             })
             .expect("migration table readable");
-        assert_eq!(count, 6);
+        assert_eq!(count, 7);
         drop(database);
         let _ = std::fs::remove_file(path);
         let _ = std::fs::remove_file(format!("{filename}-wal"));
@@ -1687,7 +1687,7 @@ mod tests {
                     version INTEGER PRIMARY KEY NOT NULL,
                     applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
-                INSERT INTO schema_migrations (version) VALUES (6);",
+                INSERT INTO schema_migrations (version) VALUES (8);",
                 )
                 .expect("future schema is created");
         }
@@ -1700,7 +1700,7 @@ mod tests {
         assert!(
             error
                 .message()
-                .contains("newer than the supported version 5")
+                .contains("newer than the supported version 7")
         );
 
         let connection = rusqlite::Connection::open(&path).expect("fixture database reopens");
@@ -1772,7 +1772,7 @@ mod tests {
                 row.get(0)
             })
             .expect("version is readable");
-        assert_eq!(version, 6);
+        assert_eq!(version, 7);
         drop(database);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
@@ -1818,7 +1818,7 @@ mod tests {
                 row.get(0)
             })
             .expect("migration version is readable");
-        assert_eq!(version, 5);
+        assert_eq!(version, 7);
         assert!(
             database
                 .list_games()
@@ -2074,7 +2074,7 @@ mod tests {
                 row.get(0)
             })
             .expect("migration table readable");
-        assert_eq!(count, 5);
+        assert_eq!(count, 7);
         drop(database);
         let _ = std::fs::remove_file(path);
     }
@@ -2331,7 +2331,7 @@ mod tests {
                     |row| row.get(0),
                 )
                 .expect("migration history is readable");
-            assert_eq!(version, 6, "all schema migrations must be applied");
+            assert_eq!(version, 7, "all schema migrations must be applied");
 
             let platform_id_column: i64 = database
                 .connection
@@ -2405,12 +2405,12 @@ mod tests {
             std::env::temp_dir().join(format!("amethys-master-{}.sqlite", uuid::Uuid::new_v4()));
         let database = Database::open(&path).expect("database opens");
         database
-            .register_catalogue_game("igdb-game-42", 42, "Master Game", false)
+            .register_catalogue_game("42", 42, "Master Game", false)
             .unwrap();
         assert_eq!(
-            database.get_catalogue_game("igdb-game-42").unwrap(),
+            database.get_catalogue_game("42").unwrap(),
             Some(CatalogueGame {
-                id: "igdb-game-42".into(),
+                id: "42".into(),
                 name: "Master Game".into()
             })
         );
@@ -2434,11 +2434,11 @@ mod tests {
                 .is_err()
         );
         database
-            .register_catalogue_game("igdb-game-42", 42, "Updated Master Name", false)
+            .register_catalogue_game("42", 42, "Updated Master Name", false)
             .unwrap();
         assert_eq!(
             database
-                .get_catalogue_game("igdb-game-42")
+                .get_catalogue_game("42")
                 .unwrap()
                 .unwrap()
                 .name,
