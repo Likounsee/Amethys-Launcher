@@ -1188,6 +1188,15 @@ mod tests {
     }
 
     #[test]
+    fn action_urls_require_valid_https_hosts_without_credentials() {
+        assert!(validate_https_reference("https://store.example/game", "URL").is_ok());
+        assert!(validate_https_reference("http://store.example/game", "URL").is_err());
+        assert!(validate_https_reference("https://user:secret@store.example/game", "URL").is_err());
+        assert!(validate_https_reference("https://bad host/game", "URL").is_err());
+        assert!(validate_https_reference("https://store.example:invalid/game", "URL").is_err());
+    }
+
+    #[test]
     fn parser_rejects_empty_oversized_and_unknown_field_documents() {
         let providers = ProviderRegistry::with_baseline_providers();
         assert!(parse_and_validate(&[], &providers).is_err());
