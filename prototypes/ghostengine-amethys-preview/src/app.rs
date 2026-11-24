@@ -540,7 +540,7 @@ impl App {
         let (sender, receiver) = std::sync::mpsc::channel();
         let query = self.store_query.trim().to_owned();
         let (genres, owned_ids, owned_names) = self.recommendation_profile();
-        let personalized = query.is_empty() && !genres.is_empty();
+        let personalized = query.is_empty() && (!owned_ids.is_empty() || !owned_names.is_empty());
         std::thread::spawn(move || {
             if synchronize {
                 let result = crate::core_client::sync_master_catalog();
@@ -763,7 +763,7 @@ impl App {
         }
     }
 
-    /// Whether the current library contains catalogue genres usable for personalization.
+    /// Whether the current library contains ownership signals for personalization.
     fn has_recommendation_profile(&self) -> bool {
         !self.games.is_empty()
     }
