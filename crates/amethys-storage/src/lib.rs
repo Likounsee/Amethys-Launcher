@@ -155,11 +155,11 @@ impl Database {
         } else {
             0
         };
-        if detected_version > 5 {
+        if detected_version > 6 {
             return Err(AmethysError::new(
                 ErrorCode::StorageMigration,
                 format!(
-                    "Database schema version {detected_version} is newer than the supported version 5."
+                    "Database schema version {detected_version} is newer than the supported version 6."
                 ),
             ));
         }
@@ -218,7 +218,7 @@ impl Database {
                     format!("Could not read migration history: {error}"),
                 )
             })?;
-        if current_version > 5 {
+        if current_version > 6 {
             return Err(AmethysError::new(
                 ErrorCode::StorageMigration,
                 format!(
@@ -377,6 +377,52 @@ impl Database {
                     )
                 })?;
         }
+
+        if current_version < 6 {
+            transaction
+                .execute_batch(
+                    "CREATE TABLE local_game_metadata (
+                     game_id TEXT PRIMARY KEY NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+                     genres_json TEXT NOT NULL DEFAULT '[]',
+                     developer TEXT, publisher TEXT, release_date TEXT, description TEXT,
+                     icon_ref TEXT, logo_ref TEXT, cover_ref TEXT, banner_ref TEXT
+                 );
+                 INSERT INTO local_game_metadata (
+                     game_id, genres_json, developer, publisher, release_date,
+                     description, icon_ref, logo_ref, cover_ref, banner_ref
+                 )
+                     SELECT games.id, metadata.genres_json, metadata.developer,
+                         metadata.publisher, metadata.release_date, metadata.description,
+                         metadata.icon_ref, metadata.logo_ref, metadata.cover_ref, metadata.banner_ref
+                     FROM games
+                     INNER JOIN catalogue_game_metadata AS metadata
+                         ON metadata.catalogue_game_id = games.catalogue_game_id;
+                 UPDATE games SET catalogue_game_id = NULL;
+                 DELETE FROM catalogue_external_ids;
+                 DELETE FROM catalogue_game_metadata;
+                 DELETE FROM catalogue_games;
+                 ALTER TABLE catalogue_games ADD COLUMN amethys_id INTEGER;
+                 ALTER TABLE catalogue_games ADD COLUMN retired INTEGER NOT NULL DEFAULT 0
+                     CHECK (retired IN (0, 1));
+                 CREATE UNIQUE INDEX idx_catalogue_games_amethys_id
+                     ON catalogue_games(amethys_id) WHERE amethys_id IS NOT NULL;
+                 CREATE TABLE local_game_locations (
+                     id TEXT PRIMARY KEY NOT NULL,
+                     game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+                     path TEXT NOT NULL,
+                     is_primary INTEGER NOT NULL DEFAULT 1 CHECK (is_primary IN (0, 1)),
+                     UNIQUE(game_id, path)
+                 );
+                 CREATE INDEX idx_local_game_locations_game ON local_game_locations(game_id);
+                 INSERT OR IGNORE INTO schema_migrations (version) VALUES (6);",
+                )
+                .map_err(|error| {
+                    AmethysError::new(
+                        ErrorCode::StorageMigration,
+                        format!("Could not apply global/local catalogue separation migration: {error}"),
+                    )
+                })?;
+        }
         transaction.commit().map_err(|error| {
             AmethysError::new(
                 ErrorCode::StorageMigration,
@@ -458,64 +504,14 @@ impl Database {
         }
 
         let id = uuid::Uuid::new_v4().to_string();
-        // Allocate canonical catalogue IDs transactionally. The numeric namespace
-        // starts at 3000 and advances past any existing numeric IDs; legacy
-        // migrated IDs (for example "game-...") remain valid and unchanged.
         self.connection
-            .execute_batch("BEGIN IMMEDIATE")
-            .map_err(|error| storage_error(format!("Could not begin game insertion: {error}")))?;
-        let insertion = (|| {
-            let catalogue_game_id: String = self
-                .connection
-                .query_row(
-                    "SELECT CAST(COALESCE(MAX(CAST(id AS INTEGER)), 2999) + 1 AS TEXT)
-                     FROM catalogue_games
-                     WHERE id <> '' AND id NOT GLOB '*[^0-9]*'",
-                    [],
-                    |row| row.get(0),
-                )
-                .map_err(|error| {
-                    storage_error(format!("Could not allocate catalogue game ID: {error}"))
-                })?;
-            self.connection
-                .execute(
-                    "INSERT INTO catalogue_games (id, name) VALUES (?1, ?2)",
-                    params![catalogue_game_id, name],
-                )
-                .map_err(|error| {
-                    storage_error(format!("Could not create catalogue game: {error}"))
-                })?;
-            self.connection
-                .execute(
-                    "INSERT INTO games (
-                        id, name, platform, platform_id, install_path, executable, catalogue_game_id
-                     ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-                    params![
-                        id,
-                        name,
-                        platform,
-                        platform_id,
-                        install_path,
-                        executable,
-                        catalogue_game_id
-                    ],
-                )
-                .map_err(|error| storage_error(format!("Could not add game: {error}")))?;
-            Ok::<String, AmethysError>(catalogue_game_id)
-        })();
-        match insertion {
-            Ok(_) => {}
-            Err(error) => {
-                let _ = self.connection.execute_batch("ROLLBACK");
-                return Err(error);
-            }
-        };
-        if let Err(error) = self.connection.execute_batch("COMMIT") {
-            let _ = self.connection.execute_batch("ROLLBACK");
-            return Err(storage_error(format!(
-                "Could not commit game insertion: {error}"
-            )));
-        }
+            .execute(
+                "INSERT INTO games (
+                    id, name, platform, platform_id, install_path, executable, catalogue_game_id
+                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, NULL)",
+                params![id, name, platform, platform_id, install_path, executable],
+            )
+            .map_err(|error| storage_error(format!("Could not add local installation: {error}")))?;
         self.get_game(&id)?
             .ok_or_else(|| storage_error("Added game could not be read back."))
     }
@@ -1460,7 +1456,7 @@ mod tests {
                 row.get(0)
             })
             .expect("migration table readable");
-        assert_eq!(count, 5);
+        assert_eq!(count, 6);
         drop(database);
         let _ = std::fs::remove_file(path);
         let _ = std::fs::remove_file(format!("{filename}-wal"));
@@ -2156,7 +2152,7 @@ mod tests {
                     |row| row.get(0),
                 )
                 .expect("migration history is readable");
-            assert_eq!(version, 5, "all schema migrations must be applied");
+            assert_eq!(version, 6, "all schema migrations must be applied");
 
             let platform_id_column: i64 = database
                 .connection
