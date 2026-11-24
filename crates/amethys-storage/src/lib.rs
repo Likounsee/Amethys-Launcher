@@ -910,9 +910,10 @@ impl Database {
             .query_row(
                 "SELECT catalogue_game_id FROM games WHERE id = ?1",
                 [installation_id],
-                |row| row.get(0),
+                |row| row.get::<_, Option<String>>(0),
             )
             .optional()
+            .map(|value| value.flatten())
             .map_err(|error| storage_error(format!("Could not read catalogue game ID: {error}")))
     }
 
