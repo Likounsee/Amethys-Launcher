@@ -556,6 +556,9 @@ pub struct CachedCatalogSource {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CachedCatalogGame {
     pub source_id: String,
+    /// Stable numeric identity assigned by Amethys, independent of platform IDs.
+    pub amethys_id: u64,
+    /// Internal catalogue key retained for source/cache relationships.
     pub id: String,
     pub title: String,
     pub description: Option<String>,
@@ -565,6 +568,14 @@ pub struct CachedCatalogGame {
     pub release_date: Option<String>,
     pub cover_ref: Option<String>,
     pub banner_ref: Option<String>,
+}
+
+/// External identity for the same game on a distribution platform.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExternalGameIdentity {
+    pub amethys_id: u64,
+    pub platform_id: String,
+    pub external_game_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -610,7 +621,7 @@ impl CatalogRepository {
         } else {
             0
         };
-        if detected_version > 1 {
+        if detected_version > 2 {
             return Err(CatalogError::Database(format!(
                 "catalogue cache schema version {detected_version} is newer than this build supports"
             )));
@@ -664,7 +675,15 @@ impl CatalogRepository {
                 ON catalog_source_games(title COLLATE NOCASE);
             CREATE INDEX IF NOT EXISTS idx_catalog_offers_game
                 ON catalog_offers(catalogue_game_id);
-            INSERT OR IGNORE INTO catalog_schema_migrations(version) VALUES (1);",
+            INSERT OR IGNORE INTO catalog_schema_migrations(version) VALUES (1);
+            CREATE TABLE IF NOT EXISTS catalogue_game_id_registry (
+                amethys_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                catalogue_game_id TEXT NOT NULL UNIQUE
+                    REFERENCES catalogue_games(id) ON DELETE CASCADE
+            );
+            INSERT OR IGNORE INTO catalogue_game_id_registry (catalogue_game_id)
+                SELECT id FROM catalogue_games ORDER BY id;
+            INSERT OR IGNORE INTO catalog_schema_migrations(version) VALUES (2);",
             )
             .map_err(db_error)?;
         transaction.commit().map_err(db_error)
@@ -746,6 +765,10 @@ impl CatalogRepository {
                     params![game.id, game.title],
                 )
                 .map_err(db_error)?;
+            transaction.execute(
+                "INSERT OR IGNORE INTO catalogue_game_id_registry (catalogue_game_id) VALUES (?1)",
+                [&game.id],
+            ).map_err(db_error)?;
             transaction
                 .execute(
                     "INSERT INTO catalog_source_games (
@@ -819,11 +842,14 @@ impl CatalogRepository {
         let mut statement = database
             .connection()
             .prepare(
-                "SELECT source_id, catalogue_game_id, title, description, genres_json,
-                    developer, publisher, release_date, cover_ref, banner_ref
-             FROM catalog_source_games
-             WHERE instr(lower(title), lower(?1)) > 0
-             ORDER BY title COLLATE NOCASE, source_id
+                "SELECT csg.source_id, csg.catalogue_game_id, csg.title, csg.description, csg.genres_json,
+                    csg.developer, csg.publisher, csg.release_date, csg.cover_ref, csg.banner_ref,
+                    registry.amethys_id
+             FROM catalog_source_games AS csg
+             INNER JOIN catalogue_game_id_registry AS registry
+                ON registry.catalogue_game_id = csg.catalogue_game_id
+             WHERE instr(lower(csg.title), lower(?1)) > 0
+             ORDER BY csg.title COLLATE NOCASE, csg.source_id
              LIMIT ?2",
             )
             .map_err(db_error)?;
@@ -840,6 +866,7 @@ impl CatalogRepository {
                 Ok(CachedCatalogGame {
                     source_id: row.get(0)?,
                     id: row.get(1)?,
+                    amethys_id: row.get::<_, i64>(10)? as u64,
                     title: row.get(2)?,
                     description: row.get(3)?,
                     genres,
@@ -852,6 +879,43 @@ impl CatalogRepository {
             })
             .map_err(db_error)?;
         rows.collect::<Result<Vec<_>, _>>().map_err(db_error)
+    }
+
+    /// Resolves the stable numeric Amethys ID from the internal catalogue key.
+    pub fn amethys_id_for_game(database: &Database, game_id: &str) -> CatalogResult<Option<u64>> {
+        let value: Option<i64> = database.connection().query_row(
+            "SELECT amethys_id FROM catalogue_game_id_registry WHERE catalogue_game_id = ?1",
+            [game_id],
+            |row| row.get(0),
+        ).optional().map_err(db_error)?;
+        value.map(|id| u64::try_from(id).map_err(|_| CatalogError::Database("negative Amethys ID in registry".into()))).transpose()
+    }
+
+    /// Resolves a platform-specific game ID without relying on its display name.
+    pub fn find_by_platform_identity(
+        database: &Database,
+        platform_id: &str,
+        external_game_id: &str,
+    ) -> CatalogResult<Option<ExternalGameIdentity>> {
+        validate_identifier(platform_id, "platform ID")?;
+        validate_text(external_game_id, 512, "external game ID")?;
+        let row: Option<(i64, String, String)> = database.connection().query_row(
+            "SELECT registry.amethys_id, offer.provider_id, offer.external_id
+             FROM catalog_offers AS offer
+             INNER JOIN catalogue_game_id_registry AS registry
+                ON registry.catalogue_game_id = offer.catalogue_game_id
+             WHERE offer.provider_id = ?1 COLLATE NOCASE AND offer.external_id = ?2",
+            params![platform_id, external_game_id],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        ).optional().map_err(db_error)?;
+        row.map(|(amethys_id, platform_id, external_game_id)| {
+            Ok(ExternalGameIdentity {
+                amethys_id: u64::try_from(amethys_id)
+                    .map_err(|_| CatalogError::Database("negative Amethys ID in registry".into()))?,
+                platform_id,
+                external_game_id,
+            })
+        }).transpose()
     }
 
     pub fn list_offers_for_game(
@@ -1116,12 +1180,18 @@ mod tests {
         assert_eq!(summary.games, 1);
         assert_eq!(summary.offers, 1);
         assert_eq!(CatalogRepository::list_sources(&database).unwrap().len(), 1);
+        let found = CatalogRepository::search_games(&database, "example", 10).unwrap();
+        assert_eq!(found.len(), 1);
+        assert!(found[0].amethys_id > 0);
         assert_eq!(
-            CatalogRepository::search_games(&database, "example", 10)
-                .unwrap()
-                .len(),
-            1
+            CatalogRepository::amethys_id_for_game(&database, "amethys-game-10001").unwrap(),
+            Some(found[0].amethys_id)
         );
+        let external = CatalogRepository::find_by_platform_identity(
+            &database, "external-link", "official-page"
+        ).unwrap().expect("platform identity resolves");
+        assert_eq!(external.amethys_id, found[0].amethys_id);
+        assert_eq!(external.external_game_id, "official-page");
         assert_eq!(
             CatalogRepository::list_offers_for_game(&database, "amethys-game-10001")
                 .unwrap()
