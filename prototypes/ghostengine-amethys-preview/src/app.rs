@@ -302,6 +302,37 @@ fn normalized_install_path(path: &std::path::Path) -> String {
     }
 }
 
+
+/// Opens a catalogue-provided store URL only when it is a plain HTTP(S) URL.
+fn open_external_url(url: &str) -> Result<(), String> {
+    let url = url.trim();
+    if !(url.starts_with("https://") || url.starts_with("http://"))
+        || url.chars().any(|character| character.is_control() || character.is_whitespace())
+        || url.split_once("://").map_or(true, |(_, host)| host.is_empty() || host.starts_with('/'))
+    {
+        return Err("URL HTTP(S) invalide ou non autorisée.".to_owned());
+    }
+    #[cfg(windows)]
+    let mut command = {
+        let mut command = std::process::Command::new("rundll32.exe");
+        command.args(["url.dll,FileProtocolHandler", url]);
+        command
+    };
+    #[cfg(target_os = "macos")]
+    let mut command = {
+        let mut command = std::process::Command::new("open");
+        command.arg(url);
+        command
+    };
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let mut command = {
+        let mut command = std::process::Command::new("xdg-open");
+        command.arg(url);
+        command
+    };
+    command.spawn().map(|_| ()).map_err(|error| error.to_string())
+}
+
 pub struct App {
     fonts: &'static Fonts,
     covers: &'static mut CoverStore,
@@ -929,6 +960,17 @@ impl App {
             }
             Action::SearchStore => self.start_store_task(false),
             Action::SyncMasterCatalog => self.start_store_task(true),
+            Action::OpenCatalogStore(index) => {
+                if let Some(url) = self.store_detail.as_ref()
+                    .and_then(|detail| detail.stores.get(index))
+                    .and_then(|store| store.url.as_deref())
+                {
+                    if let Err(error) = open_external_url(url) {
+                        self.notify(ToastKind::Error, format!("Impossible d'ouvrir la boutique : {error}"));
+                    }
+                }
+                self.render(false);
+            }
             Action::SelectCatalogGame(amethys_id) => {
                 if !self.store_loading {
                     let (sender, receiver) = std::sync::mpsc::channel();

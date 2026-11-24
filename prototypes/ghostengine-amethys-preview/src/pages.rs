@@ -1182,11 +1182,14 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
             p.paragraph(mx + 18, y + 94, mw - 36, 19, summary, 12.0, W::Reg, SOFT, 3);
         }
         let mut store_y = y + 132;
-        for store in detail.stores.iter().take(6) {
+        for (store_index, store) in detail.stores.iter().take(6).enumerate() {
             let label = store.name.as_deref().unwrap_or(&store.store);
             p.text(mx + 18, store_y, 18, &format!("{} · {}", store.store, label), 11.5, W::Semi, TXT);
             if let Some(url) = store.url.as_deref() {
-                p.text(mx + 18, store_y + 18, 18, url, 10.0, W::Reg, MUT);
+                p.text_fit(mx + 18, store_y + 18, 18, url, 10.0, W::Reg, VIO_HI, mw - 48);
+                p.hit_with(mx + 12, store_y + 14, mw - 24, 28, 8, Action::OpenCatalogStore(store_index), false, Hover::Soft);
+            } else {
+                p.text(mx + 18, store_y + 18, 18, "Lien officiel indisponible", 10.0, W::Reg, MUT);
             }
             store_y += 44;
         }
@@ -1212,62 +1215,6 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
     }
     y + 28
 }
-    backdrop(p, lay);
-    let (mx, mw) = (lay.mx, lay.mw);
-    p.text(mx, 28, 42, "Boutique", 34.0, W::Disp, TXT);
-    p.text(mx, 72, 22, "Le catalogue n'est pas encore connecté", 13.5, W::Reg, MUT);
-
-    let y = 118;
-    let h = if mw < 420 { 300 } else { 252 };
-    panel(p, mx, y, mw, h, 22);
-    p.glow(mx + 160, y + 40, 420, Color::rgba(122, 92, 232, 55), mx + 1, y + 1, mw - 2, h - 2);
-    p.round_corners(mx, y, mw, h, 22, BG);
-    p.rrect_line(mx, y, mw, h, 22, alpha(Color::WHITE, 18));
-    if mw < 420 {
-        p.gradient_rrect(mx + 24, y + 24, 56, 56, 18, 135.0, &[(0.0, ACT), (1.0, hex("#1B1432"))], PANEL);
-        p.rrect_line(mx + 24, y + 24, 56, 56, 18, alpha(VIO, 100));
-        p.icon(Icon::Gem, mx + 38, y + 38, 28, VIO_HI, ACT);
-        p.text(mx + 94, y + 28, 22, "Version 0.3", 12.0, W::Semi, VIO_HI);
-        p.text(mx + 24, y + 96, 28, "La boutique arrive", 20.0, W::Disp, TXT);
-        p.paragraph(mx + 24, y + 132, mw - 48, 20,
-            "La version 0.2 se concentre sur votre bibliothèque locale. Les catalogues, prix, promotions et achats ne sont pas encore connectés.",
-            12.5, W::Reg, SOFT, 4);
-        button(p, mx + 24, y + h - 24 - BTN_H, Some(mw - 48), "Ouvrir la bibliothèque", Some(Icon::Library), Btn::Secondary, PANEL, Some(Action::Go(Page::Library)));
-    } else {
-        p.gradient_rrect(mx + 32, y + 32, 64, 64, 22, 135.0, &[(0.0, ACT), (1.0, hex("#1B1432"))], PANEL);
-        p.rrect_line(mx + 32, y + 32, 64, 64, 22, alpha(VIO, 100));
-        p.icon(Icon::Gem, mx + 48, y + 48, 32, VIO_HI, ACT);
-        p.rrect(mx + 120, y + 34, 78, 24, 12, ACT);
-        p.rrect_line(mx + 120, y + 34, 78, 24, 12, alpha(VIO, 120));
-        p.text(mx + 120, y + 34, 24, "  Version 0.3", 12.0, W::Semi, VIO_HI);
-        p.text(mx + 120, y + 62, 40, "La boutique arrive avec la version 0.3", 26.0, W::Disp, TXT);
-        p.paragraph(mx + 120, y + 112, mw - 152, 23,
-            "La version 0.2 se concentre sur votre bibliothèque locale. Les catalogues, prix, promotions et achats ne sont pas encore connectés : rien de tout cela n'est simulé.",
-            14.5, W::Reg, SOFT, 3);
-        button(p, mx + 120, y + h - 32 - BTN_H, None, "Ouvrir la bibliothèque", Some(Icon::Library), Btn::Secondary, PANEL, Some(Action::Go(Page::Library)));
-    }
-
-    let items = [
-        ("Catalogue fiable", "Les jeux et les offres viendront de fournisseurs réels, jamais de produits ou de prix inventés."),
-        ("Personnalisation locale", "Vos recommandations seront calculées sur votre PC à partir de votre bibliothèque et de vos préférences."),
-        ("Sans serveur payant obligatoire", "Le catalogue public pourra être distribué sous forme de fichiers statiques ; vos données personnelles resteront locales."),
-    ];
-    let per_row = if lay.compact() { 1 } else { 3 };
-    let tw = (mw - GAP * (per_row - 1)) / per_row;
-    let top = y + h + GAP + 6;
-    let card_h = 132;
-    for (i, (title, text)) in items.iter().enumerate() {
-        let (col, row) = (i as i32 % per_row, i as i32 / per_row);
-        let (x, cy) = (mx + col * (tw + GAP), top + row * (card_h + GAP));
-        panel(p, x, cy, tw, card_h, 18);
-        p.circle(x + 28, cy + 30, 4, VIO);
-        p.text(x + 42, cy + 18, 24, title, 15.0, W::Semi, TXT);
-        p.paragraph(x + 24, cy + 52, tw - 48, 20, text, 12.5, W::Reg, MUT, 4);
-    }
-    let rows = (items.len() as i32 + per_row - 1) / per_row;
-    top + rows * (card_h + GAP) + 30
-}
-
 // ---------------------------------------------------------------- settings
 pub struct SettingsView<'a> {
     pub core_error: Option<&'a str>,

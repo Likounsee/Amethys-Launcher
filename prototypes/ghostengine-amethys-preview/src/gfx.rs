@@ -79,6 +79,7 @@ pub enum Action {
     SearchStore,
     SyncMasterCatalog,
     SelectCatalogGame(u64),
+    OpenCatalogStore(usize),
 }
 
 /// How a hit region reacts when the pointer (or keyboard focus) is on it.
