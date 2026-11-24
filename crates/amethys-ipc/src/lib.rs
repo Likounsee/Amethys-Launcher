@@ -16,6 +16,10 @@ pub enum IpcCommand {
     GetStatus,
     /// Lists games saved in the local library.
     ListGames,
+    /// Lists games the user owns, regardless of installation state.
+    ListOwnedGames,
+    AddOwnedGame { amethys_id: u64, name: String, genres: Vec<String> },
+    RemoveOwnedGame { amethys_id: u64 },
     /// Adds a game to the local library.
     AddGame {
         name: String,
@@ -80,6 +84,9 @@ pub enum IpcResponsePayload {
     Pong,
     CoreStatus { state: IpcCoreStatus },
     Games { games: Vec<IpcGameEntry> },
+    OwnedGames { games: Vec<IpcOwnedGameEntry> },
+    OwnedGameAdded { game: IpcOwnedGameEntry },
+    OwnedGameRemoved { removed: bool },
     GameAdded { game: Box<IpcGameEntry> },
     GameRemoved { removed: bool },
     CatalogSynchronized { catalog_version: String, game_count: u64 },
@@ -113,6 +120,15 @@ pub struct IpcGameEntry {
     pub catalogue_metadata: Option<IpcGameMetadata>,
     pub install_path: String,
     pub executable: Option<String>,
+}
+
+/// A game owned by the user, independently from its local installation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct IpcOwnedGameEntry {
+    pub amethys_id: u64,
+    pub name: String,
+    pub genres: Vec<String>,
+    pub added_at: String,
 }
 
 /// A compact entry from the public master catalogue search index.
