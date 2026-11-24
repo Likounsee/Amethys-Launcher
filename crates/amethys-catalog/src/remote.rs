@@ -304,6 +304,16 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         let owned_names = owned_names.iter().map(|name| name.trim().to_lowercase())
             .collect::<std::collections::HashSet<_>>();
 
+        // A locally installed game may not have been linked to an Amethys ID yet.
+        // Exact title matches let the catalogue itself supply its genres anyway.
+        for entry in entries.iter().filter(|entry| owned_ids.contains(&entry.amethys_id)
+            || owned_names.contains(&entry.name.trim().to_lowercase()))
+        {
+            for genre in &entry.genres {
+                *genre_weights.entry(genre.trim().to_lowercase()).or_default() += 1;
+            }
+        }
+
         let mut ranked = entries.iter()
             .filter(|entry| !owned_ids.contains(&entry.amethys_id)
                 && !owned_names.contains(&entry.name.trim().to_lowercase()))
@@ -317,7 +327,11 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
                 (score, entry)
             })
             .collect::<Vec<_>>();
-        ranked.sort_by(|left, right| right.0.cmp(&left.0));
+        if genre_weights.is_empty() {
+            ranked.sort_by_cached_key(|(_, entry)| entry.name.to_lowercase());
+        } else {
+            ranked.sort_by(|left, right| right.0.cmp(&left.0));
+        }
         Ok(ranked.into_iter().take(limit).map(|(_, entry)| entry.clone()).collect())
     }
 
