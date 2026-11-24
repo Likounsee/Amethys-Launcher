@@ -1143,81 +1143,174 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
     let (mx, mw) = (lay.mx, lay.mw);
     p.text(mx, 28, 42, "Boutique", 34.0, W::Disp, TXT);
     let status = if view.loading {
-        "Chargement du catalogue…".to_owned()
+        "Mise à jour de la boutique…".to_owned()
     } else if let (Some(version), Some(count)) = (view.catalog_version, view.game_count) {
-        format!("Catalogue {version} · {count} jeux PC")
+        format!("Découvrez des jeux PC · Catalogue {version} · {count} jeux")
     } else {
-        "Catalogue mondial de jeux PC".to_owned()
+        "Découvrez des jeux PC et explorez le catalogue Amethys".to_owned()
     };
     p.text(mx, 72, 22, &status, 13.5, W::Reg, MUT);
 
     let search_y = 112;
-    let button_w = 132;
-    let gap = 10;
-    let search_w = (mw - button_w - gap).max(120);
+    let sync_w = button_width(p, "Actualiser", Some(Icon::Refresh));
+    let search_w = (mw - sync_w - 12).max(120);
     search_field(p, mx, search_y, search_w, view.query, view.focused);
     p.hit_with(mx, search_y, search_w, BTN_H, 12, Action::FocusStoreSearch, false, Hover::Glow);
-    button(p, mx + search_w + gap, search_y, Some(button_w), "Rechercher", Some(Icon::Search), Btn::Primary, PANEL, Some(Action::SearchStore));
+    button(p, mx + search_w + 12, search_y, Some(sync_w), "Actualiser", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::SyncMasterCatalog));
 
-    let sync_y = search_y + BTN_H + 12;
-    button(p, mx, sync_y, None, "Synchroniser le catalogue", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::SyncMasterCatalog));
+    let mut y = search_y + BTN_H + 26;
     if let Some(error) = view.error {
-        panel(p, mx, sync_y + 54, mw, 76, 14);
-        p.text(mx + 18, sync_y + 65, 20, "Catalogue indisponible", 14.0, W::Semi, AMBER);
-        p.paragraph(mx + 18, sync_y + 88, mw - 36, 18, error, 12.0, W::Reg, SOFT, 2);
-    } else if view.loading {
-        p.text(mx + 4, sync_y + 56, 24, "La requête est exécutée en arrière-plan. L'interface reste disponible.", 12.5, W::Reg, MUT);
+        panel(p, mx, y, mw, 76, 14);
+        p.text(mx + 18, y + 11, 20, "Boutique indisponible", 14.0, W::Semi, AMBER);
+        p.paragraph(mx + 18, y + 34, mw - 36, 18, error, 12.0, W::Reg, SOFT, 2);
+        y += 90;
+    } else if view.loading && view.results.is_empty() {
+        panel(p, mx, y, mw, 100, 16);
+        p.text(mx + 20, y + 16, 24, "Chargement du catalogue…", 16.0, W::Semi, TXT);
+        p.text(mx + 20, y + 48, 20, "La boutique reste disponible pendant la synchronisation.", 12.5, W::Reg, MUT);
+        y += 116;
     }
 
-    let mut y = sync_y + 100;
-    if let Some(detail) = view.detail {
-        let has_summary = detail.summary.as_deref().is_some();
-        let store_y_offset = if has_summary { 158 } else { 116 };
-        let detail_height = (if has_summary { 200 } else { 160 })
-            + (detail.stores.len().min(6) as i32 * 44);
-        panel(p, mx, y, mw, detail_height, 18);
-        p.text(mx + 18, y + 14, 28, &detail.name, 19.0, W::Semi, TXT);
-        let meta = detail.release_date.as_deref().unwrap_or("Date de sortie inconnue");
-        p.text(mx + 18, y + 44, 20, meta, 12.0, W::Reg, MUT);
-        let genres = if detail.genres.is_empty() { "Genres non renseignés".to_owned() } else { detail.genres.join(" · ") };
-        p.text(mx + 18, y + 68, 20, &genres, 12.0, W::Med, VIO_HI);
-        if let Some(summary) = detail.summary.as_deref() {
-            p.paragraph(mx + 18, y + 94, mw - 36, 19, summary, 12.0, W::Reg, SOFT, 3);
+    if view.query.trim().is_empty() {
+        if let Some(featured) = view.results.first() {
+            let hero_h = if lay.compact() { 204 } else { 226 };
+            panel(p, mx, y, mw, hero_h, 20);
+            let art_w = if lay.compact() { 116 } else { 164 };
+            let art_x = mx + 14;
+            let art_y = y + 14;
+            p.placeholder_cover(&featured.name, art_x, art_y, art_w, hero_h - 28);
+            p.scrim(art_x, art_y, art_w, hero_h - 28, 0.35, 170);
+            let tx = art_x + art_w + 20;
+            let tw = mw - art_w - 58;
+            chip(p, tx, y + 22, "À LA UNE", tw.min(140));
+            p.paragraph(tx, y + 58, tw, 28, &featured.name, 23.0, W::Disp, TXT, 2);
+            p.paragraph(tx, y + 116, tw, 19,
+                "Explorez sa fiche, consultez les informations et retrouvez les boutiques officielles.",
+                12.5, W::Reg, MUT, 3);
+            button(p, tx, y + hero_h - 54, None, "Découvrir le jeu", Some(Icon::Search), Btn::Primary, PANEL, Some(Action::SelectCatalogGame(featured.amethys_id)));
+            p.hit_with(mx, y, mw, hero_h, 20, Action::SelectCatalogGame(featured.amethys_id), false, Hover::Card);
+            y += hero_h + 28;
         }
-        let mut store_y = y + store_y_offset;
-        for (store_index, store) in detail.stores.iter().take(6).enumerate() {
-            let label = store.name.as_deref().unwrap_or(&store.store);
-            p.text(mx + 18, store_y, 18, &format!("{} · {}", store.store, label), 11.5, W::Semi, TXT);
-            if let Some(url) = store.url.as_deref() {
-                p.text_fit(mx + 18, store_y + 18, 18, url, 10.0, W::Reg, VIO_HI, mw - 48);
-                p.hit_with(mx + 12, store_y + 14, mw - 24, 28, 8, Action::OpenCatalogStore(store_index), false, Hover::Soft);
-            } else {
-                p.text(mx + 18, store_y + 18, 18, "Lien officiel indisponible", 10.0, W::Reg, MUT);
-            }
-            store_y += 44;
-        }
-        y += detail_height + 12;
+        p.text(mx, y, 28, "À découvrir", 21.0, W::Semi, TXT);
+        p.text(mx, y + 30, 20, "Une sélection du catalogue Amethys", 12.5, W::Reg, MUT);
+        y += 62;
+    } else {
+        p.text(mx, y, 28, "Résultats de recherche", 21.0, W::Semi, TXT);
+        p.text(mx, y + 30, 20, &format!("{} jeu(x) trouvé(s)", view.results.len()), 12.5, W::Reg, MUT);
+        y += 62;
     }
+
     if view.results.is_empty() && !view.loading && view.error.is_none() {
         panel(p, mx, y, mw, 116, 18);
-        p.text(mx + 20, y + 18, 26, "Recherchez parmi les jeux du catalogue", 17.0, W::Semi, TXT);
+        p.text(mx + 20, y + 18, 26, if view.query.trim().is_empty() { "Le catalogue est prêt à explorer" } else { "Aucun jeu trouvé" }, 17.0, W::Semi, TXT);
         p.paragraph(mx + 20, y + 52, mw - 40, 20,
-            "Les résultats proviennent du catalogue public Amethys. Une fiche ne signifie pas que le jeu est possédé, installé ou téléchargeable directement.",
+            if view.query.trim().is_empty() { "Synchronisez le catalogue pour charger les jeux disponibles." } else { "Essayez un autre titre ou vérifiez l’orthographe de votre recherche." },
             12.5, W::Reg, MUT, 3);
         y += 132;
     }
+
+    let cols = lay.columns().min(if lay.compact() { 2 } else { 4 }).max(1);
+    let gap = 14;
+    let card_w = (mw - gap * (cols - 1)) / cols;
+    let art_h = (card_w * 4 / 5).max(112);
+    let mut displayed = 0usize;
     for (index, game) in view.results.iter().enumerate() {
-        let h = 66;
-        panel(p, mx, y, mw, h, 14);
-        p.text(mx + 16, y + 10, 24, &game.name, 15.0, W::Semi, TXT);
-        p.text(mx + 16, y + 36, 18, &format!("Amethys ID · {}", game.amethys_id), 11.5, W::Reg, MUT);
-        p.text(mx + mw - 104, y + 22, 20, "Voir la fiche  ›", 11.5, W::Med, VIO_HI);
-        p.hit_with(mx, y, mw, h, 14, Action::SelectCatalogGame(game.amethys_id), false, Hover::Card);
-        y += h + 8;
-        if index >= 47 { break; }
+        if view.query.trim().is_empty() && index == 0 { continue; }
+        let col = displayed as i32 % cols;
+        let row = displayed as i32 / cols;
+        let x = mx + col * (card_w + gap);
+        let cy = y + row * (art_h + 76 + gap);
+        panel(p, x, cy, card_w, art_h + 76, 14);
+        p.placeholder_cover(&game.name, x + 1, cy + 1, card_w - 2, art_h);
+        p.scrim(x + 1, cy + 1, card_w - 2, art_h, 0.35, 165);
+        chip(p, x + 12, cy + 12, "JEU PC", card_w - 24);
+        p.paragraph(x + 13, cy + art_h - 46, card_w - 26, 20, &game.name, 14.0, W::Semi, Color::WHITE, 2);
+        p.text(x + 14, cy + art_h + 13, 18, "Voir le produit", 11.5, W::Med, VIO_HI);
+        p.icon(Icon::Search, x + card_w - 29, cy + art_h + 14, 14, VIO_HI, PANEL);
+        p.hit_with(x, cy, card_w, art_h + 76, 14, Action::SelectCatalogGame(game.amethys_id), false, Hover::Card);
+        displayed += 1;
+        if displayed >= 48 { break; }
     }
-    y + 28
+    let rows = (displayed as i32 + cols - 1) / cols;
+    y + rows * (art_h + 76 + gap) + 24
 }
+
+/// Dedicated product page for a game in the global store catalogue.
+/// It deliberately does not use the local-installation detail view.
+pub fn store_product(p: &mut Painter, lay: &Layout, detail: Option<&IpcCatalogGameDetail>, loading: bool, error: Option<&str>) -> i32 {
+    backdrop(p, lay);
+    let (mx, mw) = (lay.mx, lay.mw);
+    button(p, mx, 24, None, "Retour à la boutique", Some(Icon::Library), Btn::Secondary, PANEL, Some(Action::BackToStore));
+    let Some(detail) = detail else {
+        let y = 88;
+        panel(p, mx, y, mw, 150, 18);
+        if loading {
+            p.text(mx + 22, y + 22, 26, "Chargement de la fiche produit…", 19.0, W::Semi, TXT);
+            p.text(mx + 22, y + 62, 20, "Récupération des informations du catalogue.", 13.0, W::Reg, MUT);
+        } else {
+            p.text(mx + 22, y + 22, 26, "Fiche produit indisponible", 19.0, W::Semi, TXT);
+            p.paragraph(mx + 22, y + 62, mw - 44, 20, error.unwrap_or("Impossible de récupérer les informations de ce jeu."), 13.0, W::Reg, MUT, 3);
+        }
+        return y + 180;
+    };
+
+    let compact = lay.compact();
+    let hero_y = 88;
+    let hero_h = if compact { 420 } else { 340 };
+    panel(p, mx, hero_y, mw, hero_h, 20);
+    let cover_w = if compact { mw - 32 } else { (mw * 34 / 100).clamp(190, 280) };
+    let cover_h = if compact { 190 } else { hero_h - 28 };
+    let cover_x = mx + 14;
+    let cover_y = hero_y + 14;
+    p.placeholder_cover(&detail.name, cover_x, cover_y, cover_w, cover_h);
+    p.scrim(cover_x, cover_y, cover_w, cover_h, 0.30, 170);
+
+    let info_x = if compact { mx + 20 } else { cover_x + cover_w + 24 };
+    let info_y = if compact { cover_y + cover_h + 18 } else { hero_y + 26 };
+    let info_w = if compact { mw - 40 } else { mw - cover_w - 58 };
+    chip(p, info_x, info_y, "FICHE PRODUIT", info_w.min(160));
+    p.paragraph(info_x, info_y + 34, info_w, 30, &detail.name, 25.0, W::Disp, TXT, 2);
+    let release = detail.release_date.as_deref().unwrap_or("Date de sortie non renseignée");
+    p.text_fit(info_x, info_y + 96, 22, release, 13.0, W::Med, MUT, info_w);
+    if !detail.genres.is_empty() {
+        let genres = detail.genres.iter().take(4).cloned().collect::<Vec<_>>().join(" · ");
+        p.text_fit(info_x, info_y + 126, 22, &genres, 12.5, W::Med, VIO_HI, info_w);
+    }
+    let store_label = if detail.stores.is_empty() { "Aucune boutique référencée" } else { "Retrouver le jeu" };
+    let first_store_action = detail.stores.iter().position(|store| store.url.is_some()).map(Action::OpenCatalogStore);
+    button(p, info_x, if compact { hero_y + hero_h - 54 } else { hero_y + hero_h - 58 }, None, store_label, Some(Icon::Folder), Btn::Primary, PANEL, first_store_action);
+
+    let mut y = hero_y + hero_h + 24;
+    if let Some(summary) = detail.summary.as_deref().filter(|summary| !summary.trim().is_empty()) {
+        let desc_h = (p.paragraph_height(mw - 48, 22, summary, 13.5, W::Reg, 16) + 74).max(130);
+        panel(p, mx, y, mw, desc_h, 18);
+        p.text(mx + 24, y + 18, 24, "À propos du jeu", 17.0, W::Semi, TXT);
+        p.paragraph(mx + 24, y + 54, mw - 48, 22, summary, 13.5, W::Reg, SOFT, 16);
+        y += desc_h + 18;
+    }
+    panel(p, mx, y, mw, 70 + detail.stores.len().min(10) as i32 * 58, 18);
+    p.text(mx + 24, y + 18, 24, "Disponible sur", 17.0, W::Semi, TXT);
+    if detail.stores.is_empty() {
+        p.text(mx + 24, y + 52, 20, "Aucune boutique officielle n’est renseignée pour ce jeu.", 12.5, W::Reg, MUT);
+    } else {
+        for (index, store) in detail.stores.iter().take(10).enumerate() {
+            let sy = y + 54 + index as i32 * 58;
+            if index > 0 { p.fill(mx + 24, sy - 8, mw - 48, 1, LINE); }
+            let label = store.name.as_deref().unwrap_or(&store.store);
+            p.text(mx + 24, sy, 20, label, 13.0, W::Semi, TXT);
+            p.text(mx + 24, sy + 23, 18, store.url.as_deref().unwrap_or("Lien officiel indisponible"), 11.5, W::Reg, if store.url.is_some() { VIO_HI } else { MUT });
+            if store.url.is_some() {
+                p.hit_with(mx + 12, sy - 4, mw - 24, 48, 8, Action::OpenCatalogStore(index), false, Hover::Soft);
+            }
+        }
+    }
+    y += 88 + detail.stores.len().min(10) as i32 * 58;
+    panel(p, mx, y, mw, 92, 16);
+    p.text(mx + 22, y + 16, 20, "Informations du catalogue", 13.0, W::Semi, TXT);
+    p.text(mx + 22, y + 44, 18, &format!("Amethys ID · {}     IGDB ID · {}", detail.amethys_id, detail.igdb_id), 11.5, W::Reg, MUT);
+    y + 112
+}
+
 // ---------------------------------------------------------------- settings
 pub struct SettingsView<'a> {
     pub core_error: Option<&'a str>,
