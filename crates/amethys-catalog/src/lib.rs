@@ -1090,6 +1090,7 @@ mod tests {
             offer.provider_id = "test-managed".into();
             offer.distribution = DistributionMode::AmethysManaged;
             offer.capabilities.direct_install = true;
+            offer.external_url = None;
         }
         assert!(validate_document(&document, &providers).is_err());
 
