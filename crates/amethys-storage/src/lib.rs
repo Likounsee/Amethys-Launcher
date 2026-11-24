@@ -4,6 +4,15 @@ use std::path::Path;
 
 /// A game registered in the user's local library.
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnedGameEntry {
+    pub amethys_id: u64,
+    pub name: String,
+    pub genres: Vec<String>,
+    pub added_at: String,
+}
+
+/// A game registered as owned, independently from any local installation.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GameEntry {
     pub id: String,
     pub name: String,
@@ -155,11 +164,11 @@ impl Database {
         } else {
             0
         };
-        if detected_version > 6 {
+        if detected_version > 7 {
             return Err(AmethysError::new(
                 ErrorCode::StorageMigration,
                 format!(
-                    "Database schema version {detected_version} is newer than the supported version 6."
+                    "Database schema version {detected_version} is newer than the supported version 7."
                 ),
             ));
         }
@@ -218,11 +227,11 @@ impl Database {
                     format!("Could not read migration history: {error}"),
                 )
             })?;
-        if current_version > 6 {
+        if current_version > 7 {
             return Err(AmethysError::new(
                 ErrorCode::StorageMigration,
                 format!(
-                    "Database schema version {current_version} is newer than the supported version 5."
+                    "Database schema version {current_version} is newer than the supported version 7."
                 ),
             ));
         }
@@ -424,6 +433,21 @@ impl Database {
                         format!("Could not apply global/local catalogue separation migration: {error}"),
                     )
                 })?;
+        }
+        if current_version < 7 {
+            transaction.execute_batch(
+                "CREATE TABLE owned_games (
+                    amethys_id INTEGER PRIMARY KEY NOT NULL CHECK (amethys_id > 0),
+                    name TEXT NOT NULL,
+                    genres_json TEXT NOT NULL DEFAULT '[]',
+                    added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+                CREATE INDEX idx_owned_games_name ON owned_games(name COLLATE NOCASE);
+                INSERT OR IGNORE INTO schema_migrations (version) VALUES (7);"
+            ).map_err(|error| AmethysError::new(
+                ErrorCode::StorageMigration,
+                format!("Could not apply owned-games library migration: {error}"),
+            ))?;
         }
         transaction.commit().map_err(|error| {
             AmethysError::new(
@@ -1040,6 +1064,57 @@ impl Database {
         Ok(changed != 0)
     }
 
+    /// Adds or refreshes an owned catalogue game without creating an installation.
+    pub fn add_owned_game(&self, amethys_id: u64, name: &str, genres: &[String]) -> Result<OwnedGameEntry, AmethysError> {
+        let name = name.trim();
+        if amethys_id == 0 || amethys_id > i64::MAX as u64 || name.is_empty() || name.len() > MAX_GAME_NAME_BYTES || name.contains('\\0') {
+            return Err(storage_error("Owned game identity or name is invalid."));
+        }
+        if genres.len() > 64 || genres.iter().any(|genre| genre.trim().is_empty() || genre.len() > 128 || genre.contains('\\0')) {
+            return Err(storage_error("Owned game genres are invalid."));
+        }
+        let normalized = genres.iter().map(|genre| genre.trim()).collect::<Vec<_>>();
+        let genres_json = serde_json::to_string(&normalized).map_err(|error| storage_error(format!("Could not encode owned game genres: {error}")))?;
+        self.connection.execute(
+            "INSERT INTO owned_games (amethys_id, name, genres_json) VALUES (?1, ?2, ?3)
+             ON CONFLICT(amethys_id) DO UPDATE SET name = excluded.name, genres_json = excluded.genres_json",
+            params![amethys_id as i64, name, genres_json],
+        ).map_err(|error| storage_error(format!("Could not add owned game: {error}")))?;
+        self.get_owned_game(amethys_id)?.ok_or_else(|| storage_error("Added owned game could not be read back."))
+    }
+
+    pub fn get_owned_game(&self, amethys_id: u64) -> Result<Option<OwnedGameEntry>, AmethysError> {
+        if amethys_id == 0 || amethys_id > i64::MAX as u64 { return Err(storage_error("Owned game ID is invalid.")); }
+        self.connection.query_row(
+            "SELECT amethys_id, name, genres_json, added_at FROM owned_games WHERE amethys_id = ?1",
+            [amethys_id as i64],
+            |row| {
+                let genres_json: String = row.get(2)?;
+                let genres = serde_json::from_str(&genres_json).map_err(|error| rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(error)))?;
+                let id: i64 = row.get(0)?;
+                Ok(OwnedGameEntry { amethys_id: id as u64, name: row.get(1)?, genres, added_at: row.get(3)? })
+            },
+        ).optional().map_err(|error| storage_error(format!("Could not read owned game: {error}")))
+    }
+
+    pub fn list_owned_games(&self) -> Result<Vec<OwnedGameEntry>, AmethysError> {
+        let mut statement = self.connection.prepare("SELECT amethys_id, name, genres_json, added_at FROM owned_games ORDER BY name COLLATE NOCASE, amethys_id")
+            .map_err(|error| storage_error(format!("Could not prepare owned-game list: {error}")))?;
+        let rows = statement.query_map([], |row| {
+            let genres_json: String = row.get(2)?;
+            let genres = serde_json::from_str(&genres_json).map_err(|error| rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(error)))?;
+            let id: i64 = row.get(0)?;
+            Ok(OwnedGameEntry { amethys_id: id as u64, name: row.get(1)?, genres, added_at: row.get(3)? })
+        }).map_err(|error| storage_error(format!("Could not list owned games: {error}")))?;
+        rows.collect::<Result<Vec<_>, _>>().map_err(|error| storage_error(format!("Could not read owned games: {error}")))
+    }
+
+    pub fn remove_owned_game(&self, amethys_id: u64) -> Result<bool, AmethysError> {
+        if amethys_id == 0 || amethys_id > i64::MAX as u64 { return Err(storage_error("Owned game ID is invalid.")); }
+        self.connection.execute("DELETE FROM owned_games WHERE amethys_id = ?1", [amethys_id as i64])
+            .map(|changed| changed != 0).map_err(|error| storage_error(format!("Could not remove owned game: {error}")))
+    }
+
     /// Reads one application setting without changing the database.
     pub fn get_setting(&self, key: &str) -> Result<Option<String>, AmethysError> {
         let key = validate_setting_key(key)?;
@@ -1209,6 +1284,17 @@ mod tests {
         let path = std::env::temp_dir().join(format!("amethys-{}.sqlite", uuid::Uuid::new_v4()));
         let database = Database::open(&path).expect("database opens");
         (database, path)
+    }
+
+    #[test]
+    fn owned_games_are_independent_from_installations() {
+        let database = Database::open(":memory:").expect("database opens");
+        let owned = database.add_owned_game(9001, "Owned without install", &["RPG".to_owned(), "Adventure".to_owned()]).unwrap();
+        assert_eq!(owned.amethys_id, 9001);
+        assert!(database.list_games().unwrap().is_empty());
+        assert_eq!(database.list_owned_games().unwrap().len(), 1);
+        assert!(database.remove_owned_game(9001).unwrap());
+        assert!(database.list_owned_games().unwrap().is_empty());
     }
 
     #[test]
