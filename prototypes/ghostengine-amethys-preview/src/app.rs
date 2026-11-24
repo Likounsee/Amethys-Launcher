@@ -985,6 +985,10 @@ impl App {
                 self.keyboard_focus = focus_index_for_action(&self.hits, Action::FocusStoreSearch);
                 self.render(false);
             }
+            Action::ClearStoreSearch => {
+                self.store_query.clear();
+                self.redraw_store_search_only();
+            }
             Action::SearchStore => self.start_store_task(false),
             Action::SyncMasterCatalog => self.start_store_task(true),
             Action::OpenCatalogStore(index) => {
