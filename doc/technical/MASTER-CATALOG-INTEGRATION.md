@@ -13,7 +13,7 @@ Le client `RemoteCatalogClient` :
 - met en cache l'index JSON pour la recherche hors ligne ;
 - télécharge les fragments de détails à la demande et les met en cache par bucket et checksum.
 
-Le client ne télécharge jamais la base SQLite temporaire du pipeline. Le cache catalogue est distinct des tables de bibliothèque locale et ne crée aucune preuve de possession ou de licence. Les détails n'exigent pas d'identifiant IGDB : celui-ci est une provenance optionnelle, jamais une clé canonique. Les jeux sans offre de boutique restent valides dans le catalogue maître.
+Le client ne télécharge jamais la base SQLite temporaire du pipeline. Le cache catalogue est distinct des tables de bibliothèque locale et ne crée aucune preuve de possession ou de licence. Les détails n'exigent pas d'identifiant IGDB : celui-ci est une provenance optionnelle, jamais une clé canonique. Les fiches exposent aussi `source_ids`, une liste générique de couples espace de noms / identifiant externe (IGDB, boutiques ou futurs fournisseurs autorisés). Le manifeste compte ces identités séparément des identités de boutique. Les jeux sans offre de boutique restent valides dans le catalogue maître.
 
 ## IPC et CLI
 
