@@ -267,7 +267,7 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         let bucket = amethys_id / manifest.shards.bucket_size;
         let descriptor = manifest.shards.files.iter().find(|item| item.bucket == bucket)
             .ok_or_else(|| RemoteCatalogError::InvalidData(format!("no shard for Amethys ID {amethys_id}")))?;
-        let cache_path = self.cache_dir.join("shards").join(format!("{:06}.json", bucket));
+        let cache_path = self.cache_dir.join("shards").join(format!("{:06}-{}.json", bucket, &descriptor.compressed_sha256[..12]));
         let records: Vec<CatalogGameDetail> = if cache_path.is_file() {
             let bytes = fs::read(&cache_path).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
             serde_json::from_slice(&bytes)
@@ -315,17 +315,24 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         if url.scheme() != "https" {
             return Err(RemoteCatalogError::InvalidUrl("only HTTPS catalogue files are accepted".into()));
         }
-        let response = self.http.get(url.clone()).send().await
+        let mut response = self.http.get(url.clone()).send().await
             .map_err(|error| RemoteCatalogError::Network(error.to_string()))?
             .error_for_status()
             .map_err(|error| RemoteCatalogError::Network(error.to_string()))?;
+        if response.url().scheme() != "https" {
+            return Err(RemoteCatalogError::InvalidUrl("catalogue redirects must remain HTTPS".into()));
+        }
         if response.content_length().is_some_and(|length| length > max_bytes as u64) {
             return Err(RemoteCatalogError::InvalidData("catalogue response exceeds size limit".into()));
         }
-        let bytes = response.bytes().await
-            .map_err(|error| RemoteCatalogError::Network(error.to_string()))?;
-        if bytes.len() > max_bytes {
-            return Err(RemoteCatalogError::InvalidData("catalogue response exceeds size limit".into()));
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response.chunk().await
+            .map_err(|error| RemoteCatalogError::Network(error.to_string()))?
+        {
+            if bytes.len().saturating_add(chunk.len()) > max_bytes {
+                return Err(RemoteCatalogError::InvalidData("catalogue response exceeds size limit".into()));
+            }
+            bytes.extend_from_slice(&chunk);
         }
         if let Some(expected) = expected_sha256 {
             let actual = sha256_hex(&bytes);
@@ -333,7 +340,7 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
                 return Err(RemoteCatalogError::InvalidData("catalogue SHA-256 mismatch".into()));
             }
         }
-        Ok(bytes.to_vec())
+        Ok(bytes)
     }
 }
 
@@ -415,6 +422,21 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> RemoteCatalogResult<()> {
     let mut file = fs::File::create(&temporary).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
     file.write_all(bytes).and_then(|()| file.sync_all())
         .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+    #[cfg(windows)]
+    if path.exists() {
+        let backup = path.with_extension(format!("old-{}", std::process::id()));
+        fs::rename(path, &backup).map_err(|error| {
+            let _ = fs::remove_file(&temporary);
+            RemoteCatalogError::Cache(error.to_string())
+        })?;
+        if let Err(error) = fs::rename(&temporary, path) {
+            let _ = fs::rename(&backup, path);
+            let _ = fs::remove_file(&temporary);
+            return Err(RemoteCatalogError::Cache(error.to_string()));
+        }
+        let _ = fs::remove_file(backup);
+        return Ok(());
+    }
     fs::rename(&temporary, path).map_err(|error| {
         let _ = fs::remove_file(&temporary);
         RemoteCatalogError::Cache(error.to_string())
