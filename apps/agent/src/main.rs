@@ -1119,7 +1119,11 @@ mod tests {
         };
         assert_eq!(added_game.name, "Dota 2");
         assert_eq!(added_game.platform_id.as_deref(), Some("570"));
-        assert_eq!(added_game.catalogue_game_id.as_deref(), Some("3000"));
+        assert_eq!(
+            added_game.catalogue_game_id.as_deref(),
+            None,
+            "an unknown storefront identity must not be guessed as an Amethys catalogue ID",
+        );
 
         let listed = round_trip(&database, &state, IpcCommand::ListGames).await;
         let games = match listed.result.expect("game library is listed") {
