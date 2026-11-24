@@ -14,7 +14,7 @@ use crate::covers::CoverStore;
 use crate::gfx::{self, alpha, fb_fill, fb_fill_rrect, fb_stroke_rrect, Action, Fonts, Hit, Hover, Icon, Page, Painter, State, W};
 use crate::pages::{self, Active, DetailView, Layout, LibraryView, SettingsView, SidebarInfo};
 use crate::status::{self, GameStatus};
-use amethys_ipc::{IpcCatalogSearchEntry, IpcGameEntry};
+use amethys_ipc::{IpcCatalogGameDetail, IpcCatalogSearchEntry, IpcGameEntry};
 use ghostengine::{
     Color, FrameOutcome, Framebuffer, InputState, LayoutDirection, Point, Rect, ScrollViewport,
     UiInteraction,
@@ -44,6 +44,7 @@ enum CoreMutationTask {
 
 enum StoreTaskResult {
     Search(Result<Vec<IpcCatalogSearchEntry>, String>),
+    Detail(Result<IpcCatalogGameDetail, String>),
     Synchronized(Result<(String, u64), String>),
 }
 
@@ -336,6 +337,7 @@ pub struct App {
     store_query: String,
     store_search_focused: bool,
     store_results: Vec<IpcCatalogSearchEntry>,
+    store_detail: Option<IpcCatalogGameDetail>,
     store_loading: bool,
     store_catalog_version: Option<String>,
     store_game_count: Option<u64>,
@@ -427,6 +429,7 @@ impl App {
             store_query: String::new(),
             store_search_focused: false,
             store_results: Vec::new(),
+            store_detail: None,
             store_loading: false,
             store_catalog_version: None,
             store_game_count: None,
@@ -530,6 +533,11 @@ impl App {
                 self.store_error = None;
             }
             StoreTaskResult::Search(Err(error)) => self.store_error = Some(error),
+            StoreTaskResult::Detail(Ok(detail)) => {
+                self.store_detail = Some(detail);
+                self.store_error = None;
+            }
+            StoreTaskResult::Detail(Err(error)) => self.store_error = Some(error),
             StoreTaskResult::Synchronized(Ok((version, count))) => {
                 self.store_catalog_version = Some(version);
                 self.store_game_count = Some(count);
@@ -755,6 +763,7 @@ impl App {
                 catalog_version: self.store_catalog_version.as_deref(),
                 game_count: self.store_game_count,
                 error: self.store_error.as_deref(),
+                detail: self.store_detail.as_ref(),
             }),
             Page::Library => pages::library(
                 &mut p,
@@ -921,8 +930,18 @@ impl App {
             Action::SearchStore => self.start_store_task(false),
             Action::SyncMasterCatalog => self.start_store_task(true),
             Action::SelectCatalogGame(amethys_id) => {
-                self.notify(ToastKind::Info, format!("Fiche du jeu {amethys_id} : chargement à connecter."));
-                self.render(false);
+                if !self.store_loading {
+                    let (sender, receiver) = std::sync::mpsc::channel();
+                    std::thread::spawn(move || {
+                        let result = crate::core_client::get_master_catalog_game(amethys_id);
+                        let _ = sender.send(StoreTaskResult::Detail(result));
+                    });
+                    self.store_receiver = Some(receiver);
+                    self.store_loading = true;
+                    self.store_error = None;
+                    self.store_detail = None;
+                    self.render(false);
+                }
             }
             Action::SelectGame(index) => {
                 if let Some(game) = self.games.get(index) {

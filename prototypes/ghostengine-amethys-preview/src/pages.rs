@@ -7,7 +7,7 @@
 
 use crate::gfx::*;
 use crate::status::{GameStatus, StatusKind};
-use amethys_ipc::{IpcCatalogSearchEntry, IpcGameEntry};
+use amethys_ipc::{IpcCatalogGameDetail, IpcCatalogSearchEntry, IpcGameEntry};
 use ghostengine::Color;
 
 pub const SIDE_W: i32 = 240;
@@ -1135,6 +1135,7 @@ pub struct StoreView<'a> {
     pub catalog_version: Option<&'a str>,
     pub game_count: Option<u64>,
     pub error: Option<&'a str>,
+    pub detail: Option<&'a IpcCatalogGameDetail>,
 }
 
 pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
@@ -1169,6 +1170,28 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
     }
 
     let mut y = sync_y + 100;
+    if let Some(detail) = view.detail {
+        let detail_height = if detail.stores.is_empty() { 174 } else { 174 + (detail.stores.len().min(6) as i32 * 44) };
+        panel(p, mx, y, mw, detail_height, 18);
+        p.text(mx + 18, y + 14, 28, &detail.name, 19.0, W::Semi, TXT);
+        let meta = detail.release_date.as_deref().unwrap_or("Date de sortie inconnue");
+        p.text(mx + 18, y + 44, 20, meta, 12.0, W::Reg, MUT);
+        let genres = if detail.genres.is_empty() { "Genres non renseignés".to_owned() } else { detail.genres.join(" · ") };
+        p.text(mx + 18, y + 68, 20, &genres, 12.0, W::Med, VIO_HI);
+        if let Some(summary) = detail.summary.as_deref() {
+            p.paragraph(mx + 18, y + 94, mw - 36, 19, summary, 12.0, W::Reg, SOFT, 3);
+        }
+        let mut store_y = y + 132;
+        for store in detail.stores.iter().take(6) {
+            let label = store.name.as_deref().unwrap_or(&store.store);
+            p.text(mx + 18, store_y, 18, &format!("{} · {}", store.store, label), 11.5, W::Semi, TXT);
+            if let Some(url) = store.url.as_deref() {
+                p.text(mx + 18, store_y + 18, 18, url, 10.0, W::Reg, MUT);
+            }
+            store_y += 44;
+        }
+        y += detail_height + 12;
+    }
     if view.results.is_empty() && !view.loading && view.error.is_none() {
         panel(p, mx, y, mw, 116, 18);
         p.text(mx + 20, y + 18, 26, "Recherchez parmi les jeux du catalogue", 17.0, W::Semi, TXT);
