@@ -1,0 +1,49 @@
+name: Build and publish IGDB PC catalogue
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: amethys-igdb-catalog-release
+  cancel-in-progress: false
+
+jobs:
+  build-and-publish:
+    name: Generate catalog.db.zst and update latest Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Zstandard encoder
+        run: python -m pip install --disable-pip-version-check zstandard==0.25.0
+
+      - name: Build SQLite catalogue from IGDB
+        env:
+          IGDB_CLIENT_ID: ${{ secrets.IGDB_CLIENT_ID }}
+          IGDB_CLIENT_SECRET: ${{ secrets.IGDB_CLIENT_SECRET }}
+        run: python scripts/build_igdb_catalog_db.py
+
+      - name: Publish database to the latest GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="$(gh release view --json tagName --jq .tagName)"
+          test -n "$TAG"
+          gh release upload "$TAG" catalog.db.zst --clobber
+          echo "Updated catalog.db.zst on latest release: $TAG"
