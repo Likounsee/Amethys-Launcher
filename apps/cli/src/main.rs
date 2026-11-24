@@ -961,7 +961,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         Ok(IpcResponsePayload::CatalogGameDetails { game }) => {
             println!(
                 "{} (Amethys ID: {}, IGDB ID: {})",
-                game.name, game.amethys_id, game.igdb_id
+                game.name,
+                game.amethys_id,
+                game.igdb_id.map_or_else(|| "non renseigné".to_string(), |id| id.to_string())
             );
             if let Some(date) = game.release_date {
                 println!("Sortie : {date}");
