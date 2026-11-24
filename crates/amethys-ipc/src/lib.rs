@@ -178,6 +178,13 @@ pub struct IpcCatalogSearchEntry {
     pub genres: Vec<String>,
 }
 
+/// A provider-independent source identity attached to a master-catalogue game.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct IpcCatalogSourceIdentity {
+    pub source: String,
+    pub external_id: String,
+}
+
 /// Full game details from the public master catalogue.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct IpcCatalogGameDetail {
@@ -191,6 +198,8 @@ pub struct IpcCatalogGameDetail {
     pub release_date: Option<String>,
     pub cover_url: Option<String>,
     pub genres: Vec<String>,
+    #[serde(default)]
+    pub source_ids: Vec<IpcCatalogSourceIdentity>,
     pub stores: Vec<IpcCatalogStoreIdentity>,
 }
 
