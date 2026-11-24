@@ -723,12 +723,13 @@ impl Database {
             return Err(storage_error("Master catalogue identity or name is invalid."));
         }
         let id = amethys_id.to_string();
+        let amethys_id_sql = amethys_id as i64;
         self.connection.execute(
             "INSERT INTO catalogue_games (id, name, amethys_id, retired)
              VALUES (?1, ?2, ?3, ?4)
              ON CONFLICT(id) DO UPDATE SET name = excluded.name, retired = excluded.retired
              WHERE catalogue_games.amethys_id = excluded.amethys_id",
-            params![id, name, amethys_id, retired],
+            params![id, name, amethys_id_sql, retired],
         ).map_err(|error| storage_error(format!("Could not register master catalogue game: {error}")))?;
         let stored: Option<i64> = self.connection.query_row(
             "SELECT amethys_id FROM catalogue_games WHERE id = ?1", [&id], |row| row.get(0)
