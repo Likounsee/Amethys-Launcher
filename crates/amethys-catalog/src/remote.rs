@@ -141,7 +141,9 @@ pub struct CatalogStoreIdentity {
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct CatalogGameDetail {
     pub amethys_id: u64,
-    pub igdb_id: u64,
+    /// Optional ingestion-source identity; never the canonical Amethys ID.
+    #[serde(default)]
+    pub igdb_id: Option<u64>,
     pub name: String,
     pub slug: Option<String>,
     pub summary: Option<String>,
