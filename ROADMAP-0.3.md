@@ -1,6 +1,6 @@
 # Amethys Launcher 0.3 — Roadmap de développement détaillée
 
-**Statut :** Lot 0 (audit) et Lot 1 (architecture/fondations) terminés ; Lot 2 implémenté, validation CI ciblée en cours.  
+**Statut :** Lot 0 (audit), Lot 1 (architecture/fondations) et Lot 2 (catalogue/sources) terminés ; CI ciblée du Lot 2 verte.  
 **Base :** branche `main` ; implémentation du Lot 2 suivie directement sur `main`.  
 **Version précédente :** 0.2.0 gelée.  
 **Quality Check / CQ globale :** reportée à la version 0.4.
@@ -75,7 +75,7 @@ Critère de fin : les lots fonctionnels disposent de contrats, dépendances et r
 
 ## Lot 2 — Modèle catalogue et sources
 
-**Statut : implémenté ; validation CI ciblée en cours.** Implémentation : [modèle catalogue, sources et cache](technical/LOT-2-CATALOG.md).
+**Statut : terminé ; validation CI ciblée réussie sur Windows et Linux.** Implémentation : [modèle catalogue, sources et cache](technical/LOT-2-CATALOG.md).
 
 **But :** créer les structures réelles sur lesquelles le Store reposera.
 
@@ -263,7 +263,7 @@ Critère :
 
 ## Dépendances critiques
 
-- Le Store dépend du modèle catalogue et des adaptateurs (Lot 2 — terminé).
+- Le Store dépend du modèle catalogue et des adaptateurs (Lot 2 — terminé et validé).
 - Le téléchargement dépend des opérations persistantes (Lot 4) et des manifestes/sources (Lot 2).
 - L'installation dépend du téléchargement vérifié et du moteur d'opérations (Lots 4-5).
 - L'intégration bibliothèque dépend du modèle d'installation (Lot 6).
