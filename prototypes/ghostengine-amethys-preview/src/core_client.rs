@@ -633,6 +633,27 @@ pub fn search_master_catalog(
     }
 }
 
+/// Builds a personalized storefront feed from the user's existing local library.
+pub fn recommend_master_catalog(
+    genres: Vec<String>,
+    owned_ids: Vec<u64>,
+    owned_names: Vec<String>,
+    limit: usize,
+) -> Result<Vec<IpcCatalogSearchEntry>, String> {
+    match send_core_command(
+        IpcCommand::SearchRecommendedCatalog {
+            genres,
+            owned_ids,
+            owned_names,
+            limit: limit.clamp(1, 100),
+        },
+        std::time::Duration::from_secs(30),
+    )? {
+        IpcResponsePayload::CatalogSearchResults { games } => Ok(games),
+        other => Err(format!("Réponse IPC inattendue : {other:?}")),
+    }
+}
+
 /// Loads a single catalogue detail and its store identities through Core.
 pub fn get_master_catalog_game(
     amethys_id: u64,
