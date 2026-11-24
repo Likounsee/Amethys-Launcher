@@ -1138,6 +1138,37 @@ pub struct StoreView<'a> {
     pub detail: Option<&'a IpcCatalogGameDetail>,
 }
 
+/// Redraws only the store search control over the already-rendered page.
+pub fn redraw_store_search(p: &mut Painter, lay: &Layout, query: &str, focused: bool) {
+    let (mx, mw) = (lay.mx, lay.mw);
+    let sync_w = button_width(p, "Actualiser", Some(Icon::Refresh));
+    let search_w = (mw - sync_w - 12).max(120);
+    let x = mx;
+    let y = 112;
+    p.rrect(x, y, search_w, BTN_H, 12, PANEL_HI);
+    if focused {
+        p.rrect_line(x, y, search_w, BTN_H, 12, VIO);
+        p.rrect_line(x + 1, y + 1, search_w - 2, BTN_H - 2, 11, alpha(VIO, 120));
+    } else {
+        p.rrect_line(x, y, search_w, BTN_H, 12, alpha(Color::WHITE, 24));
+    }
+    p.icon(Icon::Search, x + 14, y + 12, 16, if focused { VIO_HI } else { MUT }, PANEL_HI);
+    if query.is_empty() {
+        p.text(x + 42, y, BTN_H, "Rechercher un jeu…", 13.5, W::Reg, FAINT);
+        if focused {
+            p.rrect(x + 42, y + 11, 2, 18, 1, VIO_HI);
+        }
+    } else {
+        let max_w = search_w - 44 - 14 - 34;
+        let shown = tail_fit(p, query, 13.5, W::Reg, max_w);
+        let tw = p.text(x + 42, y, BTN_H, &shown, 13.5, W::Reg, TXT).round() as i32;
+        if focused {
+            p.rrect(x + 43 + tw, y + 11, 2, 18, 1, VIO_HI);
+        }
+        p.icon(Icon::Close, x + search_w - 30, y + 12, 16, MUT, PANEL_HI);
+    }
+}
+
 pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
     backdrop(p, lay);
     let (mx, mw) = (lay.mx, lay.mw);
