@@ -20,7 +20,7 @@ use ghostengine::{
     UiInteraction,
 };
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::VecDeque,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
