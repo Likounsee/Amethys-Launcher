@@ -158,10 +158,20 @@ impl IpcListener {
 impl IpcListener {
     /// Creates one local named-pipe server instance.
     pub async fn bind(endpoint: impl AsRef<str>) -> Result<Self, AmethysError> {
-        let dacl = weida_winpipe::OwnerOnlyDacl::for_current_user().map_err(io_error)?;
+        let dacl = weida_winpipe::OwnerOnlyDacl::for_current_user().map_err(|error| {
+            AmethysError::new(
+                ErrorCode::IpcIo,
+                format!("Could not create the current-user named-pipe security descriptor: {error}"),
+            )
+        })?;
         let endpoint = endpoint.as_ref().to_owned();
         let server = weida_winpipe::create_instance(std::ffi::OsStr::new(&endpoint), &dacl, true)
-            .map_err(io_error)?;
+            .map_err(|error| {
+                AmethysError::new(
+                    ErrorCode::IpcIo,
+                    format!("Could not create Windows named pipe '{endpoint}': {error}"),
+                )
+            })?;
         Ok(Self {
             server,
             endpoint,
