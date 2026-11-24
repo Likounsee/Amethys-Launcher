@@ -23,7 +23,7 @@ L'ordre de préparation est respecté : **Lot 0 (audit de l'existant) a été r�
 |---:|---|---|---|
 | 1 | Lot 0 — Audit complet de l'existant | État réel du dépôt, inventaire, réutilisation, manques et risques | Aucune |
 | 2 | Lot 1 — Architecture et fondations | Contrats, modèle métier, persistance, IPC, sécurité, frontières | Lot 1 |
-| 3 | Lot 2 — Modèle catalogue et sources | <strong>Terminé</strong> — modèles validés, catalogue versionné, cache SQLite, capacités de sources et adaptateurs statiques | Lots 0 et 1 |
+| 3 | Lot 2 — Modèle catalogue et sources | Implémentation réalisée ; validation ciblée CI en cours — modèles, catalogue versionné, cache SQLite, capacités et adaptateur statique | Lots 0 et 1 |
 | 4 | Lot 3 — Store réel | Recherche, catégories, fiches, offres et états issus de sources réelles | Lot 2 |
 | 5 | Lot 4 — Gestionnaire d'opérations | Jobs persistés, file, états, concurrence, progression, pause/reprise/annulation | Lot 0 |
 | 6 | Lot 5 — Download Manager | Téléchargement autorisé, reprise sûre, contrôle d'intégrité | Lots 2 et 4 |
