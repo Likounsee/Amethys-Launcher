@@ -765,8 +765,7 @@ impl App {
 
     /// Whether the current library contains catalogue genres usable for personalization.
     fn has_recommendation_profile(&self) -> bool {
-        self.games.iter().any(|game| game.catalogue_metadata.as_ref()
-            .is_some_and(|metadata| !metadata.genres.is_empty()))
+        !self.games.is_empty()
     }
 
     /// Extracts the local ownership and genre profile without contacting Steam.
