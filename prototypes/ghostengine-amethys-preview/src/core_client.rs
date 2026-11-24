@@ -527,6 +527,16 @@ pub fn recommend_master_catalog(
     }
 }
 
+/// Fetches current discounted PC games from the external price provider.
+pub fn fetch_store_promotions() -> Result<Vec<amethys_catalog::remote::CheapSharkDeal>, String> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|error| format!("Impossible de démarrer le client de promotions : {error}"))?;
+    runtime.block_on(amethys_catalog::remote::fetch_cheapshark_deals(60))
+        .map_err(|error| error.to_string())
+}
+
 /// Loads a single catalogue detail and its store identities through Core.
 pub fn get_master_catalog_game(
     amethys_id: u64,
