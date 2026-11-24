@@ -66,6 +66,35 @@ fn search_master_catalog(query: &str, limit: usize) -> Result<IpcResponsePayload
     Ok(IpcResponsePayload::CatalogSearchResults { games })
 }
 
+fn recommend_master_catalog(
+    genres: &[String],
+    owned_ids: &[u64],
+    owned_names: &[String],
+    limit: usize,
+) -> Result<IpcResponsePayload, String> {
+    let data_dir = amethys_config::prepare_data_directory().map_err(|error| error.to_string())?;
+    let base_url = std::env::var("AMETHYS_CATALOG_URL")
+        .unwrap_or_else(|_| DEFAULT_MASTER_CATALOG_URL.to_owned());
+    let provider = amethys_catalog::remote::StaticCatalogProvider::new(&base_url)
+        .map_err(|error| error.to_string())?;
+    let client = amethys_catalog::remote::RemoteCatalogClient::new(
+        provider,
+        data_dir.join("catalog-cache"),
+    ).map_err(|error| error.to_string())?;
+    let entries = client.load_cached_index().map_err(|error| error.to_string())?;
+    let games = client.recommend_cached(&entries, genres, owned_ids, owned_names, limit)
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .map(|entry| IpcCatalogSearchEntry {
+            amethys_id: entry.amethys_id,
+            name: entry.name,
+            slug: entry.slug,
+            genres: entry.genres,
+        })
+        .collect();
+    Ok(IpcResponsePayload::CatalogSearchResults { games })
+}
+
 async fn get_master_catalog_game(amethys_id: u64) -> Result<IpcResponsePayload, String> {
     let data_dir = amethys_config::prepare_data_directory().map_err(|error| error.to_string())?;
     let base_url = std::env::var("AMETHYS_CATALOG_URL")
@@ -158,6 +187,17 @@ where
                 Err(message) => IpcResponse::failure(
                     request.request_id,
                     IpcRemoteError::new("AM-CATALOG-0002", message),
+                ),
+            };
+            write_message(stream, &response).await?;
+            return Ok(());
+        }
+        IpcCommand::SearchRecommendedCatalog { genres, owned_ids, owned_names, limit } => {
+            let response = match recommend_master_catalog(genres, owned_ids, owned_names, *limit) {
+                Ok(payload) => IpcResponse::success(request.request_id, payload),
+                Err(message) => IpcResponse::failure(
+                    request.request_id,
+                    IpcRemoteError::new("AM-CATALOG-0004", message),
                 ),
             };
             write_message(stream, &response).await?;
@@ -307,6 +347,7 @@ where
                     .map(|removed| IpcResponsePayload::GameRemoved { removed }),
                 IpcCommand::Ping | IpcCommand::GetStatus | IpcCommand::SyncMasterCatalog
                 | IpcCommand::SearchMasterCatalog { .. }
+                | IpcCommand::SearchRecommendedCatalog { .. }
                 | IpcCommand::GetMasterCatalogGame { .. } => unreachable!("handled above"),
             }
         }
