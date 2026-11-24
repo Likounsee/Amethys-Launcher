@@ -26,6 +26,8 @@ COMMANDES:
     games set-executable <id> <chemin> Configure l'exécutable d'un jeu importé
     games add <nom> <plateforme> <dossier> [exécutable]
     games remove <id>                 Retire un jeu de la bibliothèque Amethys
+    catalog sync                      Télécharge et vérifie l'index catalogue mondial
+    catalog search <terme>            Recherche hors ligne dans le catalogue mondial
 
 OPTIONS:
     -h, --help                        Affiche cette aide
@@ -42,6 +44,7 @@ fn parse_command(argument: Option<&str>) -> Result<IpcCommand, &'static str> {
         Some("ping") => Ok(IpcCommand::Ping),
         Some("status") => Ok(IpcCommand::GetStatus),
         Some("games") => Ok(IpcCommand::ListGames),
+        Some("catalog-sync") => Ok(IpcCommand::SyncMasterCatalog),
         _ => Err(
             "Commande inconnue. Utilise « amethysctl --help » pour afficher les commandes disponibles.",
         ),
@@ -97,6 +100,10 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
     match arguments {
         [command] => parse_command(Some(command)),
         [group, action] if group == "games" && action == "list" => Ok(IpcCommand::ListGames),
+        [group, action] if group == "catalog" && action == "sync" => Ok(IpcCommand::SyncMasterCatalog),
+        [group, action, query] if group == "catalog" && action == "search" => {
+            Ok(IpcCommand::SearchMasterCatalog { query: query.clone(), limit: 50 })
+        },
         [group, action, name, platform, install_path] if group == "games" && action == "add" => {
             Ok(IpcCommand::AddGame {
                 name: name.clone(),
@@ -925,6 +932,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         Ok(IpcResponsePayload::GameRemoved { removed: true }) => {
             println!("Jeu supprimé de la bibliothèque.");
+            Ok(())
+        }
+        Ok(IpcResponsePayload::CatalogSynchronized { catalog_version, game_count }) => {
+            println!("Catalogue mondial synchronisé : {game_count} jeux (version {catalog_version}).");
+            Ok(())
+        }
+        Ok(IpcResponsePayload::CatalogSearchResults { games }) => {
+            if games.is_empty() {
+                println!("Aucun résultat dans le catalogue mondial.");
+            } else {
+                println!("Résultats du catalogue mondial :");
+                for game in games {
+                    println!("- {} (Amethys ID: {})", game.name, game.amethys_id);
+                }
+            }
             Ok(())
         }
         Ok(IpcResponsePayload::GameRemoved { removed: false }) => {
