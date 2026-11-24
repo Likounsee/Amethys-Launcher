@@ -435,19 +435,23 @@ impl Database {
                 })?;
         }
         if current_version < 7 {
-            transaction.execute_batch(
-                "CREATE TABLE owned_games (
+            transaction
+                .execute_batch(
+                    "CREATE TABLE owned_games (
                     amethys_id INTEGER PRIMARY KEY NOT NULL CHECK (amethys_id > 0),
                     name TEXT NOT NULL,
                     genres_json TEXT NOT NULL DEFAULT '[]',
                     added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
                 CREATE INDEX idx_owned_games_name ON owned_games(name COLLATE NOCASE);
-                INSERT OR IGNORE INTO schema_migrations (version) VALUES (7);"
-            ).map_err(|error| AmethysError::new(
-                ErrorCode::StorageMigration,
-                format!("Could not apply owned-games library migration: {error}"),
-            ))?;
+                INSERT OR IGNORE INTO schema_migrations (version) VALUES (7);",
+                )
+                .map_err(|error| {
+                    AmethysError::new(
+                        ErrorCode::StorageMigration,
+                        format!("Could not apply owned-games library migration: {error}"),
+                    )
+                })?;
         }
         transaction.commit().map_err(|error| {
             AmethysError::new(
@@ -651,11 +655,14 @@ impl Database {
         }
         let genres_json = serde_json::to_string(&genres)
             .map_err(|error| storage_error(format!("Could not encode game genres: {error}")))?;
-        let game_exists: bool = self.connection.query_row(
-            "SELECT EXISTS(SELECT 1 FROM games WHERE id = ?1)",
-            [game_id],
-            |row| row.get(0),
-        ).map_err(|error| storage_error(format!("Could not check local game: {error}")))?;
+        let game_exists: bool = self
+            .connection
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM games WHERE id = ?1)",
+                [game_id],
+                |row| row.get(0),
+            )
+            .map_err(|error| storage_error(format!("Could not check local game: {error}")))?;
         if !game_exists {
             return Ok(false);
         }
@@ -697,12 +704,21 @@ impl Database {
                 cover_ref = excluded.cover_ref,
                 banner_ref = excluded.banner_ref",
                 params![
-                    game_id, genres_json, metadata.developer, metadata.publisher,
-                    metadata.release_date, metadata.description, metadata.icon_ref,
-                    metadata.logo_ref, metadata.cover_ref, metadata.banner_ref
+                    game_id,
+                    genres_json,
+                    metadata.developer,
+                    metadata.publisher,
+                    metadata.release_date,
+                    metadata.description,
+                    metadata.icon_ref,
+                    metadata.logo_ref,
+                    metadata.cover_ref,
+                    metadata.banner_ref
                 ],
             )
-            .map_err(|error| storage_error(format!("Could not save local game metadata: {error}")))?;
+            .map_err(|error| {
+                storage_error(format!("Could not save local game metadata: {error}"))
+            })?;
         Ok(changed != 0)
     }
 
@@ -719,14 +735,21 @@ impl Database {
                     let genres_json: String = row.get(0)?;
                     let genres = serde_json::from_str(&genres_json).map_err(|error| {
                         rusqlite::Error::FromSqlConversionFailure(
-                            0, rusqlite::types::Type::Text, Box::new(error),
+                            0,
+                            rusqlite::types::Type::Text,
+                            Box::new(error),
                         )
                     })?;
                     Ok(GameMetadata {
-                        genres, developer: row.get(1)?, publisher: row.get(2)?,
-                        release_date: row.get(3)?, description: row.get(4)?,
-                        icon_ref: row.get(5)?, logo_ref: row.get(6)?,
-                        cover_ref: row.get(7)?, banner_ref: row.get(8)?,
+                        genres,
+                        developer: row.get(1)?,
+                        publisher: row.get(2)?,
+                        release_date: row.get(3)?,
+                        description: row.get(4)?,
+                        icon_ref: row.get(5)?,
+                        logo_ref: row.get(6)?,
+                        cover_ref: row.get(7)?,
+                        banner_ref: row.get(8)?,
                     })
                 },
             )
@@ -745,23 +768,44 @@ impl Database {
     ) -> Result<(), AmethysError> {
         let catalogue_game_id = validate_game_id(catalogue_game_id)?;
         let name = name.trim();
-        if amethys_id == 0 || amethys_id > i64::MAX as u64 || name.is_empty() || name.len() > MAX_GAME_NAME_BYTES || name.contains('\0') {
-            return Err(storage_error("Master catalogue identity or name is invalid."));
+        if amethys_id == 0
+            || amethys_id > i64::MAX as u64
+            || name.is_empty()
+            || name.len() > MAX_GAME_NAME_BYTES
+            || name.contains('\0')
+        {
+            return Err(storage_error(
+                "Master catalogue identity or name is invalid.",
+            ));
         }
         let id = catalogue_game_id.to_owned();
         let amethys_id_sql = amethys_id as i64;
-        self.connection.execute(
-            "INSERT INTO catalogue_games (id, name, amethys_id, retired)
+        self.connection
+            .execute(
+                "INSERT INTO catalogue_games (id, name, amethys_id, retired)
              VALUES (?1, ?2, ?3, ?4)
              ON CONFLICT(id) DO UPDATE SET name = excluded.name, retired = excluded.retired
              WHERE catalogue_games.amethys_id = excluded.amethys_id",
-            params![id, name, amethys_id_sql, retired],
-        ).map_err(|error| storage_error(format!("Could not register master catalogue game: {error}")))?;
-        let stored: Option<i64> = self.connection.query_row(
-            "SELECT amethys_id FROM catalogue_games WHERE id = ?1", [&id], |row| row.get(0)
-        ).optional().map_err(|error| storage_error(format!("Could not verify master catalogue ID: {error}")))?;
+                params![id, name, amethys_id_sql, retired],
+            )
+            .map_err(|error| {
+                storage_error(format!("Could not register master catalogue game: {error}"))
+            })?;
+        let stored: Option<i64> = self
+            .connection
+            .query_row(
+                "SELECT amethys_id FROM catalogue_games WHERE id = ?1",
+                [&id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| {
+                storage_error(format!("Could not verify master catalogue ID: {error}"))
+            })?;
         if stored != Some(amethys_id as i64) {
-            return Err(storage_error("Amethys ID is already assigned to a different master catalogue entry."));
+            return Err(storage_error(
+                "Amethys ID is already assigned to a different master catalogue entry.",
+            ));
         }
         Ok(())
     }
@@ -775,15 +819,30 @@ impl Database {
     ) -> Result<bool, AmethysError> {
         let provider = validate_provider_key(provider)?;
         let external_id = external_id.trim();
-        if amethys_id == 0 || amethys_id > i64::MAX as u64 || external_id.is_empty()
-            || external_id.len() > MAX_PLATFORM_ID_BYTES || external_id.contains('\0') {
-            return Err(storage_error("Master catalogue external identity is invalid."));
+        if amethys_id == 0
+            || amethys_id > i64::MAX as u64
+            || external_id.is_empty()
+            || external_id.len() > MAX_PLATFORM_ID_BYTES
+            || external_id.contains('\0')
+        {
+            return Err(storage_error(
+                "Master catalogue external identity is invalid.",
+            ));
         }
-        let catalogue_game_id: Option<String> = self.connection.query_row(
-            "SELECT id FROM catalogue_games WHERE amethys_id = ?1 AND retired = 0",
-            [amethys_id as i64], |row| row.get(0)
-        ).optional().map_err(|error| storage_error(format!("Could not check master catalogue game: {error}")))?;
-        let Some(catalogue_game_id) = catalogue_game_id else { return Ok(false); };
+        let catalogue_game_id: Option<String> = self
+            .connection
+            .query_row(
+                "SELECT id FROM catalogue_games WHERE amethys_id = ?1 AND retired = 0",
+                [amethys_id as i64],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|error| {
+                storage_error(format!("Could not check master catalogue game: {error}"))
+            })?;
+        let Some(catalogue_game_id) = catalogue_game_id else {
+            return Ok(false);
+        };
         self.connection.execute(
             "INSERT INTO catalogue_external_ids (catalogue_game_id, provider, external_id)
              VALUES (?1, ?2, ?3)
@@ -1065,26 +1124,45 @@ impl Database {
     }
 
     /// Adds or refreshes an owned catalogue game without creating an installation.
-    pub fn add_owned_game(&self, amethys_id: u64, name: &str, genres: &[String]) -> Result<OwnedGameEntry, AmethysError> {
+    pub fn add_owned_game(
+        &self,
+        amethys_id: u64,
+        name: &str,
+        genres: &[String],
+    ) -> Result<OwnedGameEntry, AmethysError> {
         let name = name.trim();
-        if amethys_id == 0 || amethys_id > i64::MAX as u64 || name.is_empty() || name.len() > MAX_GAME_NAME_BYTES || name.contains('\0') {
+        if amethys_id == 0
+            || amethys_id > i64::MAX as u64
+            || name.is_empty()
+            || name.len() > MAX_GAME_NAME_BYTES
+            || name.contains('\0')
+        {
             return Err(storage_error("Owned game identity or name is invalid."));
         }
-        if genres.len() > 64 || genres.iter().any(|genre| genre.trim().is_empty() || genre.len() > 128 || genre.contains('\0')) {
+        if genres.len() > 64
+            || genres
+                .iter()
+                .any(|genre| genre.trim().is_empty() || genre.len() > 128 || genre.contains('\0'))
+        {
             return Err(storage_error("Owned game genres are invalid."));
         }
         let normalized = genres.iter().map(|genre| genre.trim()).collect::<Vec<_>>();
-        let genres_json = serde_json::to_string(&normalized).map_err(|error| storage_error(format!("Could not encode owned game genres: {error}")))?;
+        let genres_json = serde_json::to_string(&normalized).map_err(|error| {
+            storage_error(format!("Could not encode owned game genres: {error}"))
+        })?;
         self.connection.execute(
             "INSERT INTO owned_games (amethys_id, name, genres_json) VALUES (?1, ?2, ?3)
              ON CONFLICT(amethys_id) DO UPDATE SET name = excluded.name, genres_json = excluded.genres_json",
             params![amethys_id as i64, name, genres_json],
         ).map_err(|error| storage_error(format!("Could not add owned game: {error}")))?;
-        self.get_owned_game(amethys_id)?.ok_or_else(|| storage_error("Added owned game could not be read back."))
+        self.get_owned_game(amethys_id)?
+            .ok_or_else(|| storage_error("Added owned game could not be read back."))
     }
 
     pub fn get_owned_game(&self, amethys_id: u64) -> Result<Option<OwnedGameEntry>, AmethysError> {
-        if amethys_id == 0 || amethys_id > i64::MAX as u64 { return Err(storage_error("Owned game ID is invalid.")); }
+        if amethys_id == 0 || amethys_id > i64::MAX as u64 {
+            return Err(storage_error("Owned game ID is invalid."));
+        }
         self.connection.query_row(
             "SELECT amethys_id, name, genres_json, added_at FROM owned_games WHERE amethys_id = ?1",
             [amethys_id as i64],
@@ -1100,19 +1178,40 @@ impl Database {
     pub fn list_owned_games(&self) -> Result<Vec<OwnedGameEntry>, AmethysError> {
         let mut statement = self.connection.prepare("SELECT amethys_id, name, genres_json, added_at FROM owned_games ORDER BY name COLLATE NOCASE, amethys_id")
             .map_err(|error| storage_error(format!("Could not prepare owned-game list: {error}")))?;
-        let rows = statement.query_map([], |row| {
-            let genres_json: String = row.get(2)?;
-            let genres = serde_json::from_str(&genres_json).map_err(|error| rusqlite::Error::FromSqlConversionFailure(2, rusqlite::types::Type::Text, Box::new(error)))?;
-            let id: i64 = row.get(0)?;
-            Ok(OwnedGameEntry { amethys_id: id as u64, name: row.get(1)?, genres, added_at: row.get(3)? })
-        }).map_err(|error| storage_error(format!("Could not list owned games: {error}")))?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(|error| storage_error(format!("Could not read owned games: {error}")))
+        let rows = statement
+            .query_map([], |row| {
+                let genres_json: String = row.get(2)?;
+                let genres = serde_json::from_str(&genres_json).map_err(|error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        2,
+                        rusqlite::types::Type::Text,
+                        Box::new(error),
+                    )
+                })?;
+                let id: i64 = row.get(0)?;
+                Ok(OwnedGameEntry {
+                    amethys_id: id as u64,
+                    name: row.get(1)?,
+                    genres,
+                    added_at: row.get(3)?,
+                })
+            })
+            .map_err(|error| storage_error(format!("Could not list owned games: {error}")))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| storage_error(format!("Could not read owned games: {error}")))
     }
 
     pub fn remove_owned_game(&self, amethys_id: u64) -> Result<bool, AmethysError> {
-        if amethys_id == 0 || amethys_id > i64::MAX as u64 { return Err(storage_error("Owned game ID is invalid.")); }
-        self.connection.execute("DELETE FROM owned_games WHERE amethys_id = ?1", [amethys_id as i64])
-            .map(|changed| changed != 0).map_err(|error| storage_error(format!("Could not remove owned game: {error}")))
+        if amethys_id == 0 || amethys_id > i64::MAX as u64 {
+            return Err(storage_error("Owned game ID is invalid."));
+        }
+        self.connection
+            .execute(
+                "DELETE FROM owned_games WHERE amethys_id = ?1",
+                [amethys_id as i64],
+            )
+            .map(|changed| changed != 0)
+            .map_err(|error| storage_error(format!("Could not remove owned game: {error}")))
     }
 
     /// Reads one application setting without changing the database.
@@ -1289,7 +1388,13 @@ mod tests {
     #[test]
     fn owned_games_are_independent_from_installations() {
         let database = Database::open(":memory:").expect("database opens");
-        let owned = database.add_owned_game(9001, "Owned without install", &["RPG".to_owned(), "Adventure".to_owned()]).unwrap();
+        let owned = database
+            .add_owned_game(
+                9001,
+                "Owned without install",
+                &["RPG".to_owned(), "Adventure".to_owned()],
+            )
+            .unwrap();
         assert_eq!(owned.amethys_id, 9001);
         assert!(database.list_games().unwrap().is_empty());
         assert_eq!(database.list_owned_games().unwrap().len(), 1);
@@ -1300,61 +1405,137 @@ mod tests {
     #[test]
     fn deleting_an_installation_preserves_its_master_catalogue_record() {
         let database = Database::open(":memory:").expect("database opens");
-        database.register_catalogue_game("igdb-master-7000", 7000, "Master Game", false).unwrap();
-        let game = database.add_game("Master Game", "Steam", "/games/master", None).unwrap();
+        database
+            .register_catalogue_game("igdb-master-7000", 7000, "Master Game", false)
+            .unwrap();
+        let game = database
+            .add_game("Master Game", "Steam", "/games/master", None)
+            .unwrap();
         assert!(database.set_game_catalogue_id(&game.id, "7000").unwrap());
-        database.set_catalogue_external_id(7000, "steam", "98765").unwrap();
-        database.set_game_metadata(&game.id, &super::GameMetadata {
-            developer: Some("Local note".to_owned()), ..Default::default()
-        }).unwrap();
+        database
+            .set_catalogue_external_id(7000, "steam", "98765")
+            .unwrap();
+        database
+            .set_game_metadata(
+                &game.id,
+                &super::GameMetadata {
+                    developer: Some("Local note".to_owned()),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
         assert!(database.remove_game(&game.id).unwrap());
         assert_eq!(database.get_game_metadata(&game.id).unwrap(), None);
-        assert_eq!(database.get_catalogue_game("igdb-master-7000").unwrap().unwrap().name, "Master Game");
-        assert_eq!(database.get_catalogue_game_by_external_id("steam", "98765").unwrap().unwrap().id, "igdb-master-7000");
+        assert_eq!(
+            database
+                .get_catalogue_game("igdb-master-7000")
+                .unwrap()
+                .unwrap()
+                .name,
+            "Master Game"
+        );
+        assert_eq!(
+            database
+                .get_catalogue_game_by_external_id("steam", "98765")
+                .unwrap()
+                .unwrap()
+                .id,
+            "igdb-master-7000"
+        );
     }
 
     #[test]
     fn local_imports_never_allocate_master_catalogue_ids() {
         let database = Database::open(":memory:").expect("database opens");
-        let first = database.add_game("First", "Local", "/games/first", None).unwrap();
-        let second = database.add_game("Second", "Local", "/games/second", None).unwrap();
+        let first = database
+            .add_game("First", "Local", "/games/first", None)
+            .unwrap();
+        let second = database
+            .add_game("Second", "Local", "/games/second", None)
+            .unwrap();
         assert_eq!(database.get_catalogue_game_id(&first.id).unwrap(), None);
         assert_eq!(database.get_catalogue_game_id(&second.id).unwrap(), None);
-        let count: i64 = database.connection.query_row("SELECT COUNT(*) FROM catalogue_games", [], |row| row.get(0)).unwrap();
+        let count: i64 = database
+            .connection
+            .query_row("SELECT COUNT(*) FROM catalogue_games", [], |row| row.get(0))
+            .unwrap();
         assert_eq!(count, 0);
     }
 
     #[test]
     fn local_metadata_and_verified_master_store_ids_are_separate() {
         let database = Database::open(":memory:").expect("database opens");
-        database.register_catalogue_game("igdb-example-8123", 8123, "Example", false).unwrap();
-        let game = database.add_game("Example", "Steam", "/games/example", None).unwrap();
+        database
+            .register_catalogue_game("igdb-example-8123", 8123, "Example", false)
+            .unwrap();
+        let game = database
+            .add_game("Example", "Steam", "/games/example", None)
+            .unwrap();
         assert!(database.set_game_catalogue_id(&game.id, "8123").unwrap());
         let metadata = super::GameMetadata {
             genres: vec!["Action".to_owned(), "Adventure".to_owned()],
-            developer: Some("Studio".to_owned()), publisher: Some("Publisher".to_owned()),
+            developer: Some("Studio".to_owned()),
+            publisher: Some("Publisher".to_owned()),
             release_date: Some("2026-11-22".to_owned()),
             description: Some("Local installation metadata.".to_owned()),
-            icon_ref: Some("media/library/icon.png".to_owned()), logo_ref: None,
-            cover_ref: Some("media/library/cover.png".to_owned()), banner_ref: None,
+            icon_ref: Some("media/library/icon.png".to_owned()),
+            logo_ref: None,
+            cover_ref: Some("media/library/cover.png".to_owned()),
+            banner_ref: None,
         };
         assert!(database.set_game_metadata(&game.id, &metadata).unwrap());
-        assert_eq!(database.get_game_metadata(&game.id).unwrap(), Some(metadata));
-        assert!(database.set_catalogue_external_id(8123, "steam", "123456").unwrap());
-        assert!(database.set_catalogue_external_id(8123, "epic", "epic-product-abc").unwrap());
-        assert_eq!(database.get_game_by_external_id("steam", "123456").unwrap().unwrap().id, game.id);
+        assert_eq!(
+            database.get_game_metadata(&game.id).unwrap(),
+            Some(metadata)
+        );
+        assert!(
+            database
+                .set_catalogue_external_id(8123, "steam", "123456")
+                .unwrap()
+        );
+        assert!(
+            database
+                .set_catalogue_external_id(8123, "epic", "epic-product-abc")
+                .unwrap()
+        );
+        assert_eq!(
+            database
+                .get_game_by_external_id("steam", "123456")
+                .unwrap()
+                .unwrap()
+                .id,
+            game.id
+        );
         assert_eq!(database.list_external_game_ids(&game.id).unwrap().len(), 2);
     }
 
     #[test]
     fn master_external_provider_ids_cannot_be_ambiguous() {
         let database = Database::open(":memory:").expect("database opens");
-        database.register_catalogue_game("game-100", 100, "First", false).unwrap();
-        database.register_catalogue_game("game-101", 101, "Second", false).unwrap();
-        database.set_catalogue_external_id(100, "steam", "42").unwrap();
-        assert!(database.set_catalogue_external_id(101, "steam", "42").is_err());
-        assert!(database.set_catalogue_external_id(100, "../steam", "99").is_err());
-        assert!(database.set_catalogue_external_id(100, "steam", "000099").unwrap());
+        database
+            .register_catalogue_game("game-100", 100, "First", false)
+            .unwrap();
+        database
+            .register_catalogue_game("game-101", 101, "Second", false)
+            .unwrap();
+        database
+            .set_catalogue_external_id(100, "steam", "42")
+            .unwrap();
+        assert!(
+            database
+                .set_catalogue_external_id(101, "steam", "42")
+                .is_err()
+        );
+        assert!(
+            database
+                .set_catalogue_external_id(100, "../steam", "99")
+                .is_err()
+        );
+        assert!(
+            database
+                .set_catalogue_external_id(100, "steam", "000099")
+                .unwrap()
+        );
     }
 
     #[test]
@@ -2195,15 +2376,23 @@ mod tests {
 
     #[test]
     fn local_imports_do_not_allocate_global_catalogue_ids() {
-        let path = std::env::temp_dir().join(format!("amethys-local-only-{}.sqlite", uuid::Uuid::new_v4()));
+        let path = std::env::temp_dir().join(format!(
+            "amethys-local-only-{}.sqlite",
+            uuid::Uuid::new_v4()
+        ));
         let database = Database::open(&path).expect("database opens");
-        let game = database.add_game("Unmatched Local Game", "Unknown", "/games/local", None)
+        let game = database
+            .add_game("Unmatched Local Game", "Unknown", "/games/local", None)
             .expect("local import succeeds");
         assert_eq!(database.get_catalogue_game_id(&game.id).unwrap(), None);
-        let count: i64 = database.connection.query_row(
-            "SELECT COUNT(*) FROM catalogue_games", [], |row| row.get(0)
-        ).unwrap();
-        assert_eq!(count, 0, "local imports must not populate the shared catalogue");
+        let count: i64 = database
+            .connection
+            .query_row("SELECT COUNT(*) FROM catalogue_games", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(
+            count, 0,
+            "local imports must not populate the shared catalogue"
+        );
         drop(database);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
@@ -2212,21 +2401,49 @@ mod tests {
 
     #[test]
     fn master_catalogue_ids_are_explicit_and_external_ids_are_global() {
-        let path = std::env::temp_dir().join(format!("amethys-master-{}.sqlite", uuid::Uuid::new_v4()));
+        let path =
+            std::env::temp_dir().join(format!("amethys-master-{}.sqlite", uuid::Uuid::new_v4()));
         let database = Database::open(&path).expect("database opens");
-        database.register_catalogue_game("igdb-game-42", 42, "Master Game", false).unwrap();
+        database
+            .register_catalogue_game("igdb-game-42", 42, "Master Game", false)
+            .unwrap();
         assert_eq!(
             database.get_catalogue_game("igdb-game-42").unwrap(),
-            Some(CatalogueGame { id: "igdb-game-42".into(), name: "Master Game".into() })
+            Some(CatalogueGame {
+                id: "igdb-game-42".into(),
+                name: "Master Game".into()
+            })
         );
-        assert!(database.set_catalogue_external_id(42, "steam", "0000570").unwrap());
+        assert!(
+            database
+                .set_catalogue_external_id(42, "steam", "0000570")
+                .unwrap()
+        );
         assert_eq!(
-            database.get_catalogue_game_by_external_id("steam", "0000570").unwrap(),
-            Some(CatalogueGame { id: "42".into(), name: "Master Game".into() })
+            database
+                .get_catalogue_game_by_external_id("steam", "0000570")
+                .unwrap(),
+            Some(CatalogueGame {
+                id: "42".into(),
+                name: "Master Game".into()
+            })
         );
-        assert!(database.register_catalogue_game("invalid", 0, "Invalid", false).is_err());
-        database.register_catalogue_game("igdb-game-42", 42, "Updated Master Name", false).unwrap();
-        assert_eq!(database.get_catalogue_game("igdb-game-42").unwrap().unwrap().name, "Updated Master Name");
+        assert!(
+            database
+                .register_catalogue_game("invalid", 0, "Invalid", false)
+                .is_err()
+        );
+        database
+            .register_catalogue_game("igdb-game-42", 42, "Updated Master Name", false)
+            .unwrap();
+        assert_eq!(
+            database
+                .get_catalogue_game("igdb-game-42")
+                .unwrap()
+                .unwrap()
+                .name,
+            "Updated Master Name"
+        );
         drop(database);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));

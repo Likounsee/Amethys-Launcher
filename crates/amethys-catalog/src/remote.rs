@@ -48,8 +48,10 @@ impl StaticCatalogProvider {
     pub fn new(base_url: &str) -> RemoteCatalogResult<Self> {
         let mut parsed = Url::parse(base_url)
             .map_err(|error| RemoteCatalogError::InvalidUrl(error.to_string()))?;
-        if parsed.scheme() != "https" || parsed.host_str().is_none()
-            || !parsed.username().is_empty() || parsed.password().is_some()
+        if parsed.scheme() != "https"
+            || parsed.host_str().is_none()
+            || !parsed.username().is_empty()
+            || parsed.password().is_some()
         {
             return Err(RemoteCatalogError::InvalidUrl(
                 "provider base URL must be HTTPS and contain no credentials".into(),
@@ -179,7 +181,11 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             .user_agent(concat!("Amethys-Launcher/", env!("CARGO_PKG_VERSION")))
             .build()
             .map_err(|error| RemoteCatalogError::Network(error.to_string()))?;
-        Ok(Self { provider, http, cache_dir: cache_dir.into() })
+        Ok(Self {
+            provider,
+            http,
+            cache_dir: cache_dir.into(),
+        })
     }
 
     pub fn provider(&self) -> &P {
@@ -187,7 +193,10 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
     }
 
     pub async fn fetch_manifest(&self) -> RemoteCatalogResult<CatalogManifest> {
-        let url = self.provider.base_url().join("manifest.json")
+        let url = self
+            .provider
+            .base_url()
+            .join("manifest.json")
             .map_err(|error| RemoteCatalogError::InvalidUrl(error.to_string()))?;
         let bytes = self.fetch_bytes(&url, MAX_MANIFEST_BYTES, None).await?;
         let manifest: CatalogManifest = serde_json::from_slice(&bytes)
@@ -205,46 +214,83 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         validate_manifest(manifest)?;
         let descriptor = &manifest.search_index;
         let url = self.file_url(&descriptor.file)?;
-        let compressed = self.fetch_bytes(
-            &url,
-            MAX_COMPRESSED_FILE_BYTES,
-            descriptor.compressed_sha256.as_deref(),
-        ).await?;
+        let compressed = self
+            .fetch_bytes(
+                &url,
+                MAX_COMPRESSED_FILE_BYTES,
+                descriptor.compressed_sha256.as_deref(),
+            )
+            .await?;
         verify_size(descriptor.compressed_size, compressed.len())?;
         let decoded = decompress_bounded(&compressed)?;
         // Accept both the legacy three-field rows and the genre-aware
         // four-field format so existing published catalogues remain readable.
-        let rows: Vec<serde_json::Value> = serde_json::from_slice(&decoded)
-            .map_err(|error| RemoteCatalogError::InvalidData(format!("search index JSON: {error}")))?;
+        let rows: Vec<serde_json::Value> = serde_json::from_slice(&decoded).map_err(|error| {
+            RemoteCatalogError::InvalidData(format!("search index JSON: {error}"))
+        })?;
         if rows.len() as u64 != manifest.game_count {
             return Err(RemoteCatalogError::InvalidData(format!(
-                "search index has {} rows; manifest declares {}", rows.len(), manifest.game_count
+                "search index has {} rows; manifest declares {}",
+                rows.len(),
+                manifest.game_count
             )));
         }
         let mut previous_id = 0;
         let mut entries = Vec::with_capacity(rows.len());
         for row in rows {
-            let fields = row.as_array().ok_or_else(|| RemoteCatalogError::InvalidData(
-                "search index rows must be arrays".into()
-            ))?;
+            let fields = row.as_array().ok_or_else(|| {
+                RemoteCatalogError::InvalidData("search index rows must be arrays".into())
+            })?;
             if !(3..=4).contains(&fields.len()) {
-                return Err(RemoteCatalogError::InvalidData("search index row has an unsupported field count".into()));
+                return Err(RemoteCatalogError::InvalidData(
+                    "search index row has an unsupported field count".into(),
+                ));
             }
-            let id = fields[0].as_u64().ok_or_else(|| RemoteCatalogError::InvalidData("search index ID is invalid".into()))?;
-            let name = fields[1].as_str().ok_or_else(|| RemoteCatalogError::InvalidData("search index name is invalid".into()))?.to_owned();
-            let slug = if fields[2].is_null() { None } else {
-                Some(fields[2].as_str().ok_or_else(|| RemoteCatalogError::InvalidData("search index slug is invalid".into()))?.to_owned())
+            let id = fields[0].as_u64().ok_or_else(|| {
+                RemoteCatalogError::InvalidData("search index ID is invalid".into())
+            })?;
+            let name = fields[1]
+                .as_str()
+                .ok_or_else(|| {
+                    RemoteCatalogError::InvalidData("search index name is invalid".into())
+                })?
+                .to_owned();
+            let slug = if fields[2].is_null() {
+                None
+            } else {
+                Some(
+                    fields[2]
+                        .as_str()
+                        .ok_or_else(|| {
+                            RemoteCatalogError::InvalidData("search index slug is invalid".into())
+                        })?
+                        .to_owned(),
+                )
             };
-            let genres = fields.get(3).and_then(serde_json::Value::as_array)
-                .map(|items| items.iter().filter_map(serde_json::Value::as_str).map(str::to_owned).collect())
+            let genres = fields
+                .get(3)
+                .and_then(serde_json::Value::as_array)
+                .map(|items| {
+                    items
+                        .iter()
+                        .filter_map(serde_json::Value::as_str)
+                        .map(str::to_owned)
+                        .collect()
+                })
                 .unwrap_or_default();
             if id == 0 || id <= previous_id || name.trim().is_empty() || name.len() > 512 {
                 return Err(RemoteCatalogError::InvalidData(
-                    "search index IDs must be unique, ascending and nonzero; names must be valid".into()
+                    "search index IDs must be unique, ascending and nonzero; names must be valid"
+                        .into(),
                 ));
             }
             previous_id = id;
-            entries.push(CatalogSearchEntry { amethys_id: id, name, slug, genres });
+            entries.push(CatalogSearchEntry {
+                amethys_id: id,
+                name,
+                slug,
+                genres,
+            });
         }
         let cache_path = self.cache_dir.join("index").join("games-index.json");
         let json = serde_json::to_vec(&entries)
@@ -269,7 +315,7 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
     ) -> RemoteCatalogResult<Vec<CatalogSearchEntry>> {
         if query.len() > 256 || limit == 0 || limit > MAX_SEARCH_RESULTS {
             return Err(RemoteCatalogError::InvalidData(
-                "search query or result limit is outside allowed bounds".into()
+                "search query or result limit is outside allowed bounds".into(),
             ));
         }
         let needle = query.trim().to_lowercase();
@@ -280,7 +326,8 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             results.truncate(limit);
             return Ok(results);
         }
-        Ok(entries.iter()
+        Ok(entries
+            .iter()
             .filter(|entry| entry.name.to_lowercase().contains(&needle))
             .take(limit)
             .cloned()
@@ -298,40 +345,62 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         owned_names: &[String],
         limit: usize,
     ) -> RemoteCatalogResult<Vec<CatalogSearchEntry>> {
-        if limit == 0 || limit > 100 || owned_genres.len() > 512
-            || owned_ids.len() > 10_000 || owned_names.len() > 10_000
-            || owned_genres.iter().any(|value| value.trim().is_empty() || value.len() > 128)
-            || owned_names.iter().any(|value| value.trim().is_empty() || value.len() > 512)
+        if limit == 0
+            || limit > 100
+            || owned_genres.len() > 512
+            || owned_ids.len() > 10_000
+            || owned_names.len() > 10_000
+            || owned_genres
+                .iter()
+                .any(|value| value.trim().is_empty() || value.len() > 128)
+            || owned_names
+                .iter()
+                .any(|value| value.trim().is_empty() || value.len() > 512)
         {
             return Err(RemoteCatalogError::InvalidData(
-                "recommendation profile or result limit is outside allowed bounds".into()
+                "recommendation profile or result limit is outside allowed bounds".into(),
             ));
         }
 
         let mut genre_weights = std::collections::HashMap::<String, usize>::new();
         for genre in owned_genres {
-            *genre_weights.entry(genre.trim().to_lowercase()).or_default() += 1;
+            *genre_weights
+                .entry(genre.trim().to_lowercase())
+                .or_default() += 1;
         }
-        let owned_ids = owned_ids.iter().copied().collect::<std::collections::HashSet<_>>();
-        let owned_names = owned_names.iter().map(|name| normalize_game_title(name))
+        let owned_ids = owned_ids
+            .iter()
+            .copied()
+            .collect::<std::collections::HashSet<_>>();
+        let owned_names = owned_names
+            .iter()
+            .map(|name| normalize_game_title(name))
             .collect::<std::collections::HashSet<_>>();
 
         // A locally installed game may not have been linked to an Amethys ID yet.
         // Exact title matches let the catalogue itself supply its genres anyway.
-        for entry in entries.iter().filter(|entry| owned_ids.contains(&entry.amethys_id)
-            || owned_names.contains(&normalize_game_title(&entry.name)))
-        {
+        for entry in entries.iter().filter(|entry| {
+            owned_ids.contains(&entry.amethys_id)
+                || owned_names.contains(&normalize_game_title(&entry.name))
+        }) {
             for genre in &entry.genres {
-                *genre_weights.entry(genre.trim().to_lowercase()).or_default() += 1;
+                *genre_weights
+                    .entry(genre.trim().to_lowercase())
+                    .or_default() += 1;
             }
         }
 
-        let mut ranked = entries.iter()
-            .filter(|entry| !owned_ids.contains(&entry.amethys_id)
-                && !owned_names.contains(&normalize_game_title(&entry.name)))
+        let mut ranked = entries
+            .iter()
+            .filter(|entry| {
+                !owned_ids.contains(&entry.amethys_id)
+                    && !owned_names.contains(&normalize_game_title(&entry.name))
+            })
             .map(|entry| {
                 let mut seen = std::collections::HashSet::new();
-                let score = entry.genres.iter()
+                let score = entry
+                    .genres
+                    .iter()
                     .map(|genre| genre.trim().to_lowercase())
                     .filter(|genre| !genre.is_empty() && seen.insert(genre.clone()))
                     .map(|genre| genre_weights.get(&genre).copied().unwrap_or(0))
@@ -342,11 +411,17 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         // Keep the ranking deterministic when multiple games share the same
         // genre score. A zero-score catalogue must not look personalized.
         ranked.sort_by(|left, right| {
-            right.0.cmp(&left.0)
+            right
+                .0
+                .cmp(&left.0)
                 .then_with(|| left.1.name.to_lowercase().cmp(&right.1.name.to_lowercase()))
                 .then_with(|| left.1.amethys_id.cmp(&right.1.amethys_id))
         });
-        Ok(ranked.into_iter().take(limit).map(|(_, entry)| entry.clone()).collect())
+        Ok(ranked
+            .into_iter()
+            .take(limit)
+            .map(|(_, entry)| entry.clone())
+            .collect())
     }
 
     /// Downloads a single ID-range shard, verifies its compressed checksum and
@@ -358,33 +433,58 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
     ) -> RemoteCatalogResult<CatalogGameDetail> {
         validate_manifest(manifest)?;
         if amethys_id == 0 {
-            return Err(RemoteCatalogError::InvalidData("Amethys ID cannot be zero".into()));
+            return Err(RemoteCatalogError::InvalidData(
+                "Amethys ID cannot be zero".into(),
+            ));
         }
         let bucket = amethys_id / manifest.shards.bucket_size;
-        let descriptor = manifest.shards.files.iter().find(|item| item.bucket == bucket)
-            .ok_or_else(|| RemoteCatalogError::InvalidData(format!("no shard for Amethys ID {amethys_id}")))?;
-        let cache_path = self.cache_dir.join("shards").join(format!("{:06}-{}.json", bucket, &descriptor.compressed_sha256[..12]));
+        let descriptor = manifest
+            .shards
+            .files
+            .iter()
+            .find(|item| item.bucket == bucket)
+            .ok_or_else(|| {
+                RemoteCatalogError::InvalidData(format!("no shard for Amethys ID {amethys_id}"))
+            })?;
+        let cache_path = self.cache_dir.join("shards").join(format!(
+            "{:06}-{}.json",
+            bucket,
+            &descriptor.compressed_sha256[..12]
+        ));
         let records: Vec<CatalogGameDetail> = if cache_path.is_file() {
-            let bytes = fs::read(&cache_path).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
-            serde_json::from_slice(&bytes)
-                .map_err(|error| RemoteCatalogError::InvalidData(format!("cached shard JSON: {error}")))?
+            let bytes = fs::read(&cache_path)
+                .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+            serde_json::from_slice(&bytes).map_err(|error| {
+                RemoteCatalogError::InvalidData(format!("cached shard JSON: {error}"))
+            })?
         } else {
             let url = self.file_url(&descriptor.file)?;
-            let compressed = self.fetch_bytes(
-                &url, MAX_COMPRESSED_FILE_BYTES, Some(&descriptor.compressed_sha256)
-            ).await?;
+            let compressed = self
+                .fetch_bytes(
+                    &url,
+                    MAX_COMPRESSED_FILE_BYTES,
+                    Some(&descriptor.compressed_sha256),
+                )
+                .await?;
             verify_size(Some(descriptor.compressed_size), compressed.len())?;
             let decoded = decompress_bounded(&compressed)?;
-            let records: Vec<CatalogGameDetail> = serde_json::from_slice(&decoded)
-                .map_err(|error| RemoteCatalogError::InvalidData(format!("detail shard JSON: {error}")))?;
+            let records: Vec<CatalogGameDetail> =
+                serde_json::from_slice(&decoded).map_err(|error| {
+                    RemoteCatalogError::InvalidData(format!("detail shard JSON: {error}"))
+                })?;
             if records.len() as u64 != descriptor.game_count {
-                return Err(RemoteCatalogError::InvalidData("detail shard record count mismatch".into()));
+                return Err(RemoteCatalogError::InvalidData(
+                    "detail shard record count mismatch".into(),
+                ));
             }
             for record in &records {
                 if record.amethys_id / manifest.shards.bucket_size != bucket
-                    || record.amethys_id == 0 || record.name.trim().is_empty()
+                    || record.amethys_id == 0
+                    || record.name.trim().is_empty()
                 {
-                    return Err(RemoteCatalogError::InvalidData("detail shard contains an invalid game identity".into()));
+                    return Err(RemoteCatalogError::InvalidData(
+                        "detail shard contains an invalid game identity".into(),
+                    ));
                 }
             }
             let json = serde_json::to_vec(&records)
@@ -392,13 +492,21 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             atomic_write(&cache_path, &json)?;
             records
         };
-        records.into_iter().find(|game| game.amethys_id == amethys_id)
-            .ok_or_else(|| RemoteCatalogError::InvalidData(format!("game {amethys_id} is absent from its shard")))
+        records
+            .into_iter()
+            .find(|game| game.amethys_id == amethys_id)
+            .ok_or_else(|| {
+                RemoteCatalogError::InvalidData(format!(
+                    "game {amethys_id} is absent from its shard"
+                ))
+            })
     }
 
     fn file_url(&self, relative: &str) -> RemoteCatalogResult<Url> {
         validate_relative_path(relative)?;
-        self.provider.base_url().join(relative)
+        self.provider
+            .base_url()
+            .join(relative)
             .map_err(|error| RemoteCatalogError::InvalidUrl(error.to_string()))
     }
 
@@ -409,31 +517,50 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         expected_sha256: Option<&str>,
     ) -> RemoteCatalogResult<Vec<u8>> {
         if url.scheme() != "https" {
-            return Err(RemoteCatalogError::InvalidUrl("only HTTPS catalogue files are accepted".into()));
+            return Err(RemoteCatalogError::InvalidUrl(
+                "only HTTPS catalogue files are accepted".into(),
+            ));
         }
-        let mut response = self.http.get(url.clone()).send().await
+        let mut response = self
+            .http
+            .get(url.clone())
+            .send()
+            .await
             .map_err(|error| RemoteCatalogError::Network(error.to_string()))?
             .error_for_status()
             .map_err(|error| RemoteCatalogError::Network(error.to_string()))?;
         if response.url().scheme() != "https" {
-            return Err(RemoteCatalogError::InvalidUrl("catalogue redirects must remain HTTPS".into()));
+            return Err(RemoteCatalogError::InvalidUrl(
+                "catalogue redirects must remain HTTPS".into(),
+            ));
         }
-        if response.content_length().is_some_and(|length| length > max_bytes as u64) {
-            return Err(RemoteCatalogError::InvalidData("catalogue response exceeds size limit".into()));
+        if response
+            .content_length()
+            .is_some_and(|length| length > max_bytes as u64)
+        {
+            return Err(RemoteCatalogError::InvalidData(
+                "catalogue response exceeds size limit".into(),
+            ));
         }
         let mut bytes = Vec::new();
-        while let Some(chunk) = response.chunk().await
+        while let Some(chunk) = response
+            .chunk()
+            .await
             .map_err(|error| RemoteCatalogError::Network(error.to_string()))?
         {
             if bytes.len().saturating_add(chunk.len()) > max_bytes {
-                return Err(RemoteCatalogError::InvalidData("catalogue response exceeds size limit".into()));
+                return Err(RemoteCatalogError::InvalidData(
+                    "catalogue response exceeds size limit".into(),
+                ));
             }
             bytes.extend_from_slice(&chunk);
         }
         if let Some(expected) = expected_sha256 {
             let actual = sha256_hex(&bytes);
             if !constant_time_eq(expected, &actual) {
-                return Err(RemoteCatalogError::InvalidData("catalogue SHA-256 mismatch".into()));
+                return Err(RemoteCatalogError::InvalidData(
+                    "catalogue SHA-256 mismatch".into(),
+                ));
             }
         }
         Ok(bytes)
@@ -442,25 +569,45 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
 
 fn validate_manifest(manifest: &CatalogManifest) -> RemoteCatalogResult<()> {
     if manifest.manifest_schema_version != 2 || manifest.catalog_schema_version != 1 {
-        return Err(RemoteCatalogError::InvalidData("unsupported catalogue manifest/schema version".into()));
+        return Err(RemoteCatalogError::InvalidData(
+            "unsupported catalogue manifest/schema version".into(),
+        ));
     }
-    if manifest.catalog_version.trim().is_empty() || manifest.game_count == 0
-        || manifest.shards.bucket_size == 0 || manifest.shards.game_count != manifest.game_count
+    if manifest.catalog_version.trim().is_empty()
+        || manifest.game_count == 0
+        || manifest.shards.bucket_size == 0
+        || manifest.shards.game_count != manifest.game_count
     {
-        return Err(RemoteCatalogError::InvalidData("manifest counters or version are invalid".into()));
+        return Err(RemoteCatalogError::InvalidData(
+            "manifest counters or version are invalid".into(),
+        ));
     }
     validate_relative_path(&manifest.search_index.file)?;
-    if manifest.search_index.compressed_sha256.as_deref().is_none_or(|hash| !valid_sha256(hash)) {
-        return Err(RemoteCatalogError::InvalidData("search-index checksum is missing or invalid".into()));
+    if manifest
+        .search_index
+        .compressed_sha256
+        .as_deref()
+        .is_none_or(|hash| !valid_sha256(hash))
+    {
+        return Err(RemoteCatalogError::InvalidData(
+            "search-index checksum is missing or invalid".into(),
+        ));
     }
     if manifest.shards.files.len() > 100_000 {
-        return Err(RemoteCatalogError::InvalidData("manifest contains too many shards".into()));
+        return Err(RemoteCatalogError::InvalidData(
+            "manifest contains too many shards".into(),
+        ));
     }
     let mut buckets = std::collections::BTreeSet::new();
     for shard in &manifest.shards.files {
         validate_relative_path(&shard.file)?;
-        if !buckets.insert(shard.bucket) || shard.game_count == 0 || !valid_sha256(&shard.compressed_sha256) {
-            return Err(RemoteCatalogError::InvalidData("manifest contains an invalid shard descriptor".into()));
+        if !buckets.insert(shard.bucket)
+            || shard.game_count == 0
+            || !valid_sha256(&shard.compressed_sha256)
+        {
+            return Err(RemoteCatalogError::InvalidData(
+                "manifest contains an invalid shard descriptor".into(),
+            ));
         }
     }
     validate_relative_path(&manifest.metadata.genres.file)?;
@@ -469,11 +616,18 @@ fn validate_manifest(manifest: &CatalogManifest) -> RemoteCatalogResult<()> {
 
 fn validate_relative_path(value: &str) -> RemoteCatalogResult<()> {
     let path = Path::new(value);
-    if value.is_empty() || value.len() > 512 || path.is_absolute()
-        || path.components().any(|component| !matches!(component, Component::Normal(_)))
-        || value.contains('\\') || value.contains(':')
+    if value.is_empty()
+        || value.len() > 512
+        || path.is_absolute()
+        || path
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+        || value.contains('\\')
+        || value.contains(':')
     {
-        return Err(RemoteCatalogError::InvalidData("catalogue file path is not a safe relative path".into()));
+        return Err(RemoteCatalogError::InvalidData(
+            "catalogue file path is not a safe relative path".into(),
+        ));
     }
     Ok(())
 }
@@ -483,17 +637,22 @@ fn decompress_bounded(compressed: &[u8]) -> RemoteCatalogResult<Vec<u8>> {
         .map_err(|error| RemoteCatalogError::InvalidData(format!("Zstandard stream: {error}")))?;
     let mut limited = decoder.take(MAX_DECOMPRESSED_FILE_BYTES as u64 + 1);
     let mut output = Vec::new();
-    limited.read_to_end(&mut output)
-        .map_err(|error| RemoteCatalogError::InvalidData(format!("Zstandard decompression: {error}")))?;
+    limited.read_to_end(&mut output).map_err(|error| {
+        RemoteCatalogError::InvalidData(format!("Zstandard decompression: {error}"))
+    })?;
     if output.len() > MAX_DECOMPRESSED_FILE_BYTES {
-        return Err(RemoteCatalogError::InvalidData("decompressed catalogue file exceeds size limit".into()));
+        return Err(RemoteCatalogError::InvalidData(
+            "decompressed catalogue file exceeds size limit".into(),
+        ));
     }
     Ok(output)
 }
 
 fn verify_size(expected: Option<u64>, actual: usize) -> RemoteCatalogResult<()> {
     if expected.is_some_and(|size| size != actual as u64) {
-        return Err(RemoteCatalogError::InvalidData("catalogue compressed-size mismatch".into()));
+        return Err(RemoteCatalogError::InvalidData(
+            "catalogue compressed-size mismatch".into(),
+        ));
     }
     Ok(())
 }
@@ -503,8 +662,12 @@ fn valid_sha256(value: &str) -> bool {
 }
 
 fn constant_time_eq(left: &str, right: &str) -> bool {
-    left.len() == right.len() && left.bytes().zip(right.bytes())
-        .fold(0u8, |difference, (a, b)| difference | (a ^ b)) == 0
+    left.len() == right.len()
+        && left
+            .bytes()
+            .zip(right.bytes())
+            .fold(0u8, |difference, (a, b)| difference | (a ^ b))
+            == 0
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -512,11 +675,15 @@ fn sha256_hex(bytes: &[u8]) -> String {
 }
 
 fn atomic_write(path: &Path, bytes: &[u8]) -> RemoteCatalogResult<()> {
-    let parent = path.parent().ok_or_else(|| RemoteCatalogError::Cache("cache path has no parent".into()))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| RemoteCatalogError::Cache("cache path has no parent".into()))?;
     fs::create_dir_all(parent).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
     let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
-    let mut file = fs::File::create(&temporary).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
-    file.write_all(bytes).and_then(|()| file.sync_all())
+    let mut file = fs::File::create(&temporary)
+        .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+    file.write_all(bytes)
+        .and_then(|()| file.sync_all())
         .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
     #[cfg(windows)]
     if path.exists() {

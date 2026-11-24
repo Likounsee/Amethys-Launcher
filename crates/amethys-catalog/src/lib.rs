@@ -790,13 +790,15 @@ impl CatalogRepository {
             let amethys_id = i64::try_from(game.amethys_id).map_err(|_| {
                 CatalogError::InvalidDocument("Amethys ID exceeds SQLite integer range".into())
             })?;
-            transaction.execute(
-                "INSERT INTO catalogue_games (id, name, amethys_id, retired)
+            transaction
+                .execute(
+                    "INSERT INTO catalogue_games (id, name, amethys_id, retired)
                  VALUES (?1, ?2, ?3, 0)
                  ON CONFLICT(id) DO UPDATE SET name = excluded.name
                  WHERE catalogue_games.amethys_id = excluded.amethys_id",
-                params![game.id, game.title, amethys_id],
-            ).map_err(db_error)?;
+                    params![game.id, game.title, amethys_id],
+                )
+                .map_err(db_error)?;
             transaction
                 .execute(
                     "INSERT INTO catalog_source_games (
@@ -922,9 +924,8 @@ impl CatalogRepository {
             .map_err(db_error)?;
         value
             .map(|id| {
-                u64::try_from(id).map_err(|_| {
-                    CatalogError::Database("negative Amethys ID in registry".into())
-                })
+                u64::try_from(id)
+                    .map_err(|_| CatalogError::Database("negative Amethys ID in registry".into()))
             })
             .transpose()
     }
@@ -1246,8 +1247,12 @@ mod tests {
             Some(found[0].amethys_id)
         );
         let external = CatalogRepository::find_by_platform_identity(
-            &database, "external-link", "official-page"
-        ).unwrap().expect("platform identity resolves");
+            &database,
+            "external-link",
+            "official-page",
+        )
+        .unwrap()
+        .expect("platform identity resolves");
         assert_eq!(external.amethys_id, found[0].amethys_id);
         assert_eq!(external.external_game_id, "official-page");
         assert_eq!(

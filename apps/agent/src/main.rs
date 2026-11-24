@@ -1,8 +1,8 @@
 use amethys_events::EventBus;
 use amethys_ipc::{
-    IpcCommand, IpcCoreStatus, IpcEnvelope, IpcGameEntry, IpcRemoteError, IpcRequest, IpcResponse,
-    IpcResponsePayload, IpcCatalogSearchEntry, IpcCatalogGameDetail, IpcCatalogStoreIdentity, IpcOwnedGameEntry,
-    read_envelope, transport::IpcListener, write_message,
+    IpcCatalogGameDetail, IpcCatalogSearchEntry, IpcCatalogStoreIdentity, IpcCommand,
+    IpcCoreStatus, IpcEnvelope, IpcGameEntry, IpcOwnedGameEntry, IpcRemoteError, IpcRequest,
+    IpcResponse, IpcResponsePayload, read_envelope, transport::IpcListener, write_message,
 };
 use amethys_runtime::{CoreRuntime, RuntimeState};
 use amethys_storage::Database;
@@ -31,12 +31,17 @@ async fn sync_master_catalog() -> Result<IpcResponsePayload, String> {
         .unwrap_or_else(|_| DEFAULT_MASTER_CATALOG_URL.to_owned());
     let provider = amethys_catalog::remote::StaticCatalogProvider::new(&base_url)
         .map_err(|error| error.to_string())?;
-    let client = amethys_catalog::remote::RemoteCatalogClient::new(
-        provider,
-        data_dir.join("catalog-cache"),
-    ).map_err(|error| error.to_string())?;
-    let manifest = client.fetch_manifest().await.map_err(|error| error.to_string())?;
-    let entries = client.synchronize_index(&manifest).await.map_err(|error| error.to_string())?;
+    let client =
+        amethys_catalog::remote::RemoteCatalogClient::new(provider, data_dir.join("catalog-cache"))
+            .map_err(|error| error.to_string())?;
+    let manifest = client
+        .fetch_manifest()
+        .await
+        .map_err(|error| error.to_string())?;
+    let entries = client
+        .synchronize_index(&manifest)
+        .await
+        .map_err(|error| error.to_string())?;
     Ok(IpcResponsePayload::CatalogSynchronized {
         catalog_version: manifest.catalog_version,
         game_count: entries.len() as u64,
@@ -49,12 +54,15 @@ fn search_master_catalog(query: &str, limit: usize) -> Result<IpcResponsePayload
         .unwrap_or_else(|_| DEFAULT_MASTER_CATALOG_URL.to_owned());
     let provider = amethys_catalog::remote::StaticCatalogProvider::new(&base_url)
         .map_err(|error| error.to_string())?;
-    let client = amethys_catalog::remote::RemoteCatalogClient::new(
-        provider,
-        data_dir.join("catalog-cache"),
-    ).map_err(|error| error.to_string())?;
-    let entries = client.load_cached_index().map_err(|error| error.to_string())?;
-    let games = client.search_cached(&entries, query, limit).map_err(|error| error.to_string())?
+    let client =
+        amethys_catalog::remote::RemoteCatalogClient::new(provider, data_dir.join("catalog-cache"))
+            .map_err(|error| error.to_string())?;
+    let entries = client
+        .load_cached_index()
+        .map_err(|error| error.to_string())?;
+    let games = client
+        .search_cached(&entries, query, limit)
+        .map_err(|error| error.to_string())?
         .into_iter()
         .map(|entry| IpcCatalogSearchEntry {
             amethys_id: entry.amethys_id,
@@ -77,12 +85,14 @@ fn recommend_master_catalog(
         .unwrap_or_else(|_| DEFAULT_MASTER_CATALOG_URL.to_owned());
     let provider = amethys_catalog::remote::StaticCatalogProvider::new(&base_url)
         .map_err(|error| error.to_string())?;
-    let client = amethys_catalog::remote::RemoteCatalogClient::new(
-        provider,
-        data_dir.join("catalog-cache"),
-    ).map_err(|error| error.to_string())?;
-    let entries = client.load_cached_index().map_err(|error| error.to_string())?;
-    let games = client.recommend_cached(&entries, genres, owned_ids, owned_names, limit)
+    let client =
+        amethys_catalog::remote::RemoteCatalogClient::new(provider, data_dir.join("catalog-cache"))
+            .map_err(|error| error.to_string())?;
+    let entries = client
+        .load_cached_index()
+        .map_err(|error| error.to_string())?;
+    let games = client
+        .recommend_cached(&entries, genres, owned_ids, owned_names, limit)
         .map_err(|error| error.to_string())?
         .into_iter()
         .map(|entry| IpcCatalogSearchEntry {
@@ -101,12 +111,17 @@ async fn get_master_catalog_game(amethys_id: u64) -> Result<IpcResponsePayload, 
         .unwrap_or_else(|_| DEFAULT_MASTER_CATALOG_URL.to_owned());
     let provider = amethys_catalog::remote::StaticCatalogProvider::new(&base_url)
         .map_err(|error| error.to_string())?;
-    let client = amethys_catalog::remote::RemoteCatalogClient::new(
-        provider,
-        data_dir.join("catalog-cache"),
-    ).map_err(|error| error.to_string())?;
-    let manifest = client.fetch_manifest().await.map_err(|error| error.to_string())?;
-    let game = client.fetch_game(&manifest, amethys_id).await.map_err(|error| error.to_string())?;
+    let client =
+        amethys_catalog::remote::RemoteCatalogClient::new(provider, data_dir.join("catalog-cache"))
+            .map_err(|error| error.to_string())?;
+    let manifest = client
+        .fetch_manifest()
+        .await
+        .map_err(|error| error.to_string())?;
+    let game = client
+        .fetch_game(&manifest, amethys_id)
+        .await
+        .map_err(|error| error.to_string())?;
     Ok(IpcResponsePayload::CatalogGameDetails {
         game: IpcCatalogGameDetail {
             amethys_id: game.amethys_id,
@@ -117,12 +132,16 @@ async fn get_master_catalog_game(amethys_id: u64) -> Result<IpcResponsePayload, 
             release_date: game.release_date,
             cover_url: game.cover_url,
             genres: game.genres,
-            stores: game.stores.into_iter().map(|store| IpcCatalogStoreIdentity {
-                store: store.store,
-                external_id: store.external_id,
-                name: store.name,
-                url: store.url,
-            }).collect(),
+            stores: game
+                .stores
+                .into_iter()
+                .map(|store| IpcCatalogStoreIdentity {
+                    store: store.store,
+                    external_id: store.external_id,
+                    name: store.name,
+                    url: store.url,
+                })
+                .collect(),
         },
     })
 }
@@ -192,7 +211,12 @@ where
             write_message(stream, &response).await?;
             return Ok(());
         }
-        IpcCommand::SearchRecommendedCatalog { genres, owned_ids, owned_names, limit } => {
+        IpcCommand::SearchRecommendedCatalog {
+            genres,
+            owned_ids,
+            owned_names,
+            limit,
+        } => {
             let response = match recommend_master_catalog(genres, owned_ids, owned_names, *limit) {
                 Ok(payload) => IpcResponse::success(request.request_id, payload),
                 Err(message) => IpcResponse::failure(
@@ -237,13 +261,38 @@ where
         command => {
             let database = database.lock().await;
             match command {
-                IpcCommand::ListOwnedGames => database.list_owned_games().map(|entries| IpcResponsePayload::OwnedGames {
-                    games: entries.into_iter().map(|game| IpcOwnedGameEntry { amethys_id: game.amethys_id, name: game.name, genres: game.genres, added_at: game.added_at }).collect(),
-                }),
-                IpcCommand::AddOwnedGame { amethys_id, name, genres } => database.add_owned_game(amethys_id, &name, &genres).map(|game| IpcResponsePayload::OwnedGameAdded {
-                    game: IpcOwnedGameEntry { amethys_id: game.amethys_id, name: game.name, genres: game.genres, added_at: game.added_at },
-                }),
-                IpcCommand::RemoveOwnedGame { amethys_id } => database.remove_owned_game(amethys_id).map(|removed| IpcResponsePayload::OwnedGameRemoved { removed }),
+                IpcCommand::ListOwnedGames => {
+                    database
+                        .list_owned_games()
+                        .map(|entries| IpcResponsePayload::OwnedGames {
+                            games: entries
+                                .into_iter()
+                                .map(|game| IpcOwnedGameEntry {
+                                    amethys_id: game.amethys_id,
+                                    name: game.name,
+                                    genres: game.genres,
+                                    added_at: game.added_at,
+                                })
+                                .collect(),
+                        })
+                }
+                IpcCommand::AddOwnedGame {
+                    amethys_id,
+                    name,
+                    genres,
+                } => database
+                    .add_owned_game(amethys_id, &name, &genres)
+                    .map(|game| IpcResponsePayload::OwnedGameAdded {
+                        game: IpcOwnedGameEntry {
+                            amethys_id: game.amethys_id,
+                            name: game.name,
+                            genres: game.genres,
+                            added_at: game.added_at,
+                        },
+                    }),
+                IpcCommand::RemoveOwnedGame { amethys_id } => database
+                    .remove_owned_game(amethys_id)
+                    .map(|removed| IpcResponsePayload::OwnedGameRemoved { removed }),
                 IpcCommand::ListGames => database.list_games().and_then(|entries| {
                     entries
                         .into_iter()
@@ -354,7 +403,9 @@ where
                 IpcCommand::RemoveGame { id } => database
                     .remove_game(&id)
                     .map(|removed| IpcResponsePayload::GameRemoved { removed }),
-                IpcCommand::Ping | IpcCommand::GetStatus | IpcCommand::SyncMasterCatalog
+                IpcCommand::Ping
+                | IpcCommand::GetStatus
+                | IpcCommand::SyncMasterCatalog
                 | IpcCommand::SearchMasterCatalog { .. }
                 | IpcCommand::SearchRecommendedCatalog { .. }
                 | IpcCommand::GetMasterCatalogGame { .. } => unreachable!("handled above"),

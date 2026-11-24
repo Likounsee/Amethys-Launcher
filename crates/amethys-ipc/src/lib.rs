@@ -18,8 +18,14 @@ pub enum IpcCommand {
     ListGames,
     /// Lists games the user owns, regardless of installation state.
     ListOwnedGames,
-    AddOwnedGame { amethys_id: u64, name: String, genres: Vec<String> },
-    RemoveOwnedGame { amethys_id: u64 },
+    AddOwnedGame {
+        amethys_id: u64,
+        name: String,
+        genres: Vec<String>,
+    },
+    RemoveOwnedGame {
+        amethys_id: u64,
+    },
     /// Adds a game to the local library.
     AddGame {
         name: String,
@@ -36,11 +42,17 @@ pub enum IpcCommand {
         executable: Option<String>,
     },
     /// Configures the executable path for a game already in the library.
-    SetGameExecutable { id: String, executable: String },
+    SetGameExecutable {
+        id: String,
+        executable: String,
+    },
     /// Refreshes the public master catalogue index from its configured provider.
     SyncMasterCatalog,
     /// Searches the locally cached master catalogue index.
-    SearchMasterCatalog { query: String, limit: usize },
+    SearchMasterCatalog {
+        query: String,
+        limit: usize,
+    },
     /// Recommends catalogue games using genres and titles from the local library.
     SearchRecommendedCatalog {
         genres: Vec<String>,
@@ -49,9 +61,13 @@ pub enum IpcCommand {
         limit: usize,
     },
     /// Loads one master-catalogue game detail by its stable Amethys ID.
-    GetMasterCatalogGame { amethys_id: u64 },
+    GetMasterCatalogGame {
+        amethys_id: u64,
+    },
     /// Removes a game by its identifier.
-    RemoveGame { id: String },
+    RemoveGame {
+        id: String,
+    },
 }
 
 /// A request sent from a local client to the core agent.
@@ -82,16 +98,37 @@ pub enum IpcCoreStatus {
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum IpcResponsePayload {
     Pong,
-    CoreStatus { state: IpcCoreStatus },
-    Games { games: Vec<IpcGameEntry> },
-    OwnedGames { games: Vec<IpcOwnedGameEntry> },
-    OwnedGameAdded { game: IpcOwnedGameEntry },
-    OwnedGameRemoved { removed: bool },
-    GameAdded { game: Box<IpcGameEntry> },
-    GameRemoved { removed: bool },
-    CatalogSynchronized { catalog_version: String, game_count: u64 },
-    CatalogSearchResults { games: Vec<IpcCatalogSearchEntry> },
-    CatalogGameDetails { game: IpcCatalogGameDetail },
+    CoreStatus {
+        state: IpcCoreStatus,
+    },
+    Games {
+        games: Vec<IpcGameEntry>,
+    },
+    OwnedGames {
+        games: Vec<IpcOwnedGameEntry>,
+    },
+    OwnedGameAdded {
+        game: IpcOwnedGameEntry,
+    },
+    OwnedGameRemoved {
+        removed: bool,
+    },
+    GameAdded {
+        game: Box<IpcGameEntry>,
+    },
+    GameRemoved {
+        removed: bool,
+    },
+    CatalogSynchronized {
+        catalog_version: String,
+        game_count: u64,
+    },
+    CatalogSearchResults {
+        games: Vec<IpcCatalogSearchEntry>,
+    },
+    CatalogGameDetails {
+        game: IpcCatalogGameDetail,
+    },
 }
 
 /// Canonical metadata shared by all local installations of one Amethys game.
