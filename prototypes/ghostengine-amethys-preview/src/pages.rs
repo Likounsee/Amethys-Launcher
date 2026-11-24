@@ -1182,7 +1182,7 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
             p.scrim(art_x, art_y, art_w, hero_h - 28, 0.35, 170);
             let tx = art_x + art_w + 20;
             let tw = mw - art_w - 58;
-            chip(p, tx, y + 22, "À LA UNE", tw.min(140));
+            chip(p, tx, y + 22, "À EXPLORER", tw.min(140));
             p.paragraph(tx, y + 58, tw, 28, &featured.name, 23.0, W::Disp, TXT, 2);
             p.paragraph(tx, y + 116, tw, 19,
                 "Explorez sa fiche, consultez les informations et retrouvez les boutiques officielles.",
@@ -1212,27 +1212,30 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
     let cols = lay.columns().min(if lay.compact() { 2 } else { 4 }).max(1);
     let gap = 14;
     let card_w = (mw - gap * (cols - 1)) / cols;
-    let art_h = (card_w * 4 / 5).max(112);
+    // Game covers are portrait artwork (3:4), so the storefront uses the
+    // same visual rhythm as a real PC game shop instead of stretched banners.
+    let art_h = (card_w * 4 / 3).max(150);
+    let card_h = art_h + 96;
     let mut displayed = 0usize;
     for (index, game) in view.results.iter().enumerate() {
         if view.query.trim().is_empty() && index == 0 { continue; }
         let col = displayed as i32 % cols;
         let row = displayed as i32 / cols;
         let x = mx + col * (card_w + gap);
-        let cy = y + row * (art_h + 76 + gap);
-        panel(p, x, cy, card_w, art_h + 76, 14);
+        let cy = y + row * (card_h + gap);
+        panel(p, x, cy, card_w, card_h, 14);
         p.cover_or_placeholder(&game.amethys_id.to_string(), "", &game.name, x + 1, cy + 1, card_w - 2, art_h);
-        p.scrim(x + 1, cy + 1, card_w - 2, art_h, 0.35, 165);
-        chip(p, x + 12, cy + 12, "JEU PC", card_w - 24);
-        p.paragraph(x + 13, cy + art_h - 46, card_w - 26, 20, &game.name, 14.0, W::Semi, Color::WHITE, 2);
-        p.text(x + 14, cy + art_h + 13, 18, "Voir le produit", 11.5, W::Med, VIO_HI);
-        p.icon(Icon::Search, x + card_w - 29, cy + art_h + 14, 14, VIO_HI, PANEL);
-        p.hit_with(x, cy, card_w, art_h + 76, 14, Action::SelectCatalogGame(game.amethys_id), false, Hover::Card);
+        p.scrim(x + 1, cy + 1, card_w - 2, art_h, 0.42, 175);
+        chip(p, x + 12, cy + 12, "PC", card_w - 24);
+        p.paragraph(x + 14, cy + art_h + 10, card_w - 28, 21, &game.name, 14.0, W::Semi, TXT, 2);
+        p.text(x + 14, cy + card_h - 29, 11, "Consulter la fiche produit", 11.5, W::Med, VIO_HI);
+        p.icon(Icon::ArrowRight, x + card_w - 30, cy + card_h - 28, 14, VIO_HI, PANEL);
+        p.hit_with(x, cy, card_w, card_h, 14, Action::SelectCatalogGame(game.amethys_id), false, Hover::Card);
         displayed += 1;
         if displayed >= 48 { break; }
     }
     let rows = (displayed as i32 + cols - 1) / cols;
-    y + rows * (art_h + 76 + gap) + 24
+    y + rows * (card_h + gap) + 24
 }
 
 /// Dedicated product page for a game in the global store catalogue.
