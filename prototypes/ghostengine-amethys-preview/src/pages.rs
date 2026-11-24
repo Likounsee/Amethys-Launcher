@@ -1415,7 +1415,8 @@ pub fn store_product(p: &mut Painter, lay: &Layout, detail: Option<&IpcCatalogGa
     y += 88 + detail.stores.len().min(10) as i32 * 58;
     panel(p, mx, y, mw, 92, 16);
     p.text(mx + 22, y + 16, 20, "Informations du catalogue", 13.0, W::Semi, TXT);
-    p.text(mx + 22, y + 44, 18, &format!("Amethys ID · {}     IGDB ID · {}", detail.amethys_id, detail.igdb_id), 11.5, W::Reg, MUT);
+    let igdb_label = detail.igdb_id.map_or_else(|| "—".to_string(), |id| id.to_string());
+    p.text(mx + 22, y + 44, 18, &format!("Amethys ID · {}     IGDB ID · {}", detail.amethys_id, igdb_label), 11.5, W::Reg, MUT);
     y + 112
 }
 
