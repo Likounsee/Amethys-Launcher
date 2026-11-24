@@ -875,6 +875,17 @@ impl App {
         (p.hits, p.fb, (h.max(lay.h) as f32 * lay.scale).ceil() as i32)
     }
 
+    /// Updates only the store search field; artwork/cards stay in the cached framebuffer.
+    fn redraw_store_search_only(&mut self) {
+        let old = std::mem::replace(
+            &mut self.content,
+            Framebuffer::new(1, 1, gfx::BG).expect("temporary framebuffer"),
+        );
+        let mut painter = Painter::from_framebuffer(old, self.fonts).with_scale(self.lay.scale);
+        pages::redraw_store_search(&mut painter, &self.lay, &self.store_query, self.store_search_focused);
+        self.content = painter.fb;
+    }
+
     /// Re-draws the current page (sidebar, content, hit regions).
     fn render(&mut self, reset_scroll: bool) {
         let t0 = Instant::now();
@@ -1682,6 +1693,9 @@ impl App {
         if changed || submitted {
             if submitted && store_searching {
                 self.start_store_task(false);
+            } else if changed && store_searching && self.page == Page::Store {
+                // Typing must not repaint up to 48 game covers on every keypress.
+                self.redraw_store_search_only();
             } else {
                 self.render(false);
             }
