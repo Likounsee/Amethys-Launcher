@@ -327,6 +327,18 @@ pub struct Painter<'a> {
 }
 
 impl<'a> Painter<'a> {
+    /// Reuses an existing page framebuffer for a small overlay update.
+    pub fn from_framebuffer(fb: Framebuffer, fonts: &'a Fonts) -> Self {
+        Self {
+            fb,
+            hits: Vec::new(),
+            fonts,
+            covers: None,
+            scratch: Framebuffer::new(1, 1, BG).expect("scratch"),
+            scale: 1.0,
+        }
+    }
+
     pub fn new(width: u32, height: u32, fonts: &'a Fonts) -> Self {
         Self {
             fb: Framebuffer::new(width.max(1), height.max(1), BG).expect("framebuffer"),
