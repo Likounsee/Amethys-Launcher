@@ -1256,7 +1256,7 @@ pub fn store_product(p: &mut Painter, lay: &Layout, detail: Option<&IpcCatalogGa
 
     let compact = lay.compact();
     let hero_y = 88;
-    let hero_h = if compact { 420 } else { 340 };
+    let hero_h = if compact { 490 } else { 340 };
     panel(p, mx, hero_y, mw, hero_h, 20);
     let cover_w = if compact { mw - 32 } else { (mw * 34 / 100).clamp(190, 280) };
     let cover_h = if compact { 190 } else { hero_h - 28 };
