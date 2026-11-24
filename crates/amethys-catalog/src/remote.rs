@@ -85,6 +85,8 @@ pub struct CatalogManifest {
     pub platform: String,
     pub game_count: u64,
     pub store_identity_count: u64,
+    #[serde(default)]
+    pub source_identity_count: u64,
     pub search_index: CatalogFileDescriptor,
     pub shards: CatalogShardSet,
     pub metadata: CatalogMetadataSet,
