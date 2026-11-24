@@ -336,21 +336,43 @@ pub fn list_games_or_start_agent() -> Result<Vec<IpcGameEntry>, String> {
                 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
                 command.creation_flags(CREATE_NO_WINDOW);
             }
-            command.spawn()
+            let mut child = command.spawn()
                 .map_err(|error| format!("Impossible de démarrer Amethys Core depuis {} : {error}", agent_path.display()))?;
 
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+            let mut last_error = initial_error.clone();
             while std::time::Instant::now() < deadline {
-                if let Ok(games) = list_games_with_timeouts(
+                match child.try_wait() {
+                    Ok(Some(status)) => {
+                        return Err(format!(
+                            "Amethys Core s'est arrêté pendant son démarrage (code : {}). Dernière erreur IPC : {}",
+                            status,
+                            last_error
+                        ));
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        return Err(format!("Impossible de vérifier le processus Amethys Core : {error}"));
+                    }
+                }
+
+                match list_games_with_timeouts(
                     std::time::Duration::from_secs(1),
-                    std::time::Duration::from_secs(1),
+                    std::time::Duration::from_secs(2),
                 ) {
-                    return Ok(games);
+                    Ok(games) => {
+                        // The agent is now serving requests. It is intentionally
+                        // detached so it can outlive this launcher process.
+                        drop(child);
+                        return Ok(games);
+                    }
+                    Err(error) => last_error = error,
                 }
                 std::thread::sleep(std::time::Duration::from_millis(250));
             }
             Err(format!(
-                "Amethys Core n'a pas répondu après son démarrage. Première erreur IPC : {initial_error}"
+                "Amethys Core a démarré mais aucune réponse IPC valide n'a été reçue après 15 secondes. Dernière erreur IPC : {}",
+                last_error
             ))
         }
     }
