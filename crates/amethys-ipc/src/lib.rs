@@ -37,6 +37,13 @@ pub enum IpcCommand {
     SyncMasterCatalog,
     /// Searches the locally cached master catalogue index.
     SearchMasterCatalog { query: String, limit: usize },
+    /// Recommends catalogue games using genres and titles from the local library.
+    SearchRecommendedCatalog {
+        genres: Vec<String>,
+        owned_ids: Vec<u64>,
+        owned_names: Vec<String>,
+        limit: usize,
+    },
     /// Loads one master-catalogue game detail by its stable Amethys ID.
     GetMasterCatalogGame { amethys_id: u64 },
     /// Removes a game by its identifier.
@@ -242,6 +249,7 @@ pub fn dispatch_request_with_games(
         | IpcCommand::RemoveGame { .. }
         | IpcCommand::SyncMasterCatalog
         | IpcCommand::SearchMasterCatalog { .. }
+        | IpcCommand::SearchRecommendedCatalog { .. }
         | IpcCommand::GetMasterCatalogGame { .. } => {
             return IpcResponse::failure(
                 request.request_id,
