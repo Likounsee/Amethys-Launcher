@@ -77,6 +77,7 @@ pub enum Action {
     CancelRemoveGame,
     SelectGame(usize),
     FocusStoreSearch,
+    ClearStoreSearch,
     SearchStore,
     SyncMasterCatalog,
     SelectCatalogGame(u64),
