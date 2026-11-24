@@ -1,7 +1,7 @@
 # Amethys Launcher 0.3 — Roadmap de développement détaillée
 
-**Statut :** Lots 0 (audit) et 1 (architecture/fondations) terminés ; Lot 2 terminé.  
-**Base :** branche `main`, commit audité `33903f17abf4772a617564dfe0c028a34c67ae9e`.  
+**Statut :** Lot 0 (audit) et Lot 1 (architecture/fondations) terminés ; Lot 2 implémenté, validation CI ciblée en cours.  
+**Base :** branche `main` ; implémentation du Lot 2 suivie directement sur `main`.  
 **Version précédente :** 0.2.0 gelée.  
 **Quality Check / CQ globale :** reportée à la version 0.4.
 
@@ -17,12 +17,12 @@ La campagne globale de Quality Check, la validation de release et la consolidati
 
 ## Ordre d'exécution
 
-L'ordre de préparation demandé est respecté : **Lot 1 (audit de l'existant) a été réalisé en premier, puis Lot 0 (architecture et fondations)**. Les lots fonctionnels commencent ensuite.
+L'ordre de préparation est respecté : **Lot 0 (audit de l'existant) a été réalisé en premier, puis Lot 1 (architecture et fondations)**. Les lots fonctionnels commencent ensuite.
 
 | Ordre | Lot | Résultat attendu | Dépendances |
 |---:|---|---|---|
-| 1 | Lot 1 — Audit complet de l'existant | État réel du dépôt, inventaire, réutilisation, manques et risques | Aucune |
-| 2 | Lot 0 — Architecture et fondations | Contrats, modèle métier, persistance, IPC, sécurité, frontières | Lot 1 |
+| 1 | Lot 0 — Audit complet de l'existant | État réel du dépôt, inventaire, réutilisation, manques et risques | Aucune |
+| 2 | Lot 1 — Architecture et fondations | Contrats, modèle métier, persistance, IPC, sécurité, frontières | Lot 1 |
 | 3 | Lot 2 — Modèle catalogue et sources | <strong>Terminé</strong> — modèles validés, catalogue versionné, cache SQLite, capacités de sources et adaptateurs statiques | Lots 0 et 1 |
 | 4 | Lot 3 — Store réel | Recherche, catégories, fiches, offres et états issus de sources réelles | Lot 2 |
 | 5 | Lot 4 — Gestionnaire d'opérations | Jobs persistés, file, états, concurrence, progression, pause/reprise/annulation | Lot 0 |
@@ -33,16 +33,16 @@ L'ordre de préparation demandé est respecté : **Lot 1 (audit de l'existant) a
 | 10 | Lot 9 — Intégration desktop complète | Store, téléchargements, installation, bibliothèque et mises à jour reliés au Core | Lots 3 à 8 |
 | 11 | Lot 10 — Finalisation fonctionnelle 0.3 | Parcours produit cohérent, documentation d'utilisation et limites connues | Lots 2 à 9 |
 
-Les numéros 1 puis 0 correspondent à la préparation déjà effectuée ; ils ne seront pas réordonnés dans l'historique.
+Les numéros suivent la convention corrigée : Lot 0 = audit ; Lot 1 = architecture et fondations.
 
 ---
 
-## Lot 1 — Audit complet de l'existant
+## Lot 0 — Audit complet de l'existant
 
 **Statut : terminé.**
 
 Livrables :
-- [Audit technique de la base 0.2](technical/LOT-1-AUDIT-0.3.md)
+- [Audit technique de la base 0.2](technical/LOT-0-AUDIT-0.3.md)
 - Inventaire des applications et crates ;
 - inventaire du stockage et des migrations ;
 - état de l'IPC et du transport ;
@@ -53,7 +53,7 @@ Livrables :
 
 Critère de fin : les éléments existants et absents sont distingués sans supposer qu'une fondation générique est déjà une fonctionnalité Store.
 
-## Lot 0 — Architecture et fondations
+## Lot 1 — Architecture et fondations
 
 **Statut : terminé au niveau de la conception. Aucune implémentation métier anticipée.**
 
@@ -75,7 +75,7 @@ Critère de fin : les lots fonctionnels disposent de contrats, dépendances et r
 
 ## Lot 2 — Modèle catalogue et sources
 
-**Statut : terminé.** Implémentation : [modèle catalogue, sources et cache](technical/LOT-2-CATALOG.md).
+**Statut : implémenté ; validation CI ciblée en cours.** Implémentation : [modèle catalogue, sources et cache](technical/LOT-2-CATALOG.md).
 
 **But :** créer les structures réelles sur lesquelles le Store reposera.
 
