@@ -414,6 +414,8 @@ impl Database {
                      UNIQUE(game_id, path)
                  );
                  CREATE INDEX idx_local_game_locations_game ON local_game_locations(game_id);
+                 INSERT INTO local_game_locations (id, game_id, path, is_primary)
+                     SELECT 'legacy-' || id, id, install_path, 1 FROM games;
                  INSERT OR IGNORE INTO schema_migrations (version) VALUES (6);",
                 )
                 .map_err(|error| {
@@ -976,7 +978,7 @@ impl Database {
             .execute(
                 "UPDATE games SET catalogue_game_id = ?1
              WHERE id = ?2
-               AND EXISTS (SELECT 1 FROM catalogue_games WHERE id = ?1)",
+               AND EXISTS (SELECT 1 FROM catalogue_games WHERE id = ?1 AND retired = 0)",
                 params![catalogue_game_id, installation_id],
             )
             .map_err(|error| {
