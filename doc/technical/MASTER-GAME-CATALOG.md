@@ -14,9 +14,11 @@ Voir le [format publié](https://github.com/Likounsee/Amethys-Catalog#published-
 
 ## Identifiants et gouvernance
 
-- Chaque jeu reçoit un Amethys ID global, positif, stable et attribué dans le dépôt central.
+- Chaque jeu reçoit un Amethys ID global, positif, stable et attribué dans le dépôt central. Cet ID est l'identité canonique ; aucun ID de fournisseur (IGDB, boutique ou éditeur) ne le remplace.
 - Les IDs publiés ne sont jamais réattribués, même lorsqu'une fiche disparaît du catalogue courant.
 - Les identifiants de boutiques sont des chaînes opaques et sont associés à un fournisseur explicite.
+- Une fiche de jeu peut exister sans offre ni identité de boutique connue : les offres enrichissent le catalogue, elles ne déterminent pas quelles fiches ont le droit d'exister.
+- IGDB est actuellement une source d'ingestion de métadonnées, pas la source de vérité des identifiants Amethys. D'autres sources autorisées devront pouvoir être ajoutées ou remplacer IGDB sans changer les Amethys IDs.
 - Une identité de boutique ne doit jamais être devinée à partir du titre d'un jeu.
 - Les éditions, remakes, remasters et DLC restent des fiches distinctes lorsque la source les distingue.
 
