@@ -635,6 +635,34 @@ mod tests {
 
         assert_eq!(detail.amethys_id, 1001);
         assert_eq!(detail.igdb_id, None);
+        assert!(detail.source_ids.is_empty());
+    }
+
+    #[test]
+    fn catalogue_detail_preserves_multiple_provider_identities() {
+        let detail: super::IpcCatalogGameDetail = serde_json::from_str(
+            r#"{
+                "amethys_id": 1002,
+                "igdb_id": null,
+                "name": "Multi-source game",
+                "slug": null,
+                "summary": null,
+                "release_date": null,
+                "cover_url": null,
+                "genres": [],
+                "source_ids": [
+                    {"source": "igdb", "external_id": "12345"},
+                    {"source": "store:steam", "external_id": "570"},
+                    {"source": "store:gog", "external_id": "987654"}
+                ],
+                "stores": []
+            }"#,
+        )
+        .expect("catalogue detail with multiple source identities");
+
+        assert_eq!(detail.source_ids.len(), 3);
+        assert_eq!(detail.source_ids[1].source, "store:steam");
+        assert_eq!(detail.source_ids[1].external_id, "570");
     }
 
     #[test]
