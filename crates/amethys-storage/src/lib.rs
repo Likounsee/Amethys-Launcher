@@ -687,10 +687,86 @@ impl Database {
     /// Reads metadata through a local installation ID.
     pub fn get_game_metadata(&self, game_id: &str) -> Result<Option<GameMetadata>, AmethysError> {
         let game_id = validate_game_id(game_id)?;
-        let Some(catalogue_game_id) = self.get_catalogue_game_id(game_id)? else {
-            return Ok(None);
-        };
-        self.get_catalogue_game_metadata(&catalogue_game_id)
+        self.connection
+            .query_row(
+                "SELECT genres_json, developer, publisher, release_date, description,
+                    icon_ref, logo_ref, cover_ref, banner_ref
+                 FROM local_game_metadata WHERE game_id = ?1",
+                [game_id],
+                |row| {
+                    let genres_json: String = row.get(0)?;
+                    let genres = serde_json::from_str(&genres_json).map_err(|error| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            0, rusqlite::types::Type::Text, Box::new(error),
+                        )
+                    })?;
+                    Ok(GameMetadata {
+                        genres, developer: row.get(1)?, publisher: row.get(2)?,
+                        release_date: row.get(3)?, description: row.get(4)?,
+                        icon_ref: row.get(5)?, logo_ref: row.get(6)?,
+                        cover_ref: row.get(7)?, banner_ref: row.get(8)?,
+                    })
+                },
+            )
+            .optional()
+            .map_err(|error| storage_error(format!("Could not read local game metadata: {error}")))
+    }
+
+    /// Registers a game from the authoritative shared Amethys catalogue.
+    /// Local discovery/import must never call this method.
+    pub fn register_catalogue_game(
+        &self,
+        amethys_id: u64,
+        name: &str,
+        retired: bool,
+    ) -> Result<(), AmethysError> {
+        let name = name.trim();
+        if amethys_id == 0 || name.is_empty() || name.len() > MAX_GAME_NAME_BYTES || name.contains('\0') {
+            return Err(storage_error("Master catalogue identity or name is invalid."));
+        }
+        let id = amethys_id.to_string();
+        self.connection.execute(
+            "INSERT INTO catalogue_games (id, name, amethys_id, retired)
+             VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(id) DO UPDATE SET name = excluded.name, retired = excluded.retired
+             WHERE catalogue_games.amethys_id = excluded.amethys_id",
+            params![id, name, amethys_id, retired],
+        ).map_err(|error| storage_error(format!("Could not register master catalogue game: {error}")))?;
+        let stored: Option<i64> = self.connection.query_row(
+            "SELECT amethys_id FROM catalogue_games WHERE id = ?1", [&id], |row| row.get(0)
+        ).optional().map_err(|error| storage_error(format!("Could not verify master catalogue ID: {error}")))?;
+        if stored != Some(amethys_id as i64) {
+            return Err(storage_error("Amethys ID is already assigned to a different master catalogue entry."));
+        }
+        Ok(())
+    }
+
+    /// Adds a verified platform identity to an existing master catalogue game.
+    pub fn set_catalogue_external_id(
+        &self,
+        amethys_id: u64,
+        provider: &str,
+        external_id: &str,
+    ) -> Result<bool, AmethysError> {
+        let provider = validate_provider_key(provider)?;
+        let external_id = external_id.trim();
+        if amethys_id == 0 || external_id.is_empty()
+            || external_id.len() > MAX_PLATFORM_ID_BYTES || external_id.contains('\0') {
+            return Err(storage_error("Master catalogue external identity is invalid."));
+        }
+        let id = amethys_id.to_string();
+        let exists: bool = self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM catalogue_games WHERE id = ?1 AND retired = 0)",
+            [&id], |row| row.get(0)
+        ).map_err(|error| storage_error(format!("Could not check master catalogue game: {error}")))?;
+        if !exists { return Ok(false); }
+        self.connection.execute(
+            "INSERT INTO catalogue_external_ids (catalogue_game_id, provider, external_id)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(catalogue_game_id, provider) DO UPDATE SET external_id = excluded.external_id",
+            params![id, provider, external_id],
+        ).map(|changed| changed != 0)
+            .map_err(|error| storage_error(format!("Could not save master catalogue identity: {error}")))
     }
 
     /// Reads metadata directly from the canonical Amethys Game ID.
