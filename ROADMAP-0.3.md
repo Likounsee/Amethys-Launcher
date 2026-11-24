@@ -1,300 +1,161 @@
-# Amethys Launcher 0.3 — Roadmap de développement détaillée
+# Amethys Launcher 0.3 — Périmètre et roadmap révisés
 
-**Statut :** Lot 0 (audit), Lot 1 (architecture/fondations) et Lot 2 (catalogue/sources + registre d'identités et définition du catalogue maître) terminés ; CI ciblée du code catalogue verte avant l'extension du registre.  
-**Base :** branche `main` ; implémentation du Lot 2 suivie directement sur `main`.  
 **Version précédente :** 0.2.0 gelée.  
-**Quality Check / CQ globale :** reportée à la version 0.4.
+**Branche de développement :** `main`.  
+**Cibles de développement :** Windows et Linux dès la 0.3 ; macOS reste différé.  
+**Quality Check globale et validation finale multi-OS :** 0.4.
 
-## Objectif produit de la 0.3
+## 1. Objectif produit de la 0.3
 
-Transformer Amethys en plateforme capable de présenter un catalogue réel et de gérer le téléchargement, l'installation, la bibliothèque, les mises à jour, la réparation et le lancement des jeux lorsque leur mode de distribution est officiellement autorisé.
+Faire d'Amethys un launcher PC réellement utile autour de trois piliers :
 
-La 0.3 ne remplace pas les comptes, licences, DRM ou protections des plateformes. Une fiche catalogue n'implique pas qu'Amethys possède le droit ou la capacité de télécharger le jeu. Lorsqu'une intégration directe n'est pas autorisée/disponible, Amethys doit utiliser le client officiel ou proposer un lien vers la boutique officielle.
+1. **Bibliothèque unifiée :** détecter, importer, identifier et lancer les jeux déjà installés, sans remplacer les clients officiels.
+2. **Découverte personnalisée :** comprendre les goûts du joueur à partir des jeux présents dans sa bibliothèque Amethys et lui proposer des jeux similaires.
+3. **Catalogue fiable :** disposer d'un catalogue maître commun, structuré, versionné et actualisable gratuitement via des fichiers statiques publiés sur GitHub Pages.
 
-## Décision de périmètre : CQ
+La priorité plateforme est **Steam**, sur Windows et Linux. La 0.3 doit préparer une intégration Steam propre et démontrable, tout en respectant les interfaces, autorisations et limites publiques de Valve. Les intégrations nécessitant des accès partenaires ou des accords ne doivent pas être simulées : elles seront activées uniquement lorsqu'elles seront autorisées et disponibles.
 
-La campagne globale de Quality Check, la validation de release et la consolidation qualité finale ne font **pas** partie de la 0.3 ; elles constituent la 0.4. Les lots 0.3 gardent uniquement les vérifications ciblées nécessaires pour ne pas développer à l'aveugle : tests de logique, fixtures, migrations et essais fonctionnels du composant en cours. Les vérifications déjà présentes ne doivent pas être supprimées ou contournées.
+La 0.3 doit être un produit présentable à des partenaires. Elle ne doit pas essayer de construire prématurément une boutique commerciale complète ou de remplacer l'infrastructure de distribution de Steam.
 
-## Ordre d'exécution
+## 2. Décisions produit figées
 
-L'ordre de préparation est respecté : **Lot 0 (audit de l'existant) a été réalisé en premier, puis Lot 1 (architecture et fondations)**. Les lots fonctionnels commencent ensuite.
+### Recommandations 0.3
 
-| Ordre | Lot | Résultat attendu | Dépendances |
+- Le profil initial est calculé exclusivement à partir des jeux réellement présents dans la bibliothèque Amethys.
+- Chaque jeu doit être associé à une identité catalogue fiable, en privilégiant les identifiants externes connus (notamment Steam AppID), puis une correspondance de titre contrôlée.
+- Les métadonnées de catalogue fournissent les genres, catégories et autres caractéristiques disponibles.
+- Le moteur agrège les préférences à partir de l'ensemble des jeux possédés ; il exclut les jeux déjà présents des suggestions.
+- Une recommandation doit pouvoir expliquer les catégories ou caractéristiques qui la motivent.
+- Une donnée manquante ne doit pas être inventée : le jeu reste dans la bibliothèque et son profil peut être enrichi ultérieurement.
+- Aucun temps de jeu, temps en ligne ou comportement Steam n'est requis pour la 0.3.
+
+### Intégration Steam
+
+- Windows et Linux sont des cibles de première classe.
+- Détecter les bibliothèques Steam locales et associer les installations aux identités catalogue.
+- Préserver les installations et fichiers gérés par Steam.
+- Lancer un jeu via Steam ou son mécanisme officiel lorsque nécessaire ; ne pas contourner licence, authentification, DRM ou anti-cheat.
+- Préparer une frontière d'adaptateur Steam pour les fonctions supplémentaires.
+- Les statistiques de compte, heures jouées et activité ne seront ajoutées qu'avec une intégration et des autorisations adaptées.
+
+### Catalogue et données commerciales
+
+- Le catalogue maître Amethys reste indépendant des données privées de chaque PC.
+- GitHub Pages héberge les artefacts statiques ; GitHub Actions peut les construire et les publier périodiquement, sans serveur permanent obligatoire.
+- Le launcher conserve un cache local et affiche la date/version des données.
+- Les prix et promotions ne sont affichés que si leur source, leur devise et leur date de vérification sont connues.
+- Les prix temps réel, l'historique exhaustif et la comparaison multi-boutiques ne sont pas promis sans source autorisée, fiable et suffisamment fraîche.
+- Steam est la première cible de données commerciales, mais SteamDB reste une source indépendante et ne constitue pas une API Valve garantie.
+
+## 3. Ordre d'exécution révisé
+
+| Ordre | Lot | Résultat attendu | Statut |
 |---:|---|---|---|
-| 1 | Lot 0 — Audit complet de l'existant | État réel du dépôt, inventaire, réutilisation, manques et risques | Aucune |
-| 2 | Lot 1 — Architecture et fondations | Contrats, modèle métier, persistance, IPC, sécurité, frontières | Lot 1 |
-| 3 | Lot 2 — Modèle catalogue et sources | Implémentation réalisée ; validation ciblée CI en cours — modèles, catalogue versionné, cache SQLite, capacités et adaptateur statique | Lots 0 et 1 |
-| 4 | Lot 3 — Store réel | Recherche, catégories, fiches, offres et états issus de sources réelles | Lot 2 |
-| 5 | Lot 4 — Gestionnaire d'opérations | Jobs persistés, file, états, concurrence, progression, pause/reprise/annulation | Lot 0 |
-| 6 | Lot 5 — Download Manager | Téléchargement autorisé, reprise sûre, contrôle d'intégrité | Lots 2 et 4 |
-| 7 | Lot 6 — Install Manager | Validation manifeste, staging, extraction sûre, activation et désinstallation | Lots 4 et 5 |
-| 8 | Lot 7 — Intégration bibliothèque/lancement | Jeux gérés intégrés sans casser les jeux importés, profils et méthodes de lancement | Lots 2 et 6 |
-| 9 | Lot 8 — Update & Repair Manager | Comparaison de versions, plan, mise à jour et réparation | Lots 4, 6 et 7 |
-| 10 | Lot 9 — Intégration desktop complète | Store, téléchargements, installation, bibliothèque et mises à jour reliés au Core | Lots 3 à 8 |
-| 11 | Lot 10 — Finalisation fonctionnelle 0.3 | Parcours produit cohérent, documentation d'utilisation et limites connues | Lots 2 à 9 |
+| 0 | Audit de l'existant | Inventaire, réutilisation, manques et risques | Terminé |
+| 1 | Architecture et fondations | Core, IPC, stockage, sécurité et frontières | Conception terminée |
+| 2 | Catalogue maître et identités | IDs stables, catalogue versionné, cache et adaptateur statique | Implémenté ; CI ciblée annoncée verte dans le suivi précédent |
+| 3 | Profil joueur et recommandations | Suggestions basées sur tous les jeux présents dans la bibliothèque | À réaliser / compléter |
+| 4 | Enrichissement et correspondance catalogue | Associer les jeux locaux aux AppIDs et métadonnées, gérer les correspondances incertaines | À réaliser |
+| 5 | Intégration bibliothèque Steam Windows/Linux | Détection, import, association, état et lancement via Steam officiel | À réaliser / auditer l'existant |
+| 6 | Store catalogue et découverte | Recherche, catégories, fiches, recommandations « Pour vous » et états réels | À réaliser / compléter |
+| 7 | Préparation intégration partenaire Steam | Adaptateur isolé, capacités explicites, documentation et démonstrateur sans API privée simulée | À réaliser |
+| 8 | Pipeline catalogue statique | Génération, validation, publication GitHub Pages, cache et rafraîchissement | À réaliser / compléter |
+| 9 | Intégration desktop et finalisation 0.3 | Parcours cohérent, documentation, limites et dossier de présentation | À réaliser |
 
-Les numéros suivent la convention corrigée : Lot 0 = audit ; Lot 1 = architecture et fondations.
+L'état réel de chaque lot doit être confirmé par lecture du code et tests ciblés avant de le déclarer terminé. Les numéros des lots historiques 0 à 2 sont conservés pour la traçabilité ; les lots fonctionnels suivants sont réordonnés selon la nouvelle priorité produit.
 
----
+## 4. Critères d'acceptation des lots prioritaires
 
-## Lot 0 — Audit complet de l'existant
+### Lot 3 — Profil joueur et recommandations
 
-**Statut : terminé.**
+- Le profil est calculé à partir de tous les jeux présents dans la bibliothèque Amethys, pas uniquement ceux qui ont déjà des métadonnées locales en cache.
+- Les identités sont résolues via le catalogue maître et ses identifiants externes avant toute correspondance approximative.
+- Les catégories/genres sont agrégés sans compter plusieurs fois les mêmes caractéristiques d'un jeu.
+- Les jeux possédés sont exclus des recommandations, y compris lorsque les titres diffèrent uniquement par ponctuation, édition ou normalisation.
+- Le classement est stable et explicable ; les suggestions sans signal suffisant ne sont pas présentées comme personnalisées.
+- Des tests couvrent bibliothèque vide, jeu sans métadonnées, correspondance ambiguë, doublons, catégories communes et exclusion des jeux possédés.
 
-Livrables :
-- [Audit technique de la base 0.2](technical/LOT-0-AUDIT-0.3.md)
-- Inventaire des applications et crates ;
-- inventaire du stockage et des migrations ;
-- état de l'IPC et du transport ;
-- état de la découverte, de la bibliothèque et du lancement ;
-- état du desktop et des maquettes ;
-- limites de distribution et risques ;
-- décisions de conservation/non-réécriture.
+### Lot 4 — Enrichissement catalogue
 
-Critère de fin : les éléments existants et absents sont distingués sans supposer qu'une fondation générique est déjà une fonctionnalité Store.
+- Correspondance robuste entre installation locale, identifiant externe et `amethys_id`.
+- Priorité aux IDs vérifiés ; les correspondances par titre doivent être normalisées et prudentes.
+- Une correspondance incertaine est signalée et ne fusionne pas silencieusement deux jeux.
+- Les métadonnées sont versionnées, sourcées et mises en cache.
+- Le catalogue partagé ne contient aucune donnée privée de bibliothèque.
 
-## Lot 1 — Architecture et fondations
+### Lot 5 — Steam Windows/Linux
 
-**Statut : terminé au niveau de la conception. Aucune implémentation métier anticipée.**
+- Détecter plusieurs bibliothèques Steam et leurs jeux installés.
+- Ne pas confondre jeu possédé, jeu installé et jeu simplement présent au catalogue.
+- Préserver les installations Steam et ne jamais modifier leurs fichiers pour les importer.
+- Lancer par Steam lorsque le jeu ou la plateforme l'exige.
+- Gérer les chemins et spécificités Windows/Linux sans supposer que les chemins Windows existent sous Linux.
+- Tester les cas de bibliothèque absente, plusieurs bibliothèques, manifeste invalide, jeu désinstallé et AppID inconnu.
 
-Livrable : [Architecture cible et fondations 0.3](technical/ARCHITECTURE-0.3.md).
+### Lot 6 — Store et « Pour vous »
 
-Décisions figées :
-- Core propriétaire des données et opérations ;
-- UI/CLI clients IPC ;
-- séparation CatalogGame / CatalogOffer / DistributionSource / ManagedInstall / LocalInstallation ;
-- trois modes de distribution : Amethys-managed, Official-platform-managed, Local-imported ;
-- opérations persistées et récupérables ;
-- manifestes déclaratifs, validés et sans code arbitraire ;
-- migrations SQLite non destructives après le schéma 5 ;
-- staging, vérification, activation et rollback ;
-- catalogue statique/cache local sans backend payant obligatoire ;
-- respect strict des mécanismes officiels des plateformes.
+- Alimenter l'écran depuis le catalogue maître réel, pas des données de démonstration.
+- Proposer « Pour vous » à partir du profil de bibliothèque.
+- Présenter les catégories, fiches et raisons de recommandation.
+- Distinguer clairement jeu installé, jeu possédé si cette information est disponible, et jeu simplement catalogué.
+- Aucun prix ou promotion fictif.
 
-Critère de fin : les lots fonctionnels disposent de contrats, dépendances et règles de sécurité explicites.
+### Lot 7 — Préparation partenaire Steam
 
-## Lot 2 — Modèle catalogue et sources
+- Documenter les fonctions déjà opérationnelles et les fonctions qui nécessitent un accès partenaire.
+- Démontrer la détection, l'identification, le lancement officiel et la découverte personnalisée.
+- Séparer l'adaptateur Steam du cœur du catalogue et du profil joueur.
+- Ne pas collecter ni afficher des statistiques de compte sans autorisation et mécanisme appropriés.
+- Préparer une demande de collaboration précise, sans présenter des fonctions futures comme déjà acquises.
 
-**Statut : terminé ; validation CI ciblée réussie sur Windows et Linux.** Implémentation : [modèle catalogue, sources et cache](technical/LOT-2-CATALOG.md).
+### Lot 8 — Publication gratuite du catalogue
 
-**But :** créer les structures réelles sur lesquelles le Store reposera.
+- Générer des fichiers statiques versionnés et vérifiables.
+- Publier les artefacts via GitHub Pages et automatiser leur mise à jour avec GitHub Actions dans les limites des quotas.
+- Permettre le téléchargement différentiel ou à la demande des détails lorsque c'est possible.
+- Conserver le dernier catalogue valide en cas d'échec de synchronisation.
+- Afficher la version et la date de dernière actualisation.
+- Ne jamais exposer de secrets, données personnelles ou informations de bibliothèque dans les fichiers publics.
 
-Travaux :
-1. Définir les types Rust pour jeux catalogue, offres, fournisseurs, capacités et manifestes.
-2. Ajouter les schémas de sérialisation et versions.
-3. Ajouter les migrations SQLite nécessaires au cache catalogue et aux offres.
-4. Définir un format de catalogue statique versionné.
-5. Ajouter un chargeur avec validation stricte, limites de taille et provenance.
-6. Ajouter un cache local avec date de dernière synchronisation et comportement hors ligne.
-7. Définir le trait d'adaptateur fournisseur et ses capacités (navigation, métadonnées, lancement officiel, installation autorisée, mise à jour autorisée).
-8. Ajouter un fournisseur de catalogue statique de référence et des fixtures ; aucune offre fictive ne doit être présentée comme réelle.
+## 5. Explicitement reporté après la 0.3
 
-Livré : crate `amethys-catalog`, validation stricte du JSON versionné, adaptateur fichier statique borné, registre de fournisseurs/capacités, cache SQLite transactionnel isolé par source, recherche locale et initialisation du schéma au démarrage du Core. Le registre d'identités attribue à chaque jeu un `amethys_id` numérique stable, séparé des identifiants externes. Le catalogue maître versionné dans `catalogs/master-games-v1.json` est la source commune à tous les utilisateurs ; une première sélection de 30 jeux avec IDs Amethys fixes et App IDs Steam a été ajoutée. Le cache local ne décide jamais des IDs. Les identifiants externes restent des chaînes pour prendre en charge aussi les plateformes dont les IDs sont des slugs alphanumériques. Le format d’exemple est volontairement vide : aucune offre commerciale n’est inventée.
+Ces fonctions ne doivent pas retarder le produit présentable centré sur la bibliothèque, les recommandations et Steam :
 
-Critères d'acceptation :
-- un catalogue valide est chargé et mis en cache ;
-- un catalogue invalide ou trop volumineux est rejeté proprement ;
-- une mise à jour ne détruit pas le dernier cache valide ;
-- les identités externes ne fusionnent pas des jeux par simple nom ;
-- chaque jeu possède un Amethys ID numérique stable et les IDs externes sont résolus par couple plateforme/ID ;
-- l'absence de réseau conserve les données mises en cache.
+- Téléchargement et installation directs gérés par Amethys (Download Manager et Install Manager).
+- Mise à jour et réparation des fichiers de jeux gérés par Amethys.
+- Remplacement des clients officiels ou gestion universelle de tous les launchers.
+- Prix et promotions en temps réel à grande échelle, historique complet et alertes multi-boutiques tant que les sources autorisées et fiables ne sont pas établies.
+- Statistiques de temps de jeu, temps en ligne et activité Steam : après intégration autorisée.
+- Comptes Amethys complets, synchronisation multi-appareils, paiement, portefeuille et achats.
+- Cloud Gaming, cloud saves, réseau social, amis, chat et Workshop intégré.
+- Support macOS ; l'architecture doit éviter de le bloquer, mais Windows et Linux sont les cibles 0.3.
+- Campagne globale Quality Check, validation finale multi-OS et release hardening : version 0.4.
 
-## Lot 3 — Store réel
+Les anciens lots Download Manager, Install Manager, Update & Repair ne sont pas supprimés de la vision à long terme ; ils sont explicitement déplacés hors du chemin critique 0.3.
 
-**But :** rendre la page Store réellement alimentée par le catalogue du Lot 2.
+## 6. Hors périmètre et règles non négociables
 
-Travaux :
-1. API Core de recherche, liste, catégories, filtres et détails.
-2. Résolution des médias et chargement paresseux/cache.
-3. Affichage des offres, fournisseurs, prix/devise seulement lorsqu'ils sont vérifiés et datés.
-4. Distinction entre téléchargeable par Amethys, géré par plateforme officielle, lien externe et indisponible.
-5. Liens vers les pages officielles.
-6. États de chargement, vide, erreur et hors ligne.
-7. Remplacement des données de maquette par les données IPC réelles.
-
-Critères :
-- aucune donnée commerciale inventée ;
-- chaque offre indique sa source ;
-- un jeu sans méthode d'installation autorisée n'affiche pas une action d'installation Amethys ;
-- le Store reste consultable depuis le cache hors ligne.
-
-## Lot 4 — Gestionnaire d'opérations persistantes
-
-**But :** bâtir le moteur commun utilisé par téléchargement, installation, mise à jour et réparation.
-
-Travaux :
-1. Modèle d'opération et machine à états.
-2. Persistance des opérations et de leur progression.
-3. Identifiants d'opération stables.
-4. Workers asynchrones, concurrence configurable et arrêt contrôlé.
-5. Pause, reprise et annulation coopératives.
-6. Récupération au redémarrage : reprendre, replanifier ou marquer needs_attention selon le type d'opération.
-7. API IPC pour créer/lister/consulter/contrôler les opérations.
-8. Notifications d'événements ; l'état relu depuis le Core reste la vérité.
-
-Critères :
-- une opération survit au redémarrage de l'agent ;
-- une commande répétée ne crée pas de doublon involontaire ;
-- transitions illégales refusées ;
-- erreur et annulation ne laissent pas un état bloqué ;
-- UI/CLI peuvent retrouver une opération par son ID.
-
-## Lot 5 — Download Manager
-
-**But :** télécharger des fichiers uniquement depuis une source autorisée.
-
-Travaux :
-1. Transport HTTP asynchrone et gestion des redirections contrôlées.
-2. Téléchargement en streaming sans charger le paquet entier en mémoire.
-3. Limites de concurrence et de débit.
-4. Progression octets/fichiers, vitesse et taille inconnue gérées proprement.
-5. Fichiers temporaires et métadonnées de reprise.
-6. Reprise conditionnelle via Range et validateurs serveur ; redémarrage complet si la cohérence ne peut être prouvée.
-7. Contrôle SHA-256 (ou algorithme explicitement déclaré et supporté) après téléchargement.
-8. Gestion des erreurs, timeouts, espace disque et annulation.
-9. Masquage des URL signées et tokens dans les logs.
-
-Critères :
-- fichier téléchargé correspond à la taille et à l'empreinte ;
-- interruption et reprise n'acceptent pas de contenu incohérent ;
-- téléchargement corrompu refusé ;
-- aucun fichier final n'est publié avant validation.
-
-## Lot 6 — Install Manager
-
-**But :** convertir un téléchargement vérifié en installation gérée et récupérable.
-
-Travaux :
-1. Validation du manifeste et des capacités de source.
-2. Vérification du chemin d'installation choisi et de l'espace disque.
-3. Extraction sûre avec limites d'entrées, tailles et compression.
-4. Protection traversal, liens et collisions de chemins.
-5. Installation en répertoire staging possédé par Amethys.
-6. Vérification des fichiers après extraction.
-7. Activation contrôlée et sauvegarde de l'ancienne version si remplacement.
-8. Désinstallation limitée aux fichiers enregistrés comme appartenant à Amethys.
-9. Nettoyage après interruption sans toucher aux installations importées.
-
-Critères :
-- installation complète et vérifiée avant d'être visible comme prête ;
-- interruption ne détruit pas l'ancienne installation ;
-- archive malveillante rejetée ;
-- désinstallation ne sort jamais du répertoire géré.
-
-## Lot 7 — Intégration bibliothèque et lancement
-
-**But :** faire cohabiter proprement installations importées et gérées.
-
-Travaux :
-1. Relier ManagedInstall au Game ID canonique.
-2. Conserver un identifiant distinct pour chaque installation.
-3. Afficher la provenance : importée ou gérée par Amethys.
-4. Ajouter version, source, emplacement et état d'installation.
-5. Ajouter Game Profiles déclaratifs et versionnés.
-6. Décrire point d'entrée relatif, working directory, arguments autorisés, méthode de lancement et prérequis.
-7. Valider le profil et les chemins avant lancement.
-8. Supporter lancement direct ou hand-off vers launcher officiel lorsque documenté.
-9. Préserver les validations de sécurité du lancement 0.2.
-
-Critères :
-- les jeux importés continuent à apparaître et se lancer comme avant ;
-- les jeux gérés apparaissent après installation ;
-- aucun profil ne peut lancer un chemin hors installation ;
-- les méthodes officielles ne sont pas remplacées par une simulation.
-
-## Lot 8 — Update & Repair Manager
-
-**But :** maintenir les installations gérées cohérentes.
-
-Travaux :
-1. Comparer manifeste/build installés et build disponible.
-2. Produire un plan explicite avant modification.
-3. Télécharger uniquement les fichiers nécessaires si le manifeste le permet.
-4. Appliquer en staging et vérifier avant activation.
-5. Préserver l'ancienne version pour rollback lorsque possible.
-6. Vérifier les empreintes de l'installation.
-7. Réparer les fichiers manquants/corrompus depuis la source autorisée.
-8. Générer un rapport de réparation.
-9. Gérer les cas où la source ne permet pas le delta ou le rollback.
-
-Critères :
-- une mise à jour incomplète ne remplace pas une version fonctionnelle ;
-- une réparation ne touche que les fichiers appartenant à l'installation gérée ;
-- les installations importées ne sont pas modifiées sans mécanisme officiel explicite.
-
-## Lot 9 — Intégration desktop complète
-
-**But :** connecter toutes les pages et opérations au vrai Core.
-
-Travaux :
-1. Store : recherche, catégories, détails, offres et action disponible.
-2. Téléchargements : file, progression, pause/reprise/annulation, historique.
-3. Installation : emplacement, espace, confirmation et résultat.
-4. Bibliothèque : provenance, version, état et lancement.
-5. Mises à jour : badge, détails, appliquer.
-6. Réparation : diagnostic et résultat.
-7. Notifications cohérentes, erreurs compréhensibles et récupération de l'état après redémarrage.
-8. Paramètres de stockage géré, concurrence et cache.
-9. Supprimer les chemins UI de maquette qui pourraient être confondus avec des données réelles.
-
-Critères :
-- aucun écran ne simule une opération ;
-- toute action visible est connectée à une commande Core réelle ou désactivée avec explication ;
-- la fermeture/réouverture de l'UI ne perd pas l'état d'une opération Core.
-
-## Lot 10 — Finalisation fonctionnelle 0.3
-
-**But :** terminer le périmètre fonctionnel sans lancer la campagne CQ 0.4.
-
-Travaux :
-1. Parcours utilisateur complet pour chaque mode de distribution effectivement supporté.
-2. Messages et états cohérents dans les cas sans fournisseur compatible.
-3. Documentation utilisateur : catalogue, sources, installation, stockage, erreurs et limites.
-4. Documentation technique des adaptateurs et manifestes.
-5. Nettoyage des placeholders et fonctionnalités annoncées mais non implémentées.
-6. Inventaire précis des fonctions réellement prises en charge et des dépendances à des accords éditeurs.
-7. Préparer une liste de validation 0.4 sans exécuter la campagne CQ complète.
-
-Critère :
-- les fonctionnalités annoncées comme disponibles fonctionnent réellement sur les sources prises en charge ;
-- les limites sont explicites ;
-- les parcours non supportés renvoient vers la source officielle plutôt que de promettre une installation impossible.
-
----
-
-## Dépendances critiques
-
-- Le Store dépend du modèle catalogue et des adaptateurs (Lot 2 — terminé et validé).
-- Le téléchargement dépend des opérations persistantes (Lot 4) et des manifestes/sources (Lot 2).
-- L'installation dépend du téléchargement vérifié et du moteur d'opérations (Lots 4-5).
-- L'intégration bibliothèque dépend du modèle d'installation (Lot 6).
-- Les mises à jour/réparations dépendent du modèle d'installation et du manifeste (Lots 6-7).
-- L'interface finale dépend des contrats IPC et de l'état réel des lots métier (Lots 3-8).
-
-## Hors périmètre 0.3
-
-- Comptes Amethys complets et synchronisation multi-appareils.
-- Paiement, portefeuille, achats et gestion de licences propriétaire.
-- Cloud Gaming.
-- Synchronisation cloud des sauvegardes.
-- Réseau social, amis, chat.
-- Workshop/mods intégrés.
-- Gestion universelle de tous les éditeurs sans API/accord.
-- Contournement DRM, anti-cheat, authentification ou restrictions régionales.
-- Backend payant obligatoire.
-- Campagne globale CQ, validation finale multi-OS et release hardening : 0.4.
-
-## Critère global de fin fonctionnelle 0.3
-
-Pour au moins une source de distribution réellement autorisée et documentée, l'utilisateur doit pouvoir consulter une offre réelle, démarrer une opération, télécharger et vérifier les fichiers, installer dans un emplacement choisi, retrouver le jeu dans la bibliothèque, le lancer selon le profil valide, puis consulter et appliquer une mise à jour ou réparer l'installation si la source le permet.
-
-Les autres sources peuvent être au stade catalogue/lien officiel si leurs mécanismes d'installation ne sont pas accessibles. Le support doit être présenté avec honnêteté, fournisseur par fournisseur.
-
-## Règles de travail pour tous les lots
-
+- Aucun contournement de DRM, licence, authentification, anti-cheat ou restriction régionale.
+- Aucun téléchargement ou accès à des données commerciales sans source et autorisation appropriées.
+- Aucun serveur payant obligatoire pour la bibliothèque locale, les recommandations ou la lecture du catalogue public statique.
+- Aucun prix, temps de jeu, possession ou statut d'installation inventé.
+- Le Core reste propriétaire des données persistantes ; desktop et CLI passent par IPC.
+- Les installations officielles existantes ne sont jamais déplacées, écrasées ou modifiées automatiquement.
+- Les migrations SQLite sont non destructives.
 - Développement directement sur `main`, sans Pull Request.
-- Un lot commence par la lecture des fichiers concernés et de leurs appels existants.
-- Chaque changement doit être cohérent avec les contrats des Lots 0 et 1.
-- Pas de fonctionnalité fictive, pas de données commerciales inventées.
-- Ne pas déclarer un test exécuté s'il ne l'a pas été.
-- Ne pas élargir le périmètre sans mettre à jour cette roadmap.
+- Lire les fichiers concernés et leurs appels avant chaque modification.
+- Tests ciblés nécessaires à chaque lot ; ne jamais prétendre qu'un test a été exécuté sans preuve.
+- Toute modification de périmètre doit être répercutée dans cette roadmap.
+
+## 7. Critère global de fin fonctionnelle 0.3
+
+Un utilisateur Windows ou Linux doit pouvoir :
+
+1. retrouver/importer ses jeux installés dans une bibliothèque Amethys fiable ;
+2. lancer les jeux compatibles, en respectant le launcher officiel lorsque nécessaire ;
+3. voir ses jeux associés au catalogue maître Amethys avec des catégories et métadonnées vérifiables ;
+4. obtenir une page « Pour vous » proposant des jeux similaires à partir de l'ensemble de sa bibliothèque, avec explication des recommandations et exclusion de ses jeux déjà présents ;
+5. consulter un catalogue réel publié et actualisable via l'infrastructure statique gratuite ;
+6. comprendre précisément quelles fonctions Steam sont disponibles immédiatement et lesquelles nécessitent un accord ou un accès partenaire.
+
+La 0.3 est présentable lorsque ce parcours fonctionne réellement sur Windows et Linux, que les limites sont explicites et que le dossier de collaboration Steam s'appuie sur un démonstrateur vérifiable. La boutique commerciale avancée et les statistiques de compte ne sont pas des conditions de fin de la 0.3.
