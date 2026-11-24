@@ -645,17 +645,14 @@ impl Database {
                 )));
             }
         }
-        let Some(catalogue_game_id) = self.get_catalogue_game_id(game_id)? else {
-            return Ok(false);
-        };
         let changed = self
             .connection
             .execute(
-                "INSERT INTO catalogue_game_metadata (
-                catalogue_game_id, genres_json, developer, publisher, release_date, description,
+                "INSERT INTO local_game_metadata (
+                game_id, genres_json, developer, publisher, release_date, description,
                 icon_ref, logo_ref, cover_ref, banner_ref
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
-             ON CONFLICT(catalogue_game_id) DO UPDATE SET
+             ON CONFLICT(game_id) DO UPDATE SET
                 genres_json = excluded.genres_json,
                 developer = excluded.developer,
                 publisher = excluded.publisher,
@@ -666,21 +663,12 @@ impl Database {
                 cover_ref = excluded.cover_ref,
                 banner_ref = excluded.banner_ref",
                 params![
-                    catalogue_game_id,
-                    genres_json,
-                    metadata.developer,
-                    metadata.publisher,
-                    metadata.release_date,
-                    metadata.description,
-                    metadata.icon_ref,
-                    metadata.logo_ref,
-                    metadata.cover_ref,
-                    metadata.banner_ref
+                    game_id, genres_json, metadata.developer, metadata.publisher,
+                    metadata.release_date, metadata.description, metadata.icon_ref,
+                    metadata.logo_ref, metadata.cover_ref, metadata.banner_ref
                 ],
             )
-            .map_err(|error| {
-                storage_error(format!("Could not save catalogue metadata: {error}"))
-            })?;
+            .map_err(|error| storage_error(format!("Could not save local game metadata: {error}")))?;
         Ok(changed != 0)
     }
 
