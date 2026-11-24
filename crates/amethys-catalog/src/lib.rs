@@ -1089,13 +1089,16 @@ mod tests {
     fn rejects_direct_install_without_explicit_provider_authorization_and_manifest() {
         let providers = providers_with_direct_install();
         let mut document = valid_document();
-        let offer = &mut document.games[0].offers[0];
-        offer.provider_id = "test-managed".into();
-        offer.distribution = DistributionMode::AmethysManaged;
-        offer.capabilities.direct_install = true;
+        {
+            let offer = &mut document.games[0].offers[0];
+            offer.provider_id = "test-managed".into();
+            offer.distribution = DistributionMode::AmethysManaged;
+            offer.capabilities.direct_install = true;
+        }
         assert!(validate_document(&document, &providers).is_err());
 
-        offer.manifest_reference = Some("https://cdn.example.invalid/manifest.json".into());
+        document.games[0].offers[0].manifest_reference =
+            Some("https://cdn.example.invalid/manifest.json".into());
         assert!(validate_document(&document, &providers).is_ok());
     }
 
