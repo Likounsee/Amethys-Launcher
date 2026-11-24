@@ -53,6 +53,9 @@ pub struct CatalogDocument {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct CatalogGame {
+    /// Globally assigned Amethys identity, fixed in the master catalogue.
+    pub amethys_id: u64,
+    /// Stable internal catalogue key (not a platform identifier).
     pub id: String,
     pub title: String,
     #[serde(default)]
@@ -176,6 +179,15 @@ impl ProviderRegistry {
             .register(MetadataOnlyProvider)
             .expect("static provider is valid");
         registry
+            .register(PlatformStoreProvider("steam", "Steam"))
+            .expect("static provider is valid");
+        registry
+            .register(PlatformStoreProvider("epic-games", "Epic Games"))
+            .expect("static provider is valid");
+        registry
+            .register(PlatformStoreProvider("gog", "GOG"))
+            .expect("static provider is valid");
+        registry
     }
 }
 
@@ -196,6 +208,19 @@ impl DistributionProviderAdapter for MetadataOnlyProvider {
         ProviderDescriptor {
             id: "metadata-only".into(),
             display_name: "Metadata only".into(),
+            capabilities: ProviderCapabilities::default(),
+        }
+    }
+}
+
+/// A known store identity. Capabilities stay disabled until an authorized
+/// official integration is implemented and verified.
+pub struct PlatformStoreProvider(pub &'static str, pub &'static str);
+impl DistributionProviderAdapter for PlatformStoreProvider {
+    fn descriptor(&self) -> ProviderDescriptor {
+        ProviderDescriptor {
+            id: self.0.into(),
+            display_name: self.1.into(),
             capabilities: ProviderCapabilities::default(),
         }
     }
@@ -334,11 +359,18 @@ pub fn validate_document(
     }
 
     let mut game_ids = BTreeSet::new();
+    let mut amethys_ids = BTreeSet::new();
     let mut offer_ids = BTreeSet::new();
     let mut provider_external_ids = BTreeSet::new();
     let mut offer_count = 0usize;
 
     for game in &document.games {
+        if game.amethys_id == 0 || !amethys_ids.insert(game.amethys_id) {
+            return Err(CatalogError::InvalidDocument(format!(
+                "Amethys ID {} is zero or duplicated",
+                game.amethys_id
+            )));
+        }
         validate_identifier(&game.id, "game ID")?;
         if !game_ids.insert(&game.id) {
             return Err(CatalogError::InvalidDocument(format!(
@@ -766,8 +798,12 @@ impl CatalogRepository {
                 )
                 .map_err(db_error)?;
             transaction.execute(
-                "INSERT OR IGNORE INTO catalogue_game_id_registry (catalogue_game_id) VALUES (?1)",
-                [&game.id],
+                "INSERT INTO catalogue_game_id_registry (amethys_id, catalogue_game_id)
+                 VALUES (?1, ?2)
+                 ON CONFLICT(catalogue_game_id) DO UPDATE SET amethys_id = excluded.amethys_id",
+                params![i64::try_from(game.amethys_id).map_err(|_| {
+                    CatalogError::InvalidDocument("Amethys ID exceeds SQLite integer range".into())
+                })?, game.id],
             ).map_err(db_error)?;
             transaction
                 .execute(
@@ -1083,6 +1119,7 @@ mod tests {
             catalog_version: 1,
             generated_at: "2026-11-23T12:00:00Z".into(),
             games: vec![CatalogGame {
+                amethys_id: 1_000_001,
                 id: "amethys-game-10001".into(),
                 title: "Example Game".into(),
                 description: Some("A test fixture, not a real store listing.".into()),

@@ -1,6 +1,758 @@
 {
   "schema_version": 1,
-  "catalog_id": "amethys.global-games",
+  "catalog_id": "amethys.master-games",
   "catalog_version": 1,
-  "games": []
+  "generated_at": "2026-11-24T00:00:00Z",
+  "games": [
+    {
+      "amethys_id": 1000001,
+      "id": "counter-strike-2",
+      "title": "Counter-Strike 2",
+      "genres": [
+        "Action",
+        "FPS"
+      ],
+      "offers": [
+        {
+          "id": "steam-730",
+          "provider_id": "steam",
+          "external_id": "730",
+          "title": "Counter-Strike 2",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/730/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000002,
+      "id": "dota-2",
+      "title": "Dota 2",
+      "genres": [
+        "Strategy",
+        "MOBA"
+      ],
+      "offers": [
+        {
+          "id": "steam-570",
+          "provider_id": "steam",
+          "external_id": "570",
+          "title": "Dota 2",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/570/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000003,
+      "id": "team-fortress-2",
+      "title": "Team Fortress 2",
+      "genres": [
+        "Action",
+        "FPS"
+      ],
+      "offers": [
+        {
+          "id": "steam-440",
+          "provider_id": "steam",
+          "external_id": "440",
+          "title": "Team Fortress 2",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/440/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000004,
+      "id": "left-4-dead-2",
+      "title": "Left 4 Dead 2",
+      "genres": [
+        "Action",
+        "Horror"
+      ],
+      "offers": [
+        {
+          "id": "steam-550",
+          "provider_id": "steam",
+          "external_id": "550",
+          "title": "Left 4 Dead 2",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/550/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000005,
+      "id": "portal-2",
+      "title": "Portal 2",
+      "genres": [
+        "Puzzle",
+        "Adventure"
+      ],
+      "offers": [
+        {
+          "id": "steam-620",
+          "provider_id": "steam",
+          "external_id": "620",
+          "title": "Portal 2",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/620/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000006,
+      "id": "half-life-2",
+      "title": "Half-Life 2",
+      "genres": [
+        "Action",
+        "FPS"
+      ],
+      "offers": [
+        {
+          "id": "steam-220",
+          "provider_id": "steam",
+          "external_id": "220",
+          "title": "Half-Life 2",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/220/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000007,
+      "id": "terraria",
+      "title": "Terraria",
+      "genres": [
+        "Sandbox",
+        "Survival"
+      ],
+      "offers": [
+        {
+          "id": "steam-105600",
+          "provider_id": "steam",
+          "external_id": "105600",
+          "title": "Terraria",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/105600/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000008,
+      "id": "stardew-valley",
+      "title": "Stardew Valley",
+      "genres": [
+        "Simulation",
+        "RPG"
+      ],
+      "offers": [
+        {
+          "id": "steam-413150",
+          "provider_id": "steam",
+          "external_id": "413150",
+          "title": "Stardew Valley",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/413150/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000009,
+      "id": "undertale",
+      "title": "Undertale",
+      "genres": [
+        "RPG",
+        "Indie"
+      ],
+      "offers": [
+        {
+          "id": "steam-391540",
+          "provider_id": "steam",
+          "external_id": "391540",
+          "title": "Undertale",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/391540/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000010,
+      "id": "balatro",
+      "title": "Balatro",
+      "genres": [
+        "Strategy",
+        "Card Game"
+      ],
+      "offers": [
+        {
+          "id": "steam-2379780",
+          "provider_id": "steam",
+          "external_id": "2379780",
+          "title": "Balatro",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/2379780/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000011,
+      "id": "vampire-survivors",
+      "title": "Vampire Survivors",
+      "genres": [
+        "Action",
+        "Roguelike"
+      ],
+      "offers": [
+        {
+          "id": "steam-1794680",
+          "provider_id": "steam",
+          "external_id": "1794680",
+          "title": "Vampire Survivors",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/1794680/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000012,
+      "id": "slay-the-spire",
+      "title": "Slay the Spire",
+      "genres": [
+        "Strategy",
+        "Card Game"
+      ],
+      "offers": [
+        {
+          "id": "steam-646570",
+          "provider_id": "steam",
+          "external_id": "646570",
+          "title": "Slay the Spire",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/646570/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000013,
+      "id": "lethal-company",
+      "title": "Lethal Company",
+      "genres": [
+        "Horror",
+        "Co-op"
+      ],
+      "offers": [
+        {
+          "id": "steam-1966720",
+          "provider_id": "steam",
+          "external_id": "1966720",
+          "title": "Lethal Company",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/1966720/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000014,
+      "id": "palworld",
+      "title": "Palworld",
+      "genres": [
+        "Survival",
+        "Open World"
+      ],
+      "offers": [
+        {
+          "id": "steam-1623730",
+          "provider_id": "steam",
+          "external_id": "1623730",
+          "title": "Palworld",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/1623730/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000015,
+      "id": "celeste",
+      "title": "Celeste",
+      "genres": [
+        "Platformer",
+        "Indie"
+      ],
+      "offers": [
+        {
+          "id": "steam-504230",
+          "provider_id": "steam",
+          "external_id": "504230",
+          "title": "Celeste",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/504230/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000016,
+      "id": "cuphead",
+      "title": "Cuphead",
+      "genres": [
+        "Action",
+        "Platformer"
+      ],
+      "offers": [
+        {
+          "id": "steam-268910",
+          "provider_id": "steam",
+          "external_id": "268910",
+          "title": "Cuphead",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/268910/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000017,
+      "id": "hades",
+      "title": "Hades",
+      "genres": [
+        "Action",
+        "Roguelike"
+      ],
+      "offers": [
+        {
+          "id": "steam-1145360",
+          "provider_id": "steam",
+          "external_id": "1145360",
+          "title": "Hades",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/1145360/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000018,
+      "id": "elden-ring",
+      "title": "ELDEN RING",
+      "genres": [
+        "RPG",
+        "Action"
+      ],
+      "offers": [
+        {
+          "id": "steam-1245620",
+          "provider_id": "steam",
+          "external_id": "1245620",
+          "title": "ELDEN RING",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/1245620/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000019,
+      "id": "cyberpunk-2077",
+      "title": "Cyberpunk 2077",
+      "genres": [
+        "RPG",
+        "Open World"
+      ],
+      "offers": [
+        {
+          "id": "steam-1091500",
+          "provider_id": "steam",
+          "external_id": "1091500",
+          "title": "Cyberpunk 2077",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/1091500/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000020,
+      "id": "baldurs-gate-3",
+      "title": "Baldur's Gate 3",
+      "genres": [
+        "RPG",
+        "Strategy"
+      ],
+      "offers": [
+        {
+          "id": "steam-1086940",
+          "provider_id": "steam",
+          "external_id": "1086940",
+          "title": "Baldur's Gate 3",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/1086940/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000021,
+      "id": "grand-theft-auto-v",
+      "title": "Grand Theft Auto V",
+      "genres": [
+        "Action",
+        "Open World"
+      ],
+      "offers": [
+        {
+          "id": "steam-271590",
+          "provider_id": "steam",
+          "external_id": "271590",
+          "title": "Grand Theft Auto V",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/271590/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000022,
+      "id": "apex-legends",
+      "title": "Apex Legends",
+      "genres": [
+        "Action",
+        "Battle Royale"
+      ],
+      "offers": [
+        {
+          "id": "steam-1172470",
+          "provider_id": "steam",
+          "external_id": "1172470",
+          "title": "Apex Legends",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/1172470/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000023,
+      "id": "warframe",
+      "title": "Warframe",
+      "genres": [
+        "Action",
+        "RPG"
+      ],
+      "offers": [
+        {
+          "id": "steam-230410",
+          "provider_id": "steam",
+          "external_id": "230410",
+          "title": "Warframe",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/230410/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000024,
+      "id": "destiny-2",
+      "title": "Destiny 2",
+      "genres": [
+        "Action",
+        "FPS"
+      ],
+      "offers": [
+        {
+          "id": "steam-1085660",
+          "provider_id": "steam",
+          "external_id": "1085660",
+          "title": "Destiny 2",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/1085660/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000025,
+      "id": "unturned",
+      "title": "Unturned",
+      "genres": [
+        "Survival",
+        "Sandbox"
+      ],
+      "offers": [
+        {
+          "id": "steam-304930",
+          "provider_id": "steam",
+          "external_id": "304930",
+          "title": "Unturned",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/304930/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000026,
+      "id": "rust",
+      "title": "Rust",
+      "genres": [
+        "Survival",
+        "Multiplayer"
+      ],
+      "offers": [
+        {
+          "id": "steam-252490",
+          "provider_id": "steam",
+          "external_id": "252490",
+          "title": "Rust",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/252490/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000027,
+      "id": "valheim",
+      "title": "Valheim",
+      "genres": [
+        "Survival",
+        "Adventure"
+      ],
+      "offers": [
+        {
+          "id": "steam-892970",
+          "provider_id": "steam",
+          "external_id": "892970",
+          "title": "Valheim",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/892970/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000028,
+      "id": "hollow-knight",
+      "title": "Hollow Knight",
+      "genres": [
+        "Action",
+        "Metroidvania"
+      ],
+      "offers": [
+        {
+          "id": "steam-367520",
+          "provider_id": "steam",
+          "external_id": "367520",
+          "title": "Hollow Knight",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/367520/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000029,
+      "id": "hogwarts-legacy",
+      "title": "Hogwarts Legacy",
+      "genres": [
+        "RPG",
+        "Adventure"
+      ],
+      "offers": [
+        {
+          "id": "steam-990080",
+          "provider_id": "steam",
+          "external_id": "990080",
+          "title": "Hogwarts Legacy",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/990080/"
+        }
+      ]
+    },
+    {
+      "amethys_id": 1000030,
+      "id": "helldivers-2",
+      "title": "HELLDIVERS 2",
+      "genres": [
+        "Action",
+        "Co-op"
+      ],
+      "offers": [
+        {
+          "id": "steam-553850",
+          "provider_id": "steam",
+          "external_id": "553850",
+          "title": "HELLDIVERS 2",
+          "distribution": "external_link",
+          "capabilities": {
+            "official_launch": false,
+            "direct_install": false,
+            "update": false,
+            "repair": false
+          },
+          "external_url": "https://store.steampowered.com/app/553850/"
+        }
+      ]
+    }
+  ]
 }

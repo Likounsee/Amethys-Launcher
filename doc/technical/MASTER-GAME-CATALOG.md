@@ -49,7 +49,7 @@ Les utilisateurs peuvent ajouter des jeux locaux à leur bibliothèque, mais cel
 }
 ```
 
-L'exemple est illustratif, pas une fiche de jeu réelle. Le fichier initial reste vide tant que les données officielles n'ont pas été collectées et vérifiées.
+L'exemple est illustratif, pas une fiche de jeu réelle. Le fichier contient désormais une première sélection de 30 jeux reliés à leurs App IDs Steam vérifiés. Les IDs Epic Games et GOG seront ajoutés séparément lorsqu'ils seront confirmés.
 
 ## Ordre de travail avant le Store
 
@@ -59,3 +59,8 @@ L'exemple est illustratif, pas une fiche de jeu réelle. Le fichier initial rest
 4. Détecter les doublons et les éditions distinctes.
 5. Importer/synchroniser le catalogue maître dans le cache Core.
 6. Faire consommer ce catalogue par le Store ; ne jamais y générer d'IDs.
+
+
+## Première sélection intégrée
+
+Le fichier `catalogs/master-games-v1.json` contient une première sélection de 30 jeux, avec IDs Amethys attribués dans le dépôt et IDs Steam conservés comme chaînes. Les offres sont de type `external_link` uniquement : aucun droit de téléchargement direct, aucune licence et aucun prix ne sont supposés. Les IDs des autres plateformes seront ajoutés au même jeu Amethys après vérification, sans créer une nouvelle fiche du jeu.
