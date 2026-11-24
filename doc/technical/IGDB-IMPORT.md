@@ -58,3 +58,8 @@ Configurer les deux secrets de dépôt suivants dans **Settings → Secrets and 
 Ensuite lancer **Actions → Import IGDB master catalogue → Run workflow**. Ne jamais placer le Client Secret dans le dépôt, dans un fichier de configuration versionné ou dans le chat.
 
 Le premier import essaie de conserver les IDs des 30 fiches actuelles en rapprochant les identifiants externes déjà connus. Le registre `catalogs/amethys-id-registry.json` conserve ensuite les correspondances IGDB → Amethys, y compris les IDs connus qui ne sont plus présents dans le catalogue courant.
+
+
+## Attribution et usage commercial
+
+La FAQ IGDB indique que l'API est gratuite, y compris pour les usages commerciaux, mais demande aux produits commerciaux intégrant IGDB de passer par leur processus de partenariat et d'afficher une attribution visible à IGDB.com. Avant toute distribution commerciale d'Amethys intégrant ces données, contacter `partner@igdb.com` et confirmer les conditions applicables.
