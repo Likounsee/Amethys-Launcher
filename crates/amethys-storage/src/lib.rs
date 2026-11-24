@@ -1201,228 +1201,63 @@ mod tests {
     }
 
     #[test]
-    fn deleting_an_installation_preserves_its_canonical_catalogue_record() {
+    fn deleting_an_installation_preserves_its_master_catalogue_record() {
         let database = Database::open(":memory:").expect("database opens");
-        let game = database
-            .add_game("Temporary", "Local", "/games/temp", None)
-            .expect("game added");
-        let catalogue_id = database
-            .get_catalogue_game_id(&game.id)
-            .expect("catalogue ID lookup")
-            .expect("catalogue identity exists");
-        database
-            .set_game_metadata(
-                &game.id,
-                &super::GameMetadata {
-                    developer: Some("Studio".to_owned()),
-                    ..Default::default()
-                },
-            )
-            .expect("metadata saved");
-        database
-            .set_external_game_id(&game.id, "steam", "98765")
-            .expect("external ID saved");
-        assert!(
-            database
-                .remove_game(&game.id)
-                .expect("installation removed")
-        );
-        assert_eq!(
-            database
-                .get_game_metadata(&game.id)
-                .expect("metadata lookup"),
-            None
-        );
-        assert_eq!(
-            database
-                .get_catalogue_game(&catalogue_id)
-                .expect("catalogue lookup")
-                .unwrap()
-                .name,
-            "Temporary"
-        );
-        assert_eq!(
-            database
-                .list_external_game_ids(&game.id)
-                .expect("IDs listed")
-                .len(),
-            0
-        );
-        // The external identity remains attached to the canonical title even
-        // when no local installation is currently present.
-        let count: i64 = database
-            .connection()
-            .query_row(
-                "SELECT COUNT(*) FROM catalogue_external_ids WHERE external_id = '98765'",
-                [],
-                |row| row.get(0),
-            )
-            .expect("catalogue ID remains stored");
-        assert_eq!(count, 1);
+        database.register_catalogue_game(7000, "Master Game", false).unwrap();
+        let game = database.add_game("Master Game", "Steam", "/games/master", None).unwrap();
+        assert!(database.set_game_catalogue_id(&game.id, "7000").unwrap());
+        database.set_catalogue_external_id(7000, "steam", "98765").unwrap();
+        database.set_game_metadata(&game.id, &super::GameMetadata {
+            developer: Some("Local note".to_owned()), ..Default::default()
+        }).unwrap();
+        assert!(database.remove_game(&game.id).unwrap());
+        assert_eq!(database.get_game_metadata(&game.id).unwrap(), None);
+        assert_eq!(database.get_catalogue_game("7000").unwrap().unwrap().name, "Master Game");
+        assert_eq!(database.get_catalogue_game_by_external_id("steam", "98765").unwrap().unwrap().id, "7000");
     }
 
     #[test]
-    fn new_catalogue_game_ids_are_numeric_and_start_at_3000() {
+    fn local_imports_never_allocate_master_catalogue_ids() {
         let database = Database::open(":memory:").expect("database opens");
-        let first = database
-            .add_game("First", "Local", "/games/first", None)
-            .expect("first game added");
-        let second = database
-            .add_game("Second", "Local", "/games/second", None)
-            .expect("second game added");
-
-        assert_eq!(
-            database
-                .get_catalogue_game_id(&first.id)
-                .expect("first ID lookup")
-                .as_deref(),
-            Some("3000")
-        );
-        assert_eq!(
-            database
-                .get_catalogue_game_id(&second.id)
-                .expect("second ID lookup")
-                .as_deref(),
-            Some("3001")
-        );
+        let first = database.add_game("First", "Local", "/games/first", None).unwrap();
+        let second = database.add_game("Second", "Local", "/games/second", None).unwrap();
+        assert_eq!(database.get_catalogue_game_id(&first.id).unwrap(), None);
+        assert_eq!(database.get_catalogue_game_id(&second.id).unwrap(), None);
+        let count: i64 = database.connection.query_row("SELECT COUNT(*) FROM catalogue_games", [], |row| row.get(0)).unwrap();
+        assert_eq!(count, 0);
     }
 
     #[test]
-    fn catalogue_metadata_and_provider_identity_survive_without_installations() {
+    fn local_metadata_and_verified_master_store_ids_are_separate() {
         let database = Database::open(":memory:").expect("database opens");
-        let game = database
-            .add_game("Example", "Steam", "/games/example", None)
-            .expect("game added");
-        let catalogue_id = database
-            .get_catalogue_game_id(&game.id)
-            .expect("catalogue ID lookup")
-            .expect("catalogue ID exists");
-        let metadata = super::GameMetadata {
-            developer: Some("Studio".to_owned()),
-            ..Default::default()
-        };
-        database
-            .set_game_metadata(&game.id, &metadata)
-            .expect("metadata saved");
-        database
-            .set_external_game_id(&game.id, "steam", "765611")
-            .expect("external ID saved");
-        database
-            .remove_game(&game.id)
-            .expect("installation removed");
-
-        assert_eq!(
-            database
-                .get_catalogue_game_by_external_id("steam", "765611")
-                .expect("catalogue provider lookup")
-                .expect("catalogue game remains")
-                .id,
-            catalogue_id
-        );
-        assert_eq!(
-            database
-                .get_catalogue_game_metadata(&catalogue_id)
-                .expect("catalogue metadata lookup"),
-            Some(metadata)
-        );
-    }
-
-    #[test]
-    fn metadata_and_multiple_provider_ids_share_one_stable_game_id() {
-        let database = Database::open(":memory:").expect("database opens");
-        let game = database
-            .add_game("Example", "Steam", "/games/example", None)
-            .expect("game added");
+        database.register_catalogue_game(8123, "Example", false).unwrap();
+        let game = database.add_game("Example", "Steam", "/games/example", None).unwrap();
+        assert!(database.set_game_catalogue_id(&game.id, "8123").unwrap());
         let metadata = super::GameMetadata {
             genres: vec!["Action".to_owned(), "Adventure".to_owned()],
-            developer: Some("Studio".to_owned()),
-            publisher: Some("Publisher".to_owned()),
+            developer: Some("Studio".to_owned()), publisher: Some("Publisher".to_owned()),
             release_date: Some("2026-11-22".to_owned()),
-            description: Some("A local catalogue record.".to_owned()),
-            icon_ref: Some("media/library/icon.png".to_owned()),
-            logo_ref: None,
-            cover_ref: Some("media/library/cover.png".to_owned()),
-            banner_ref: None,
+            description: Some("Local installation metadata.".to_owned()),
+            icon_ref: Some("media/library/icon.png".to_owned()), logo_ref: None,
+            cover_ref: Some("media/library/cover.png".to_owned()), banner_ref: None,
         };
-        assert!(
-            database
-                .set_game_metadata(&game.id, &metadata)
-                .expect("metadata saved")
-        );
-        assert_eq!(
-            database.get_game_metadata(&game.id).expect("metadata read"),
-            Some(metadata)
-        );
-        assert!(
-            database
-                .set_external_game_id(&game.id, "steam", "123456")
-                .expect("Steam ID saved")
-        );
-        assert!(
-            database
-                .set_external_game_id(&game.id, "epic", "epic-product-abc")
-                .expect("Epic ID saved")
-        );
-        assert_eq!(
-            database
-                .get_game_by_external_id("steam", "123456")
-                .expect("Steam lookup")
-                .unwrap()
-                .id,
-            game.id
-        );
-        assert_eq!(
-            database
-                .get_game_by_external_id("epic", "epic-product-abc")
-                .expect("Epic lookup")
-                .unwrap()
-                .id,
-            game.id
-        );
-        assert_eq!(
-            database
-                .list_external_game_ids(&game.id)
-                .expect("IDs listed")
-                .len(),
-            2
-        );
+        assert!(database.set_game_metadata(&game.id, &metadata).unwrap());
+        assert_eq!(database.get_game_metadata(&game.id).unwrap(), Some(metadata));
+        assert!(database.set_catalogue_external_id(8123, "steam", "123456").unwrap());
+        assert!(database.set_catalogue_external_id(8123, "epic", "epic-product-abc").unwrap());
+        assert_eq!(database.get_game_by_external_id("steam", "123456").unwrap().unwrap().id, game.id);
+        assert_eq!(database.list_external_game_ids(&game.id).unwrap().len(), 2);
     }
 
     #[test]
-    fn external_provider_ids_cannot_be_ambiguous_or_overwritten_by_another_game() {
+    fn master_external_provider_ids_cannot_be_ambiguous() {
         let database = Database::open(":memory:").expect("database opens");
-        let first = database
-            .add_game("First", "Local", "/games/first", None)
-            .expect("first game");
-        let second = database
-            .add_game("Second", "Local", "/games/second", None)
-            .expect("second game");
-        database
-            .set_external_game_id(&first.id, "steam", "42")
-            .expect("first ID saved");
-        assert!(
-            database
-                .set_external_game_id(&second.id, "steam", "42")
-                .is_err()
-        );
-        assert!(
-            database
-                .set_external_game_id(&first.id, "../steam", "99")
-                .is_err()
-        );
-        assert!(
-            database
-                .set_external_game_id(&first.id, "steam", "../99")
-                .is_ok()
-        );
-        assert_eq!(
-            database
-                .get_game_by_external_id("steam", "../99")
-                .expect("lookup")
-                .unwrap()
-                .id,
-            first.id
-        );
+        database.register_catalogue_game(100, "First", false).unwrap();
+        database.register_catalogue_game(101, "Second", false).unwrap();
+        database.set_catalogue_external_id(100, "steam", "42").unwrap();
+        assert!(database.set_catalogue_external_id(101, "steam", "42").is_err());
+        assert!(database.set_catalogue_external_id(100, "../steam", "99").is_err());
+        assert!(database.set_catalogue_external_id(100, "steam", "000099").unwrap());
     }
 
     #[test]
