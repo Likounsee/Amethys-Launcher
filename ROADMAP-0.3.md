@@ -1,161 +1,149 @@
-# Amethys Launcher 0.3 — Périmètre et roadmap révisés
+# Amethys Launcher 0.3 — périmètre et plan de réalisation
 
-**Version précédente :** 0.2.0 gelée.  
-**Branche de développement :** `main`.  
-**Cibles de développement :** Windows et Linux dès la 0.3 ; macOS reste différé.  
-**Quality Check globale et validation finale multi-OS :** 0.4.
+> Cette version remplace les anciens objectifs 0.3 centrés sur une intégration partenaire Steam ou sur une chaîne de distribution complète. La 0.3 doit d'abord rendre Amethys utile comme launcher local, bibliothèque unifiée et boutique de découverte alimentée par le catalogue maître.
 
-## 1. Objectif produit de la 0.3
+## 1. Objectif de la version
 
-Faire d'Amethys un launcher PC réellement utile autour de trois piliers :
+Livrer une version Windows et Linux cohérente permettant de :
 
-1. **Bibliothèque unifiée :** détecter, importer, identifier et lancer les jeux déjà installés, sans remplacer les clients officiels.
-2. **Découverte personnalisée :** comprendre les goûts du joueur à partir des jeux présents dans sa bibliothèque Amethys et lui proposer des jeux similaires.
-3. **Catalogue fiable :** disposer d'un catalogue maître commun, structuré, versionné et actualisable gratuitement via des fichiers statiques publiés sur GitHub Pages.
+1. détecter et importer les jeux déjà installés sur le PC ;
+2. gérer une bibliothèque locale fiable et lancer les jeux lorsque leur configuration le permet ;
+3. explorer un véritable catalogue de jeux Amethys, avec recherche et fiches détaillées ;
+4. proposer une expérience « Pour vous » fondée sur les jeux présents dans la bibliothèque ;
+5. présenter une section Promotions correctement structurée, sans prix ni réductions inventés ;
+6. synchroniser le catalogue public et continuer à consulter les données déjà mises en cache hors ligne.
 
-La priorité plateforme est **Steam**, sur Windows et Linux. La 0.3 doit préparer une intégration Steam propre et démontrable, tout en respectant les interfaces, autorisations et limites publiques de Valve. Les intégrations nécessitant des accès partenaires ou des accords ne doivent pas être simulées : elles seront activées uniquement lorsqu'elles seront autorisées et disponibles.
+La 0.3 doit être utile sans compte Amethys, sans serveur privé et sans téléchargement de jeux géré par Amethys.
 
-La 0.3 doit être un produit présentable à des partenaires. Elle ne doit pas essayer de construire prématurément une boutique commerciale complète ou de remplacer l'infrastructure de distribution de Steam.
+## 2. Périmètre fonctionnel
 
-## 2. Décisions produit figées
+### A. Bibliothèque locale
 
-### Recommandations 0.3
+- Détecter les installations depuis les launchers et sources locales pris en charge.
+- Afficher clairement les jeux enregistrés et les nouvelles installations détectées.
+- Importer explicitement une installation dans la bibliothèque Amethys.
+- Éviter les doublons par identité de plateforme et chemin normalisé.
+- Associer une installation à une fiche du catalogue maître lorsque l'identité est suffisamment fiable.
+- Permettre la recherche, le tri, les filtres, les fiches locales et la personnalisation des jaquettes.
+- Vérifier la disponibilité du chemin et de l'exécutable, permettre de corriger la configuration et lancer le jeu.
+- Préserver les fichiers et les données des launchers officiels : importer ne signifie jamais déplacer ou gérer leur installation.
+- Windows et Linux sont des cibles de la 0.3. La couverture réelle de chaque source doit être documentée et testée ; aucune intégration de plateforme particulière n'est une condition de sortie.
 
-- Le profil initial est calculé exclusivement à partir des jeux réellement présents dans la bibliothèque Amethys.
-- Chaque jeu doit être associé à une identité catalogue fiable, en privilégiant les identifiants externes connus (notamment Steam AppID), puis une correspondance de titre contrôlée.
-- Les métadonnées de catalogue fournissent les genres, catégories et autres caractéristiques disponibles.
-- Le moteur agrège les préférences à partir de l'ensemble des jeux possédés ; il exclut les jeux déjà présents des suggestions.
-- Une recommandation doit pouvoir expliquer les catégories ou caractéristiques qui la motivent.
-- Une donnée manquante ne doit pas être inventée : le jeu reste dans la bibliothèque et son profil peut être enrichi ultérieurement.
-- Aucun temps de jeu, temps en ligne ou comportement Steam n'est requis pour la 0.3.
+### B. Catalogue maître Amethys
 
-### Intégration Steam
+- Conserver un catalogue partagé, indépendant des bibliothèques privées des utilisateurs.
+- Utiliser des identifiants Amethys stables et des identifiants externes de boutiques clairement séparés.
+- Publier les métadonnées disponibles : titre, description, genres, éditeur, date de sortie, médias et liens officiels lorsque vérifiés.
+- Alimenter le catalogue à partir du dépôt Amethys-Catalog et de son pipeline de génération/validation.
+- Distribuer les fichiers statiques via GitHub Pages et automatiser leur publication avec GitHub Actions.
+- Synchroniser le manifeste et l'index, charger les fiches détaillées à la demande et vérifier tailles/empreintes.
+- Conserver un cache local utilisable hors ligne, afficher la version et la date de synchronisation et préserver le dernier catalogue valide en cas d'échec.
+- Ne jamais confondre présence au catalogue, possession, installation, licence et disponibilité au téléchargement.
 
-- Windows et Linux sont des cibles de première classe.
-- Détecter les bibliothèques Steam locales et associer les installations aux identités catalogue.
-- Préserver les installations et fichiers gérés par Steam.
-- Lancer un jeu via Steam ou son mécanisme officiel lorsque nécessaire ; ne pas contourner licence, authentification, DRM ou anti-cheat.
-- Préparer une frontière d'adaptateur Steam pour les fonctions supplémentaires.
-- Les statistiques de compte, heures jouées et activité ne seront ajoutées qu'avec une intégration et des autorisations adaptées.
+### C. Boutique
 
-### Catalogue et données commerciales
+- Raccorder l'interface desktop au catalogue maître réel ; éliminer les données de démonstration du parcours normal.
+- Fournir recherche, navigation, résultats, fiches détaillées, genres, médias et liens vers les boutiques officielles.
+- Distinguer les états chargement, vide, erreur, hors ligne, cache disponible et absence de fiche.
+- Indiquer clairement lorsqu'une information n'est pas disponible.
+- Ne pas afficher de prix, avis, disponibilité ou promotion fictifs.
+- Garder une séparation nette entre boutique/catalogue global et bibliothèque locale.
 
-- Le catalogue maître Amethys reste indépendant des données privées de chaque PC.
-- GitHub Pages héberge les artefacts statiques ; GitHub Actions peut les construire et les publier périodiquement, sans serveur permanent obligatoire.
-- Le launcher conserve un cache local et affiche la date/version des données.
-- Les prix et promotions ne sont affichés que si leur source, leur devise et leur date de vérification sont connues.
-- Les prix temps réel, l'historique exhaustif et la comparaison multi-boutiques ne sont pas promis sans source autorisée, fiable et suffisamment fraîche.
-- Steam est la première cible de données commerciales, mais SteamDB reste une source indépendante et ne constitue pas une API Valve garantie.
+### D. « Pour vous » — recommandations
 
-## 3. Ordre d'exécution révisé
+- Construire le profil à partir de tous les jeux enregistrés dans la bibliothèque locale Amethys.
+- Utiliser les identifiants catalogue fiables en priorité ; utiliser les titres normalisés avec prudence lorsque l'identifiant manque.
+- Récupérer les genres/métadonnées catalogue nécessaires même lorsqu'ils ne sont pas déjà présents dans le cache local.
+- Agréger les préférences sans surpondérer les doublons.
+- Exclure les jeux déjà présents dans la bibliothèque, y compris les variantes de titre évidentes.
+- Expliquer les recommandations par les genres ou caractéristiques communes.
+- Ne pas présenter une liste générique comme personnalisée lorsqu'aucun signal pertinent n'est disponible.
+- Aucun temps de jeu, compte externe ou historique d'activité n'est requis.
 
-| Ordre | Lot | Résultat attendu | Statut |
-|---:|---|---|---|
-| 0 | Audit de l'existant | Inventaire, réutilisation, manques et risques | Terminé |
-| 1 | Architecture et fondations | Core, IPC, stockage, sécurité et frontières | Conception terminée |
-| 2 | Catalogue maître et identités | IDs stables, catalogue versionné, cache et adaptateur statique | Implémenté ; CI ciblée annoncée verte dans le suivi précédent |
-| 3 | Profil joueur et recommandations | Suggestions basées sur tous les jeux présents dans la bibliothèque | À réaliser / compléter |
-| 4 | Enrichissement et correspondance catalogue | Associer les jeux locaux aux AppIDs et métadonnées, gérer les correspondances incertaines | À réaliser |
-| 5 | Intégration bibliothèque Steam Windows/Linux | Détection, import, association, état et lancement via Steam officiel | À réaliser / auditer l'existant |
-| 6 | Store catalogue et découverte | Recherche, catégories, fiches, recommandations « Pour vous » et états réels | À réaliser / compléter |
-| 7 | Préparation intégration partenaire Steam | Adaptateur isolé, capacités explicites, documentation et démonstrateur sans API privée simulée | À réaliser |
-| 8 | Pipeline catalogue statique | Génération, validation, publication GitHub Pages, cache et rafraîchissement | À réaliser / compléter |
-| 9 | Intégration desktop et finalisation 0.3 | Parcours cohérent, documentation, limites et dossier de présentation | À réaliser |
+### E. Promotions
 
-L'état réel de chaque lot doit être confirmé par lecture du code et tests ciblés avant de le déclarer terminé. Les numéros des lots historiques 0 à 2 sont conservés pour la traçabilité ; les lots fonctionnels suivants sont réordonnés selon la nouvelle priorité produit.
+- Conserver une section Promotions dans la boutique, avec son état vide et ses explications correctement conçus.
+- Préparer le modèle interne pour recevoir ultérieurement des offres sourcées.
+- N'afficher une promotion que si le prix, la devise, la source, l'URL et la date de vérification sont fiables.
+- Les prix en temps réel, historiques exhaustifs, alertes et comparaisons multi-boutiques ne sont pas des critères de sortie 0.3 sans sources autorisées et suffisamment fraîches.
+- Aucune dépendance à une API commerciale tierce ne doit devenir le cœur du catalogue Amethys.
 
-## 4. Critères d'acceptation des lots prioritaires
+### F. Préparation technique des futurs téléchargements
 
-### Lot 3 — Profil joueur et recommandations
+Le Download Manager, Install Manager, Update Manager et Repair Manager complets ne font pas partie des fonctionnalités livrées en 0.3.
 
-- Le profil est calculé à partir de tous les jeux présents dans la bibliothèque Amethys, pas uniquement ceux qui ont déjà des métadonnées locales en cache.
-- Les identités sont résolues via le catalogue maître et ses identifiants externes avant toute correspondance approximative.
-- Les catégories/genres sont agrégés sans compter plusieurs fois les mêmes caractéristiques d'un jeu.
-- Les jeux possédés sont exclus des recommandations, y compris lorsque les titres diffèrent uniquement par ponctuation, édition ou normalisation.
-- Le classement est stable et explicable ; les suggestions sans signal suffisant ne sont pas présentées comme personnalisées.
-- Des tests couvrent bibliothèque vide, jeu sans métadonnées, correspondance ambiguë, doublons, catégories communes et exclusion des jeux possédés.
+Seule une préparation proportionnée est autorisée :
+- conserver une distinction explicite entre lien externe, distribution gérée par la plateforme officielle et éventuelle distribution gérée par Amethys ;
+- documenter les capacités d'une source (lancement, installation directe, mise à jour, réparation) sans prétendre qu'elles sont disponibles ;
+- garder les identités jeu, offre, source et installation séparées ;
+- définir les frontières d'adaptateurs nécessaires pour que de futurs connecteurs puissent être ajoutés sans réécrire la bibliothèque et le catalogue ;
+- ne pas créer de faux jobs, fausses progressions, fausses installations ou écrans de téléchargement sans source autorisée réelle.
 
-### Lot 4 — Enrichissement catalogue
+Les téléchargements, installations, mises à jour et réparations gérés par Amethys seront développés lorsqu'une source autorisée et un mécanisme d'accès aux fichiers seront disponibles. Les clients officiels restent responsables de leurs téléchargements protégés, licences, DRM et mises à jour.
 
-- Correspondance robuste entre installation locale, identifiant externe et `amethys_id`.
-- Priorité aux IDs vérifiés ; les correspondances par titre doivent être normalisées et prudentes.
-- Une correspondance incertaine est signalée et ne fusionne pas silencieusement deux jeux.
-- Les métadonnées sont versionnées, sourcées et mises en cache.
-- Le catalogue partagé ne contient aucune donnée privée de bibliothèque.
+## 3. Hors périmètre explicite de la 0.3
 
-### Lot 5 — Steam Windows/Linux
+- Comptes Amethys, authentification, A2F et gestion de sessions.
+- Backend de comptes, synchronisation cloud du profil et de la bibliothèque.
+- Paiements, portefeuille et achats.
+- Download Manager fonctionnel pour les jeux.
+- Install Manager fonctionnel pour les jeux.
+- Update Manager et Repair Manager pour les fichiers de jeux.
+- Cloud saves, réseau social, amis, chat et cloud gaming.
+- Intégration partenaire ou accès privé à une plateforme comme condition de sortie.
+- Prix temps réel et historique exhaustif multi-boutiques sans source autorisée.
+- macOS ; l'architecture ne doit pas le rendre impossible, mais Windows et Linux sont les cibles 0.3.
+- Campagne globale de Quality Check et consolidation finale multi-OS : prévues pour la 0.4.
 
-- Détecter plusieurs bibliothèques Steam et leurs jeux installés.
-- Ne pas confondre jeu possédé, jeu installé et jeu simplement présent au catalogue.
-- Préserver les installations Steam et ne jamais modifier leurs fichiers pour les importer.
-- Lancer par Steam lorsque le jeu ou la plateforme l'exige.
-- Gérer les chemins et spécificités Windows/Linux sans supposer que les chemins Windows existent sous Linux.
-- Tester les cas de bibliothèque absente, plusieurs bibliothèques, manifeste invalide, jeu désinstallé et AppID inconnu.
+Les tests ciblés nécessaires à chaque modification restent obligatoires pendant la 0.3. Reporter la campagne globale de Quality Check ne signifie pas reporter les tests de développement.
 
-### Lot 6 — Store et « Pour vous »
+## 4. Architecture et contraintes
 
-- Alimenter l'écran depuis le catalogue maître réel, pas des données de démonstration.
-- Proposer « Pour vous » à partir du profil de bibliothèque.
-- Présenter les catégories, fiches et raisons de recommandation.
-- Distinguer clairement jeu installé, jeu possédé si cette information est disponible, et jeu simplement catalogué.
-- Aucun prix ou promotion fictif.
+- Le Core Rust reste propriétaire des données persistantes et des opérations.
+- Le desktop GhostEngine et le CLI utilisent le protocole IPC versionné ; ils n'accèdent pas directement à SQLite.
+- La bibliothèque locale reste privée à l'appareil ; le catalogue maître partagé ne contient aucune installation, chemin local ou donnée personnelle.
+- GitHub Pages et GitHub Actions constituent l'hébergement statique initial ; aucun serveur payant permanent n'est obligatoire pour le périmètre 0.3.
+- Le fournisseur de catalogue reste abstrait afin de permettre un hébergement différent ultérieurement.
+- Les sources officielles et leurs politiques doivent être respectées ; aucun contournement de licence, DRM, authentification ou anti-cheat.
+- Aucune installation existante n'est déplacée, écrasée ou modifiée automatiquement.
+- Toute donnée incertaine reste explicitement incertaine ; ne pas fabriquer de correspondance, prix, possession ou état d'installation.
+- Les migrations de base de données doivent préserver les données existantes.
 
-### Lot 7 — Préparation partenaire Steam
+## 5. Ordre de réalisation
 
-- Documenter les fonctions déjà opérationnelles et les fonctions qui nécessitent un accès partenaire.
-- Démontrer la détection, l'identification, le lancement officiel et la découverte personnalisée.
-- Séparer l'adaptateur Steam du cœur du catalogue et du profil joueur.
-- Ne pas collecter ni afficher des statistiques de compte sans autorisation et mécanisme appropriés.
-- Préparer une demande de collaboration précise, sans présenter des fonctions futures comme déjà acquises.
+| Ordre | Lot | Résultat attendu |
+|---:|---|---|
+| 0 | Audit et cadrage | Inventaire du code, des fonctionnalités déjà présentes et des blocages |
+| 1 | Fondations catalogue | Identités, schémas, cache, fournisseur statique et validation |
+| 2 | Pipeline du catalogue maître | Génération, contrôle qualité des données et publication statique |
+| 3 | Bibliothèque locale | Détection, import, dédoublonnage, association et lancement |
+| 4 | Boutique | Recherche, navigation, fiches réelles, états et liens officiels |
+| 5 | Profil et recommandations | Profil issu de toute la bibliothèque, exclusions et explications |
+| 6 | Promotions | Section utilisable sans données commerciales inventées |
+| 7 | Préparation des futurs connecteurs | Contrats minimaux de capacités et documentation, sans gestionnaires complets |
+| 8 | Intégration desktop | Parcours cohérent et retours d'erreur compréhensibles |
+| 9 | Validation ciblée 0.3 | Tests pertinents, builds Windows/Linux, documentation des limites et préparation de release |
 
-### Lot 8 — Publication gratuite du catalogue
+L'ordre peut être ajusté selon les dépendances réelles découvertes dans le code, mais les exclusions de périmètre restent inchangées.
 
-- Générer des fichiers statiques versionnés et vérifiables.
-- Publier les artefacts via GitHub Pages et automatiser leur mise à jour avec GitHub Actions dans les limites des quotas.
-- Permettre le téléchargement différentiel ou à la demande des détails lorsque c'est possible.
-- Conserver le dernier catalogue valide en cas d'échec de synchronisation.
-- Afficher la version et la date de dernière actualisation.
-- Ne jamais exposer de secrets, données personnelles ou informations de bibliothèque dans les fichiers publics.
+## 6. Critères de sortie 0.3
 
-## 5. Explicitement reporté après la 0.3
+La version est considérée prête lorsque :
 
-Ces fonctions ne doivent pas retarder le produit présentable centré sur la bibliothèque, les recommandations et Steam :
+- la bibliothèque locale peut détecter, importer, retrouver et lancer les jeux compatibles sans altérer les installations officielles ;
+- le catalogue maître réel peut être synchronisé, vérifié, mis en cache et consulté hors ligne ;
+- la boutique utilise ce catalogue réel pour la recherche et les fiches détaillées ;
+- « Pour vous » exploite l'ensemble de la bibliothèque, exclut les jeux déjà présents et n'invente pas de personnalisation ;
+- Promotions ne présente que des données commerciales vérifiées et explique proprement l'absence d'offres ;
+- les parcours principaux sont vérifiés sur Windows et Linux et les limites des sources sont documentées ;
+- les tests ciblés passent et aucune régression connue n'est masquée.
 
-- Téléchargement et installation directs gérés par Amethys (Download Manager et Install Manager).
-- Mise à jour et réparation des fichiers de jeux gérés par Amethys.
-- Remplacement des clients officiels ou gestion universelle de tous les launchers.
-- Prix et promotions en temps réel à grande échelle, historique complet et alertes multi-boutiques tant que les sources autorisées et fiables ne sont pas établies.
-- Statistiques de temps de jeu, temps en ligne et activité Steam : après intégration autorisée.
-- Comptes Amethys complets, synchronisation multi-appareils, paiement, portefeuille et achats.
-- Cloud Gaming, cloud saves, réseau social, amis, chat et Workshop intégré.
-- Support macOS ; l'architecture doit éviter de le bloquer, mais Windows et Linux sont les cibles 0.3.
-- Campagne globale Quality Check, validation finale multi-OS et release hardening : version 0.4.
+## 7. Règles de développement
 
-Les anciens lots Download Manager, Install Manager, Update & Repair ne sont pas supprimés de la vision à long terme ; ils sont explicitement déplacés hors du chemin critique 0.3.
-
-## 6. Hors périmètre et règles non négociables
-
-- Aucun contournement de DRM, licence, authentification, anti-cheat ou restriction régionale.
-- Aucun téléchargement ou accès à des données commerciales sans source et autorisation appropriées.
-- Aucun serveur payant obligatoire pour la bibliothèque locale, les recommandations ou la lecture du catalogue public statique.
-- Aucun prix, temps de jeu, possession ou statut d'installation inventé.
-- Le Core reste propriétaire des données persistantes ; desktop et CLI passent par IPC.
-- Les installations officielles existantes ne sont jamais déplacées, écrasées ou modifiées automatiquement.
-- Les migrations SQLite sont non destructives.
-- Développement directement sur `main`, sans Pull Request.
-- Lire les fichiers concernés et leurs appels avant chaque modification.
-- Tests ciblés nécessaires à chaque lot ; ne jamais prétendre qu'un test a été exécuté sans preuve.
-- Toute modification de périmètre doit être répercutée dans cette roadmap.
-
-## 7. Critère global de fin fonctionnelle 0.3
-
-Un utilisateur Windows ou Linux doit pouvoir :
-
-1. retrouver/importer ses jeux installés dans une bibliothèque Amethys fiable ;
-2. lancer les jeux compatibles, en respectant le launcher officiel lorsque nécessaire ;
-3. voir ses jeux associés au catalogue maître Amethys avec des catégories et métadonnées vérifiables ;
-4. obtenir une page « Pour vous » proposant des jeux similaires à partir de l'ensemble de sa bibliothèque, avec explication des recommandations et exclusion de ses jeux déjà présents ;
-5. consulter un catalogue réel publié et actualisable via l'infrastructure statique gratuite ;
-6. comprendre précisément quelles fonctions Steam sont disponibles immédiatement et lesquelles nécessitent un accord ou un accès partenaire.
-
-La 0.3 est présentable lorsque ce parcours fonctionne réellement sur Windows et Linux, que les limites sont explicites et que le dossier de collaboration Steam s'appuie sur un démonstrateur vérifiable. La boutique commerciale avancée et les statistiques de compte ne sont pas des conditions de fin de la 0.3.
+- Développer directement sur `main`, sans Pull Request.
+- Lire les fichiers concernés et leurs appels avant de modifier le code.
+- Faire des changements ciblés, testables et cohérents avec l'architecture existante.
+- Lancer les tests et vérifications pertinents après chaque lot ; corriger les échecs avant de poursuivre.
+- Ne jamais annoncer un test réussi sans résultat vérifiable.
+- Mettre à jour cette roadmap et la documentation lorsque le périmètre ou l'état réel change.
+- Les pourcentages de progression doivent être calculés à partir des critères fonctionnels ci-dessus, pas du nombre de fichiers ou de commits.
