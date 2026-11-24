@@ -182,7 +182,9 @@ pub struct IpcCatalogSearchEntry {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct IpcCatalogGameDetail {
     pub amethys_id: u64,
-    pub igdb_id: u64,
+    /// Optional ID from the current metadata ingestion provider.
+    #[serde(default)]
+    pub igdb_id: Option<u64>,
     pub name: String,
     pub slug: Option<String>,
     pub summary: Option<String>,
