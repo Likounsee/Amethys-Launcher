@@ -1,6 +1,6 @@
 # Architecture cible et fondations — Amethys Launcher 0.3
 
-Ce document transforme l'audit du Lot 1 en décisions d'architecture applicables. Il constitue le Lot 0 de la 0.3. Il ne prétend pas que les modules décrits sont déjà implémentés.
+Ce document transforme l'audit du Lot 0 en décisions d'architecture applicables. Il constitue le Lot 1 de la 0.3. Il ne prétend pas que les modules décrits sont déjà implémentés.
 
 ## 1. Objectif
 
