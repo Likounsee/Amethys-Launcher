@@ -963,7 +963,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 "{} (Amethys ID: {}, IGDB ID: {})",
                 game.name,
                 game.amethys_id,
-                game.igdb_id.map_or_else(|| "non renseigné".to_string(), |id| id.to_string())
+                game.igdb_id
+                    .map_or_else(|| "non renseigné".to_string(), |id| id.to_string())
             );
             if let Some(date) = game.release_date {
                 println!("Sortie : {date}");
