@@ -127,6 +127,53 @@ pub fn launch_game(game: &IpcGameEntry) -> Result<u32, String> {
 }
 
 
+/// Checks the IPC transport without touching SQLite. This distinguishes a
+/// reachable Core from a Core whose database is busy or stalled.
+fn ping_core_with_timeout(timeout: std::time::Duration) -> Result<(), String> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|error| format!("Impossible de démarrer le client IPC : {error}"))?;
+
+    runtime.block_on(async {
+        #[cfg(windows)]
+        let mut stream = tokio::time::timeout(
+            timeout,
+            transport::connect(r"\\.\pipe\amethys-core"),
+        )
+        .await
+        .map_err(|_| format!("Délai dépassé lors de la connexion à Amethys Core ({:.1} s).", timeout.as_secs_f32()))?
+        .map_err(|error| error.to_string())?;
+
+        #[cfg(unix)]
+        let mut stream = {
+            let directory = amethys_config::data_directory()
+                .map_err(|error| format!("Dossier de données Amethys indisponible : {error}"))?;
+            tokio::time::timeout(
+                timeout,
+                transport::connect(directory.join("amethys.sock")),
+            )
+            .await
+            .map_err(|_| format!("Délai dépassé lors de la connexion à Amethys Core ({:.1} s).", timeout.as_secs_f32()))?
+            .map_err(|error| error.to_string())?
+        };
+
+        let response = tokio::time::timeout(
+            timeout,
+            send_request(&mut stream, IpcRequest::new(IpcCommand::Ping)),
+        )
+        .await
+        .map_err(|_| format!("Amethys Core n'a pas répondu au Ping dans {:.1} secondes.", timeout.as_secs_f32()))?
+        .map_err(|error| error.to_string())?;
+
+        match response.result {
+            Ok(IpcResponsePayload::Pong) => Ok(()),
+            Ok(other) => Err(format!("Réponse Ping IPC inattendue : {other:?}")),
+            Err(error) => Err(format!("{} : {}", error.code, error.message)),
+        }
+    })
+}
+
 /// Removes one saved library entry through the Core-owned storage service.
 pub fn remove_game(id: &str) -> Result<bool, String> {
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -315,8 +362,8 @@ fn find_agent_executable(launcher_executable: &std::path::Path) -> Option<std::p
 
 /// Connects to the running agent or starts the bundled/development agent automatically.
 pub fn list_games_or_start_agent() -> Result<Vec<IpcGameEntry>, String> {
-    match list_games() {
-        Ok(games) => Ok(games),
+    match ping_core_with_timeout(std::time::Duration::from_secs(5)) {
+        Ok(()) => list_games(),
         Err(initial_error) => {
             let executable = std::env::current_exe()
                 .map_err(|error| format!("Impossible de localiser le launcher : {error}"))?;
@@ -356,15 +403,12 @@ pub fn list_games_or_start_agent() -> Result<Vec<IpcGameEntry>, String> {
                     }
                 }
 
-                match list_games_with_timeouts(
-                    std::time::Duration::from_secs(1),
-                    std::time::Duration::from_secs(2),
-                ) {
-                    Ok(games) => {
-                        // The agent is now serving requests. It is intentionally
-                        // detached so it can outlive this launcher process.
+                match ping_core_with_timeout(std::time::Duration::from_secs(2)) {
+                    Ok(()) => {
+                        // The transport is alive. Query SQLite separately so a
+                        // database stall is reported as such, not as an IPC startup failure.
                         drop(child);
-                        return Ok(games);
+                        return list_games();
                     }
                     Err(error) => last_error = error,
                 }
