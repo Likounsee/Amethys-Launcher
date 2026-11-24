@@ -206,9 +206,24 @@ pub async fn connect(
 pub async fn connect(endpoint: impl AsRef<str>) -> Result<BoxedIpcStream, AmethysError> {
     // The helper opens the client with identification-level QoS, preventing
     // the server from impersonating this client beyond identity inspection.
-    weida_winpipe::open_client(std::ffi::OsStr::new(endpoint.as_ref()))
-        .map(|stream| Box::new(stream) as BoxedIpcStream)
-        .map_err(io_error)
+    // A named pipe can briefly have no listening instance while the server
+    // accepts a client and creates its replacement instance. Windows reports
+    // that race as ERROR_PIPE_BUSY; retry it instead of failing the whole IPC
+    // request immediately.
+    let endpoint = endpoint.as_ref().to_owned();
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+    loop {
+        match weida_winpipe::open_client(std::ffi::OsStr::new(&endpoint)) {
+            Ok(stream) => return Ok(Box::new(stream) as BoxedIpcStream),
+            Err(error)
+                if weida_winpipe::is_pipe_busy(&error)
+                    && tokio::time::Instant::now() < deadline =>
+            {
+                tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+            }
+            Err(error) => return Err(io_error(error)),
+        }
+    }
 }
 
 #[cfg(not(any(unix, windows)))]
