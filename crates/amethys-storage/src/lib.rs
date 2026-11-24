@@ -1067,10 +1067,10 @@ impl Database {
     /// Adds or refreshes an owned catalogue game without creating an installation.
     pub fn add_owned_game(&self, amethys_id: u64, name: &str, genres: &[String]) -> Result<OwnedGameEntry, AmethysError> {
         let name = name.trim();
-        if amethys_id == 0 || amethys_id > i64::MAX as u64 || name.is_empty() || name.len() > MAX_GAME_NAME_BYTES || name.contains('\\0') {
+        if amethys_id == 0 || amethys_id > i64::MAX as u64 || name.is_empty() || name.len() > MAX_GAME_NAME_BYTES || name.contains('\0') {
             return Err(storage_error("Owned game identity or name is invalid."));
         }
-        if genres.len() > 64 || genres.iter().any(|genre| genre.trim().is_empty() || genre.len() > 128 || genre.contains('\\0')) {
+        if genres.len() > 64 || genres.iter().any(|genre| genre.trim().is_empty() || genre.len() > 128 || genre.contains('\0')) {
             return Err(storage_error("Owned game genres are invalid."));
         }
         let normalized = genres.iter().map(|genre| genre.trim()).collect::<Vec<_>>();
