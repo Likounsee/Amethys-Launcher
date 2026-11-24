@@ -1765,8 +1765,9 @@ impl App {
             } else if self.editing_executable {
                 // Escape discards the draft and restores the executable saved by Core.
                 self.apply(Action::CancelExecutableEdit);
-            } else if self.search_focused {
+            } else if self.search_focused || self.store_search_focused {
                 self.search_focused = false;
+                self.store_search_focused = false;
                 self.render(false);
             } else if self.stats_open {
                 self.stats_open = false;
