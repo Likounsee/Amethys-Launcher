@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/one-time-rust-format.yml"
+      - "**/*.rs"
   workflow_dispatch:
 
 permissions:
