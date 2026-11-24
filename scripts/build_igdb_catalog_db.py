@@ -177,7 +177,7 @@ def main() -> None:
     skipped_duplicate_store_ids = 0
     last_igdb_id = 0
     fields = (
-        "id,name,slug,summary,first_release_date,cover.image_id,genres.name,"
+        "id,name,category,slug,summary,first_release_date,cover.image_id,genres.name,"
         "external_games.uid,external_games.name,external_games.url,"
         "external_games.external_game_source.name"
     )
@@ -188,7 +188,10 @@ def main() -> None:
             # when the catalogue is larger than 10,000 records.
             query = (
                 f"fields {fields}; "
-                f"where category = 0 & platforms = ({WINDOWS_PC_PLATFORM_ID}) "
+                # Keep the array-valued platform predicate at the API boundary,
+                # then filter the enum-valued category locally. This avoids an
+                # empty catalogue if IGDB's combined predicate yields no rows.
+                f"where platforms = ({WINDOWS_PC_PLATFORM_ID}) "
                 f"& id > {last_igdb_id}; "
                 f"sort id asc; limit {PAGE_SIZE};"
             )
@@ -196,10 +199,16 @@ def main() -> None:
             if not page:
                 break
 
+            fetched_count = len(page)
             with connection:
                 for game in page:
                     igdb_id = int(game["id"])
                     last_igdb_id = max(last_igdb_id, igdb_id)
+                    # IGDB category 0 is a main game. Null is accepted as the
+                    # default category; DLC and other secondary entries are skipped.
+                    category = game.get("category")
+                    if category not in (None, 0):
+                        continue
                     name = str(game.get("name") or "").strip()
                     if not name:
                         continue
@@ -281,12 +290,16 @@ def main() -> None:
                 f"store IDs={inserted_stores}",
                 file=sys.stderr,
             )
-            if len(page) < PAGE_SIZE:
+            if fetched_count < PAGE_SIZE:
                 break
             time.sleep(0.30)  # IGDB limit: 4 requests/second.
 
         if inserted_games == 0:
-            raise RuntimeError("IGDB returned zero Windows PC games; refusing to publish an empty catalogue")
+            raise RuntimeError(
+                "IGDB returned no main games for Windows platform "
+                f"{WINDOWS_PC_PLATFORM_ID}; the platform query completed but matched "
+                "zero records. Refusing to publish an empty catalogue."
+            )
 
         connection.executemany(
             "INSERT INTO catalog_meta(key, value) VALUES (?, ?)",
