@@ -627,6 +627,14 @@ impl Database {
         }
         let genres_json = serde_json::to_string(&genres)
             .map_err(|error| storage_error(format!("Could not encode game genres: {error}")))?;
+        let game_exists: bool = self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM games WHERE id = ?1)",
+            [game_id],
+            |row| row.get(0),
+        ).map_err(|error| storage_error(format!("Could not check local game: {error}")))?;
+        if !game_exists {
+            return Ok(false);
+        }
         let optional_fields = [
             (&metadata.developer, 512, "developer"),
             (&metadata.publisher, 512, "publisher"),
