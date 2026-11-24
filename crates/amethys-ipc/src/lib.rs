@@ -609,6 +609,26 @@ mod tests {
     }
 
     #[test]
+    fn catalogue_detail_accepts_missing_provider_identity() {
+        let detail: super::IpcCatalogGameDetail = serde_json::from_str(
+            r#"{
+                "amethys_id": 1001,
+                "name": "Provider-independent game",
+                "slug": null,
+                "summary": null,
+                "release_date": null,
+                "cover_url": null,
+                "genres": [],
+                "stores": []
+            }"#,
+        )
+        .expect("catalogue detail without IGDB identity");
+
+        assert_eq!(detail.amethys_id, 1001);
+        assert_eq!(detail.igdb_id, None);
+    }
+
+    #[test]
     fn ipc_request_and_response_round_trip_through_json() {
         let request = super::IpcRequest::new(super::IpcCommand::GetStatus);
         let encoded = serde_json::to_vec(&request).expect("serialize request");
