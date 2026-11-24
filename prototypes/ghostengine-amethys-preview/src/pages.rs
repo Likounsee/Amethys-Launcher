@@ -1196,7 +1196,7 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
     let switch_w = 224;
     let switch_h = 34;
     let switch_x = mx + mw - switch_w;
-    let switch_y = 30;
+    let switch_y = if lay.compact() { 72 } else { 30 };
     p.rrect(switch_x, switch_y, switch_w, switch_h, 10, PANEL_HI);
     let selected_x = switch_x + if view.promotions { switch_w / 2 } else { 0 };
     p.rrect(selected_x, switch_y, switch_w / 2, switch_h, 10, VIO);
@@ -1215,7 +1215,7 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
         button(p, mx + search_w + 12, search_y, Some(sync_w), "Actualiser", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::SyncMasterCatalog));
         search_y + BTN_H + 26
     };
-    if view.promotions {
+    if view.promotions && !lay.compact() {
         p.text(mx, 82, 20, "Offres et baisses de prix vérifiées", 13.0, W::Reg, MUT);
     }
     if let Some(error) = view.error {
