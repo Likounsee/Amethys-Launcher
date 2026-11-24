@@ -1132,6 +1132,7 @@ pub struct StoreView<'a> {
     pub focused: bool,
     pub results: &'a [IpcCatalogSearchEntry],
     pub recommended: bool,
+    pub promotions: bool,
     pub loading: bool,
     pub catalog_version: Option<&'a str>,
     pub game_count: Option<u64>,
@@ -1185,7 +1186,25 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
     } else {
         "Découvrez des jeux PC et explorez le catalogue Amethys".to_owned()
     };
-    p.text(mx, 72, 22, &status, 13.5, W::Reg, MUT);
+    if !lay.compact() {
+        p.text(mx, 72, 22, &status, 13.5, W::Reg, MUT);
+    }
+
+    // Two explicit storefront experiences: player-first recommendations and
+    // a separate offers view. The latter stays honest until price data exists.
+    let switch_w = 224;
+    let switch_h = 34;
+    let switch_x = mx + mw - switch_w;
+    let switch_y = 30;
+    p.rrect(switch_x, switch_y, switch_w, switch_h, 10, PANEL_HI);
+    let selected_x = switch_x + if view.promotions { switch_w / 2 } else { 0 };
+    p.rrect(selected_x, switch_y, switch_w / 2, switch_h, 10, VIO);
+    p.text(switch_x + 12, switch_y, switch_h, "Pour vous", 12.5, W::Semi,
+        if view.promotions { MUT } else { Color::WHITE });
+    p.text(switch_x + switch_w / 2 + 14, switch_y, switch_h, "Promotions", 12.5, W::Semi,
+        if view.promotions { Color::WHITE } else { MUT });
+    p.hit_with(switch_x, switch_y, switch_w / 2, switch_h, 10, Action::SetStoreMode(false), false, Hover::Glow);
+    p.hit_with(switch_x + switch_w / 2, switch_y, switch_w / 2, switch_h, 10, Action::SetStoreMode(true), false, Hover::Glow);
 
     let search_y = 112;
     let sync_w = button_width(p, "Actualiser", Some(Icon::Refresh));
@@ -1204,6 +1223,18 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
         p.text(mx + 20, y + 16, 24, "Chargement du catalogue…", 16.0, W::Semi, TXT);
         p.text(mx + 20, y + 48, 20, "La boutique reste disponible pendant la synchronisation.", 12.5, W::Reg, MUT);
         y += 116;
+    }
+
+    if view.promotions {
+        panel(p, mx, y, mw, 150, 18);
+        p.text(mx + 20, y + 18, 26, "Les promotions arrivent bientôt", 18.0, W::Semi, TXT);
+        p.paragraph(mx + 20, y + 54, mw - 40, 20,
+            "Cette vue sera dédiée aux jeux réellement en réduction, avec le prix actuel, l’ancien prix, le pourcentage économisé et la boutique concernée.",
+            13.0, W::Reg, SOFT, 3);
+        p.paragraph(mx + 20, y + 106, mw - 40, 18,
+            "Le catalogue actuel référence les jeux et leurs boutiques, mais ne fournit pas encore de prix ni d’historique de promotions. Aucun faux prix ne sera affiché.",
+            11.5, W::Reg, MUT, 3);
+        return y + 174;
     }
 
     if view.query.trim().is_empty() {
@@ -1228,7 +1259,7 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
         }
         let heading = if view.recommended { "Recommandés pour vous" } else { "À découvrir" };
         let subtitle = if view.recommended {
-            "Sélection basée sur les genres de vos jeux possédés"
+            "Sélection basée sur les jeux de votre bibliothèque"
         } else {
             "Une sélection du catalogue Amethys"
         };
