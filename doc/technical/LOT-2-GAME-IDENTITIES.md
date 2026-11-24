@@ -2,6 +2,8 @@
 
 ## Objectif
 
+Le catalogue doit être global et centralisé : l'Amethys ID d'un jeu est défini une seule fois dans le catalogue maître versionné du dépôt, puis distribué à tous les utilisateurs. Il n'est jamais attribué localement lors d'une découverte ou d'un import.
+
 Le Store, la bibliothèque, les imports locaux et les intégrations de plateformes doivent tous parler du même jeu sans dépendre de son titre, qui peut varier selon la langue ou la plateforme.
 
 Chaque jeu canonique reçoit deux familles d'identifiants distinctes :
@@ -55,3 +57,8 @@ Cet exemple illustre uniquement le format. Il ne constitue pas une entrée comme
 Le registre technique est prêt à recevoir les jeux. La liste commerciale doit être alimentée uniquement à partir de sources fiables/officielles et vérifiées : nom canonique, plateforme, ID externe, URL officielle et provenance. Aucun ID ne doit être deviné à partir d'un nom ou d'une recherche approximative.
 
 Les connecteurs et la collecte à grande échelle des catalogues de plateformes restent des travaux distincts. Le Store doit consommer ces identités, jamais en recréer à partir des titres.
+
+
+## Catalogue maître commun
+
+La source de vérité globale est `catalogs/master-games-v1.json`. Elle est identique pour tous les utilisateurs et contient les Amethys IDs attribués explicitement par le projet. Le cache SQLite de chaque installation ne fait que répliquer cette source. Les jeux locaux non référencés restent des imports locaux et ne reçoivent pas automatiquement un ID global. Voir `doc/technical/MASTER-GAME-CATALOG.md`.

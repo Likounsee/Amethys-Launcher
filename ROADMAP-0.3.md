@@ -1,6 +1,6 @@
 # Amethys Launcher 0.3 — Roadmap de développement détaillée
 
-**Statut :** Lot 0 (audit), Lot 1 (architecture/fondations) et Lot 2 (catalogue/sources + registre d'identités) terminés ; CI ciblée du code catalogue verte avant l'extension du registre.  
+**Statut :** Lot 0 (audit), Lot 1 (architecture/fondations) et Lot 2 (catalogue/sources + registre d'identités et définition du catalogue maître) terminés ; CI ciblée du code catalogue verte avant l'extension du registre.  
 **Base :** branche `main` ; implémentation du Lot 2 suivie directement sur `main`.  
 **Version précédente :** 0.2.0 gelée.  
 **Quality Check / CQ globale :** reportée à la version 0.4.
@@ -89,7 +89,7 @@ Travaux :
 7. Définir le trait d'adaptateur fournisseur et ses capacités (navigation, métadonnées, lancement officiel, installation autorisée, mise à jour autorisée).
 8. Ajouter un fournisseur de catalogue statique de référence et des fixtures ; aucune offre fictive ne doit être présentée comme réelle.
 
-Livré : crate `amethys-catalog`, validation stricte du JSON versionné, adaptateur fichier statique borné, registre de fournisseurs/capacités, cache SQLite transactionnel isolé par source, recherche locale et initialisation du schéma au démarrage du Core. Le registre d'identités attribue désormais à chaque jeu un `amethys_id` numérique stable, séparé des identifiants externes propres à chaque plateforme. Les identifiants externes restent des chaînes pour prendre en charge aussi les plateformes dont les IDs sont des slugs alphanumériques. Le format d’exemple est volontairement vide : aucune offre commerciale n’est inventée.
+Livré : crate `amethys-catalog`, validation stricte du JSON versionné, adaptateur fichier statique borné, registre de fournisseurs/capacités, cache SQLite transactionnel isolé par source, recherche locale et initialisation du schéma au démarrage du Core. Le registre d'identités attribue à chaque jeu un `amethys_id` numérique stable, séparé des identifiants externes. Le catalogue maître versionné dans `catalogs/master-games-v1.json` est la source commune à tous les utilisateurs ; le cache local ne décide jamais des IDs. Les identifiants externes restent des chaînes pour prendre en charge aussi les plateformes dont les IDs sont des slugs alphanumériques. Le format d’exemple est volontairement vide : aucune offre commerciale n’est inventée.
 
 Critères d'acceptation :
 - un catalogue valide est chargé et mis en cache ;
