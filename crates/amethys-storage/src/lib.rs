@@ -1495,7 +1495,7 @@ mod tests {
                 .get_catalogue_game_id(&game.id)
                 .expect("legacy catalogue ID lookup")
                 .as_deref(),
-            Some("3000")
+            None
         );
         let version: i64 = database
             .connection()
@@ -1503,7 +1503,7 @@ mod tests {
                 row.get(0)
             })
             .expect("version is readable");
-        assert_eq!(version, 5);
+        assert_eq!(version, 6);
         drop(database);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
