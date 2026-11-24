@@ -485,20 +485,16 @@ fn validate_offer(offer: &CatalogOffer, provider: &ProviderCapabilities) -> Cata
 
 fn validate_https_reference(value: &str, label: &str) -> CatalogResult<()> {
     validate_text(value, 2048, label)?;
-    let lower = value.to_ascii_lowercase();
-    let authority = value
-        .get(8..)
-        .unwrap_or("")
-        .split(['/', '?', '#'])
-        .next()
-        .unwrap_or("");
-    if !lower.starts_with("https://")
-        || authority.is_empty()
-        || authority.contains('@')
-        || value.chars().any(char::is_whitespace)
+    let parsed = url::Url::parse(value).map_err(|_| {
+        CatalogError::InvalidDocument(format!("{label} must be a valid absolute HTTPS URL"))
+    })?;
+    if parsed.scheme() != "https"
+        || parsed.host_str().is_none()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
     {
         return Err(CatalogError::InvalidDocument(format!(
-            "{label} must be an absolute HTTPS URL without whitespace or credentials"
+            "{label} must be an absolute HTTPS URL without credentials"
         )));
     }
     Ok(())
