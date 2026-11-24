@@ -1,9 +1,9 @@
-pub mod remote;
-
 //! Versioned catalogue documents, trusted provider capabilities and an offline SQLite cache.
 //!
 //! The catalogue feed is metadata only. It does not grant distribution rights,
 //! create licenses, or imply that a provider supports direct installation.
+
+pub mod remote;
 
 use amethys_storage::Database;
 use rusqlite::{OptionalExtension, params};
