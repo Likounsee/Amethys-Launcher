@@ -153,6 +153,15 @@ pub struct CatalogGameDetail {
     pub stores: Vec<CatalogStoreIdentity>,
 }
 
+/// Normalizes punctuation and casing so minor title-format differences do not
+/// prevent a local game from contributing to the player's taste profile.
+fn normalize_game_title(value: &str) -> String {
+    value.chars()
+        .filter(|character| character.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
 pub struct RemoteCatalogClient<P> {
     provider: P,
     http: reqwest::Client,
@@ -301,13 +310,13 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             *genre_weights.entry(genre.trim().to_lowercase()).or_default() += 1;
         }
         let owned_ids = owned_ids.iter().copied().collect::<std::collections::HashSet<_>>();
-        let owned_names = owned_names.iter().map(|name| name.trim().to_lowercase())
+        let owned_names = owned_names.iter().map(|name| normalize_game_title(name))
             .collect::<std::collections::HashSet<_>>();
 
         // A locally installed game may not have been linked to an Amethys ID yet.
         // Exact title matches let the catalogue itself supply its genres anyway.
         for entry in entries.iter().filter(|entry| owned_ids.contains(&entry.amethys_id)
-            || owned_names.contains(&entry.name.trim().to_lowercase()))
+            || owned_names.contains(&normalize_game_title(&entry.name)))
         {
             for genre in &entry.genres {
                 *genre_weights.entry(genre.trim().to_lowercase()).or_default() += 1;
@@ -587,6 +596,45 @@ mod tests {
             &entries, &["Action".into(), "Adventure".into()], &[1], &["Owned".into()], 10,
         ).unwrap();
         assert_eq!(results.iter().map(|game| game.amethys_id).collect::<Vec<_>>(), vec![3, 2]);
+    }
+
+    #[test]
+    fn recommendation_matches_owned_titles_ignoring_punctuation_and_case() {
+        let client = RemoteCatalogClient::new(
+            StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
+            std::env::temp_dir().join("amethys-normalized-recommendation-test"),
+        ).unwrap();
+        let entries = vec![
+            CatalogSearchEntry {
+                amethys_id: 10,
+                name: "Clair-Obscur Expedition 33".into(),
+                slug: None,
+                genres: vec!["RPG".into(), "Adventure".into()],
+            },
+            CatalogSearchEntry {
+                amethys_id: 11,
+                name: "Another RPG".into(),
+                slug: None,
+                genres: vec!["RPG".into()],
+            },
+            CatalogSearchEntry {
+                amethys_id: 12,
+                name: "Puzzle World".into(),
+                slug: None,
+                genres: vec!["Puzzle".into()],
+            },
+        ];
+        let results = client.recommend_cached(
+            &entries,
+            &[],
+            &[],
+            &["clair obscur: expedition 33".into()],
+            10,
+        ).unwrap();
+        assert_eq!(
+            results.iter().map(|game| game.amethys_id).collect::<Vec<_>>(),
+            vec![11, 12],
+        );
     }
 
     #[test]
