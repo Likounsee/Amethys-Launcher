@@ -31,6 +31,21 @@ jobs:
       - name: Install Zstandard encoder
         run: python -m pip install --disable-pip-version-check zstandard==0.25.0
 
+      - name: Static checks for generator and SQLite schema
+        run: |
+          python -m py_compile scripts/build_igdb_catalog_db.py
+          python - <<'PY'
+          import sqlite3
+          from pathlib import Path
+          db = sqlite3.connect(":memory:")
+          db.executescript(Path("scripts/catalog_schema.sql").read_text(encoding="utf-8"))
+          assert db.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+          assert {row[0] for row in db.execute(
+              "SELECT name FROM sqlite_master WHERE type='table'"
+          )} >= {"games", "game_stores", "catalog_meta"}
+          print("SQLite schema OK")
+          PY
+
       - name: Build SQLite catalogue from IGDB
         env:
           IGDB_CLIENT_ID: ${{ secrets.IGDB_CLIENT_ID }}

@@ -39,6 +39,14 @@ STORE_NAMES = {
     "epic games store": "epic",
     "epic game store": "epic",
     "epic games": "epic",
+    "ea app": "ea",
+    "origin": "ea",
+    "ubisoft connect": "ubisoft",
+    "ubisoft store": "ubisoft",
+    "battle.net": "battle-net",
+    "blizzard shop": "battle-net",
+    "amazon games": "amazon-games",
+    "humble store": "humble",
 }
 
 
@@ -276,6 +284,9 @@ def main() -> None:
             if len(page) < PAGE_SIZE:
                 break
             time.sleep(0.30)  # IGDB limit: 4 requests/second.
+
+        if inserted_games == 0:
+            raise RuntimeError("IGDB returned zero Windows PC games; refusing to publish an empty catalogue")
 
         connection.executemany(
             "INSERT INTO catalog_meta(key, value) VALUES (?, ?)",
