@@ -249,7 +249,14 @@ pub async fn fetch_cheapshark_deals(limit: usize) -> RemoteCatalogResult<Vec<Che
         }
         let mut url = Url::parse("https://www.cheapshark.com/redirect")
             .map_err(|error| RemoteCatalogError::InvalidUrl(error.to_string()))?;
-        url.query_pairs_mut().append_pair("dealID", &deal.deal_id);
+        // CheapShark returns dealID URL-encoded already. Decode before
+        // appending it as a query pair to avoid double-encoding percent signs.
+        let encoded_id = format!("dealID={}", deal.deal_id);
+        let decoded_id = url::form_urlencoded::parse(encoded_id.as_bytes())
+            .next()
+            .map(|(_, value)| value.into_owned())
+            .unwrap_or_default();
+        url.query_pairs_mut().append_pair("dealID", &decoded_id);
         result.push(CheapSharkDeal {
             deal_id: deal.deal_id,
             title: deal.title,
