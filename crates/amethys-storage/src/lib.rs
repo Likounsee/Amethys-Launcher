@@ -1427,11 +1427,7 @@ mod tests {
         assert!(database.remove_game(&game.id).unwrap());
         assert_eq!(database.get_game_metadata(&game.id).unwrap(), None);
         assert_eq!(
-            database
-                .get_catalogue_game("7000")
-                .unwrap()
-                .unwrap()
-                .name,
+            database.get_catalogue_game("7000").unwrap().unwrap().name,
             "Master Game"
         );
         assert_eq!(
@@ -2437,11 +2433,7 @@ mod tests {
             .register_catalogue_game("42", 42, "Updated Master Name", false)
             .unwrap();
         assert_eq!(
-            database
-                .get_catalogue_game("42")
-                .unwrap()
-                .unwrap()
-                .name,
+            database.get_catalogue_game("42").unwrap().unwrap().name,
             "Updated Master Name"
         );
         drop(database);
