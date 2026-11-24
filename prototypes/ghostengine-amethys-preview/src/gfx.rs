@@ -50,6 +50,7 @@ pub enum Page {
     Store,
     Library,
     Product,
+    StoreProduct,
     Settings,
 }
 
@@ -79,6 +80,7 @@ pub enum Action {
     SearchStore,
     SyncMasterCatalog,
     SelectCatalogGame(u64),
+    BackToStore,
     OpenCatalogStore(usize),
 }
 
