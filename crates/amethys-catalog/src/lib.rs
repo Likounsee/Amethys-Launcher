@@ -653,7 +653,7 @@ impl CatalogRepository {
         } else {
             0
         };
-        if detected_version > 2 {
+        if detected_version > 3 {
             return Err(CatalogError::Database(format!(
                 "catalogue cache schema version {detected_version} is newer than this build supports"
             )));
@@ -708,14 +708,9 @@ impl CatalogRepository {
             CREATE INDEX IF NOT EXISTS idx_catalog_offers_game
                 ON catalog_offers(catalogue_game_id);
             INSERT OR IGNORE INTO catalog_schema_migrations(version) VALUES (1);
-            CREATE TABLE IF NOT EXISTS catalogue_game_id_registry (
-                amethys_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                catalogue_game_id TEXT NOT NULL UNIQUE
-                    REFERENCES catalogue_games(id) ON DELETE CASCADE
-            );
-            INSERT OR IGNORE INTO catalogue_game_id_registry (catalogue_game_id)
-                SELECT id FROM catalogue_games ORDER BY id;
-            INSERT OR IGNORE INTO catalog_schema_migrations(version) VALUES (2);",
+            INSERT OR IGNORE INTO catalog_schema_migrations(version) VALUES (2);
+            DROP TABLE IF EXISTS catalogue_game_id_registry;
+            INSERT OR IGNORE INTO catalog_schema_migrations(version) VALUES (3);",
             )
             .map_err(db_error)?;
         transaction.commit().map_err(db_error)
@@ -790,20 +785,15 @@ impl CatalogRepository {
         for game in &document.games {
             let genres = serde_json::to_string(&game.genres)
                 .map_err(|error| CatalogError::InvalidDocument(error.to_string()))?;
-            transaction
-                .execute(
-                    "INSERT INTO catalogue_games(id, name) VALUES (?1, ?2)
-                 ON CONFLICT(id) DO NOTHING",
-                    params![game.id, game.title],
-                )
-                .map_err(db_error)?;
+            let amethys_id = i64::try_from(game.amethys_id).map_err(|_| {
+                CatalogError::InvalidDocument("Amethys ID exceeds SQLite integer range".into())
+            })?;
             transaction.execute(
-                "INSERT INTO catalogue_game_id_registry (amethys_id, catalogue_game_id)
-                 VALUES (?1, ?2)
-                 ON CONFLICT(catalogue_game_id) DO UPDATE SET amethys_id = excluded.amethys_id",
-                params![i64::try_from(game.amethys_id).map_err(|_| {
-                    CatalogError::InvalidDocument("Amethys ID exceeds SQLite integer range".into())
-                })?, game.id],
+                "INSERT INTO catalogue_games (id, name, amethys_id, retired)
+                 VALUES (?1, ?2, ?3, 0)
+                 ON CONFLICT(id) DO UPDATE SET name = excluded.name
+                 WHERE catalogue_games.amethys_id = excluded.amethys_id",
+                params![game.id, game.title, amethys_id],
             ).map_err(db_error)?;
             transaction
                 .execute(
@@ -880,10 +870,10 @@ impl CatalogRepository {
             .prepare(
                 "SELECT csg.source_id, csg.catalogue_game_id, csg.title, csg.description, csg.genres_json,
                     csg.developer, csg.publisher, csg.release_date, csg.cover_ref, csg.banner_ref,
-                    registry.amethys_id
+                    master.amethys_id
              FROM catalog_source_games AS csg
-             INNER JOIN catalogue_game_id_registry AS registry
-                ON registry.catalogue_game_id = csg.catalogue_game_id
+             INNER JOIN catalogue_games AS master
+                ON master.id = csg.catalogue_game_id AND master.retired = 0
              WHERE instr(lower(csg.title), lower(?1)) > 0
              ORDER BY csg.title COLLATE NOCASE, csg.source_id
              LIMIT ?2",
@@ -922,7 +912,7 @@ impl CatalogRepository {
         let value: Option<i64> = database
             .connection()
             .query_row(
-                "SELECT amethys_id FROM catalogue_game_id_registry WHERE catalogue_game_id = ?1",
+                "SELECT amethys_id FROM catalogue_games WHERE id = ?1 AND retired = 0",
                 [game_id],
                 |row| row.get(0),
             )
@@ -948,10 +938,10 @@ impl CatalogRepository {
         let row: Option<(i64, String, String)> = database
             .connection()
             .query_row(
-                "SELECT registry.amethys_id, offer.provider_id, offer.external_id
+                "SELECT master.amethys_id, offer.provider_id, offer.external_id
                  FROM catalog_offers AS offer
-                 INNER JOIN catalogue_game_id_registry AS registry
-                    ON registry.catalogue_game_id = offer.catalogue_game_id
+                 INNER JOIN catalogue_games AS master
+                    ON master.id = offer.catalogue_game_id AND master.retired = 0
                  WHERE offer.provider_id = ?1 COLLATE NOCASE AND offer.external_id = ?2",
                 params![platform_id, external_game_id],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
