@@ -13,7 +13,7 @@ Le client `RemoteCatalogClient` :
 - met en cache l'index JSON pour la recherche hors ligne ;
 - télécharge les fragments de détails à la demande et les met en cache par bucket et checksum.
 
-Le client ne télécharge jamais la base SQLite temporaire du pipeline. Le cache catalogue est distinct des tables de bibliothèque locale et ne crée aucune preuve de possession ou de licence.
+Le client ne télécharge jamais la base SQLite temporaire du pipeline. Le cache catalogue est distinct des tables de bibliothèque locale et ne crée aucune preuve de possession ou de licence. Les détails n'exigent pas d'identifiant IGDB : celui-ci est une provenance optionnelle, jamais une clé canonique. Les jeux sans offre de boutique restent valides dans le catalogue maître.
 
 ## IPC et CLI
 
@@ -43,4 +43,4 @@ Pour tester un autre hébergement statique compatible, définir `AMETHYS_CATALOG
 
 - La recherche et les fiches détaillées sont disponibles via Core IPC et CLI ; l'écran Store graphique doit encore être raccordé à ces commandes.
 - Les métadonnées du catalogue distant ne sont pas fusionnées avec les installations locales.
-- Une entrée du catalogue n'implique ni achat, ni propriété, ni installation, ni autorisation de téléchargement.
+- Une entrée du catalogue n'implique ni achat, ni propriété, ni installation, ni autorisation de téléchargement. L'absence d'offre connue ne supprime pas la fiche du catalogue.
