@@ -324,7 +324,7 @@ pub fn sidebar(p: &mut Painter, lay: &Layout, active: Active, info: &SidebarInfo
     p.text(28, 84, 16, "NAVIGATION", 10.5, W::Semi, FAINT);
     let count = info.game_count.to_string();
     nav_item(p, 106, "Bibliothèque", Icon::Library, active == Active::Library, Some((&count, true)), Page::Library);
-    nav_item(p, 156, "Boutique", Icon::Gem, active == Active::Store, Some(("Bientôt", false)), Page::Store);
+    nav_item(p, 156, "Boutique", Icon::Gem, active == Active::Store, None, Page::Store);
     nav_item(p, vh - 144, "Paramètres", Icon::Gear, active == Active::Settings, None, Page::Settings);
 
     let (fx, fy, fw, fh) = (14, vh - 84, sw - 28, 62);
