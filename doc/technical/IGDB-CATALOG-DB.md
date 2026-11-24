@@ -1,8 +1,15 @@
-# Catalogue PC SQLite distribué par Release
+# Catalogue PC SQLite distribué indépendamment du launcher
 
 ## Objectif
 
-Le catalogue global distribué aux clients Amethys est un snapshot SQLite public, généré côté GitHub Actions à partir d'IGDB. Aucun appel IGDB ni secret Twitch n'est effectué depuis le launcher. Le fichier publié est `catalog.db.zst`, asset de la dernière GitHub Release du dépôt.
+Le catalogue global distribué aux clients Amethys est un snapshot SQLite public, généré côté GitHub Actions à partir d'IGDB. Aucun appel IGDB ni secret Twitch n'est effectué depuis le launcher. Le catalogue est publié sur **GitHub Pages**, indépendamment des Releases et versions du launcher.
+
+Les URLs stables du site sont :
+
+- Manifeste : `https://likounsee.github.io/Amethys-Launcher/catalog-manifest.json`
+- Base compressée : `https://likounsee.github.io/Amethys-Launcher/catalog.db.zst`
+
+Le workflow remplace le contenu publié à chaque génération. Il ne crée aucune Release et ne pousse pas le binaire de la base dans l'historique Git de `main`.
 
 ## Séparation stricte Store / bibliothèque locale
 
@@ -35,19 +42,19 @@ python -m pip install zstandard==0.25.0
 python scripts/build_igdb_catalog_db.py
 ```
 
-Le script produit `catalog.db`, `catalog.db.zst` et met à jour `catalogs/amethys-id-registry.json`. Il valide la base avec `PRAGMA integrity_check`.
+Le script produit `catalog.db`, `catalog.db.zst`, `catalog-manifest.json` et met à jour `catalogs/amethys-id-registry.json`. Le manifeste contient notamment le nombre de jeux, la date/version du catalogue, les tailles et les SHA-256 de la base compressée et de la base SQLite. Le script valide la base avec `PRAGMA integrity_check`.
 
-## GitHub Actions
+## Publication automatique avec GitHub Actions
 
 Le workflow `.github/workflows/build-igdb-catalog.yml` s'exécute chaque lundi à 04:17 UTC et peut aussi être lancé manuellement. Configurer les secrets de dépôt `IGDB_CLIENT_ID` et `IGDB_CLIENT_SECRET` dans **Settings → Secrets and variables → Actions**.
 
-Le job met à jour l'asset `catalog.db.zst` sur la dernière Release existante avec `gh release upload --clobber`. Il ne crée pas une nouvelle version du launcher chaque semaine. Le workflow nécessite une Release existante et les permissions `contents: write`. Le registre des IDs est ensuite committé sur `main` afin que les prochains imports conservent les identités.
+La première activation nécessite de sélectionner **Settings → Pages → Build and deployment → Source: GitHub Actions**. Ensuite, le workflow construit la base, met à jour le registre d'identifiants sur `main`, puis déploie uniquement les deux fichiers de catalogue sur GitHub Pages. Il ne crée pas de Release, ne modifie pas la version du launcher et ne stocke pas la base dans l'historique Git.
 
 ## Côté client
 
-Le client Rust devra interroger l'API GitHub Releases (métadonnées de la dernière Release), comparer la version/date du catalogue avec celle stockée localement, télécharger l'asset HTTPS si plus récent, vérifier son SHA-256 publié/calculé, puis décompresser dans le répertoire de données Amethys sous %AppData%. Le remplacement doit être atomique : décompresser dans un fichier temporaire, vérifier SQLite en lecture seule, puis renommer. Les recherches et associations locales se feront ensuite dans cette base via `rusqlite`; les jaquettes seront téléchargées séparément à la demande.
+Le client Rust devra télécharger d'abord `catalog-manifest.json` depuis l'URL stable, comparer `catalog_version` avec la version locale, puis récupérer `database.file` si le catalogue est plus récent. Il doit vérifier `compressed_sha256` avant décompression, puis `uncompressed_sha256` après décompression, vérifier SQLite en lecture seule et remplacer le fichier local de façon atomique (fichier temporaire puis renommage). Les recherches et associations locales se feront ensuite dans cette base via `rusqlite`; les jaquettes seront téléchargées séparément à la demande.
 
-Ce document décrit le format et le pipeline de génération. Le téléchargement, la mise à jour atomique et le cache de jaquettes côté Rust constituent l'étape d'intégration client suivante.
+Ce pipeline assure la génération et la publication du catalogue. Le téléchargement, la mise à jour atomique et le cache de jaquettes côté Rust constituent l'étape d'intégration client suivante.
 
 ## Attribution IGDB
 

@@ -7,16 +7,21 @@ on:
 
 permissions:
   contents: write
+  pages: write
+  id-token: write
 
 concurrency:
-  group: amethys-igdb-catalog-release
+  group: amethys-igdb-catalog-pages
   cancel-in-progress: false
 
 jobs:
   build-and-publish:
-    name: Generate catalog.db.zst and update latest Release
+    name: Generate and deploy the public catalogue
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Checkout main
         uses: actions/checkout@v4
@@ -52,16 +57,20 @@ jobs:
           IGDB_CLIENT_SECRET: ${{ secrets.IGDB_CLIENT_SECRET }}
         run: python scripts/build_igdb_catalog_db.py
 
-      - name: Publish database to the latest GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
+      - name: Verify generated catalogue manifest
         run: |
-          set -euo pipefail
-          TAG="$(gh release view --json tagName --jq .tagName)"
-          test -n "$TAG"
-          gh release upload "$TAG" catalog.db.zst --clobber
-          echo "Updated catalog.db.zst on latest release: $TAG"
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          manifest = json.loads(Path("catalog-manifest.json").read_text(encoding="utf-8"))
+          database = Path("catalog.db.zst")
+          assert manifest["game_count"] > 0
+          assert manifest["database"]["file"] == database.name
+          assert manifest["database"]["compressed_size"] == database.stat().st_size
+          assert manifest["database"]["compressed_sha256"] == hashlib.sha256(database.read_bytes()).hexdigest()
+          print(f"Catalogue ready: {manifest['game_count']} Windows PC games")
+          PY
 
       - name: Persist stable Amethys ID registry
         run: |
@@ -70,7 +79,36 @@ jobs:
           git add catalogs/amethys-id-registry.json
           if git diff --cached --quiet; then
             echo "ID registry is unchanged."
-            exit 0
+          else
+            git commit -m "Update stable Amethys catalogue ID registry"
+            git push origin HEAD:main
           fi
-          git commit -m "Update stable Amethys catalogue ID registry"
-          git push origin HEAD:main
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare public catalogue site
+        run: |
+          mkdir -p public
+          cp catalog.db.zst catalog-manifest.json public/
+          cat > public/index.html <<'HTML'
+          <!doctype html>
+          <html lang="en">
+            <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Amethys Game Catalogue</title></head>
+            <body>
+              <h1>Amethys Game Catalogue</h1>
+              <p>This endpoint distributes the public Windows PC master catalogue.</p>
+              <p><a href="./catalog-manifest.json">Catalogue manifest</a></p>
+              <p><a href="./catalog.db.zst">Compressed SQLite database</a></p>
+            </body>
+          </html>
+          HTML
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy catalogue to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

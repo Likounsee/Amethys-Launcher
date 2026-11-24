@@ -7,6 +7,7 @@ database, logs, generated files, or GitHub Release assets.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
 import json
 import os
 import sqlite3
@@ -320,6 +321,36 @@ def main() -> None:
     with DB_PATH.open("rb") as source, temporary_output.open("wb") as target:
         zstandard.ZstdCompressor(level=19, threads=-1).copy_stream(source, target)
     temporary_output.replace(COMPRESSED_PATH)
+
+    def sha256_file(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    manifest = {
+        "manifest_schema_version": 1,
+        "catalog_schema_version": 1,
+        "catalog_version": generated_at,
+        "generated_at": generated_at,
+        "source": "IGDB",
+        "platform": "windows-pc",
+        "game_count": inserted_games,
+        "store_identity_count": inserted_stores,
+        "database": {
+            "file": "catalog.db.zst",
+            "compression": "zstd",
+            "compressed_size": COMPRESSED_PATH.stat().st_size,
+            "compressed_sha256": sha256_file(COMPRESSED_PATH),
+            "uncompressed_size": DB_PATH.stat().st_size,
+            "uncompressed_sha256": sha256_file(DB_PATH),
+        },
+    }
+    (ROOT / "catalog-manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
     print(
         f"Built {inserted_games} Windows PC games, {inserted_stores} store identities; "
