@@ -1131,6 +1131,7 @@ pub struct StoreView<'a> {
     pub query: &'a str,
     pub focused: bool,
     pub results: &'a [IpcCatalogSearchEntry],
+    pub promotion_results: &'a [amethys_catalog::remote::CheapSharkDeal],
     pub recommended: bool,
     pub promotions: bool,
     pub loading: bool,
@@ -1222,23 +1223,52 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
         p.text(mx + 18, y + 11, 20, "Boutique indisponible", 14.0, W::Semi, AMBER);
         p.paragraph(mx + 18, y + 34, mw - 36, 18, error, 12.0, W::Reg, SOFT, 2);
         y += 90;
-    } else if view.loading && view.results.is_empty() {
+    } else if view.loading && (if view.promotions { view.promotion_results.is_empty() } else { view.results.is_empty() }) {
         panel(p, mx, y, mw, 100, 16);
-        p.text(mx + 20, y + 16, 24, "Chargement du catalogue…", 16.0, W::Semi, TXT);
-        p.text(mx + 20, y + 48, 20, "La boutique reste disponible pendant la synchronisation.", 12.5, W::Reg, MUT);
+        p.text(mx + 20, y + 16, 24,
+            if view.promotions { "Recherche des promotions…" } else { "Chargement du catalogue…" },
+            16.0, W::Semi, TXT);
+        p.text(mx + 20, y + 48, 20,
+            if view.promotions { "Récupération des offres de prix en cours." } else { "La boutique reste disponible pendant la synchronisation." },
+            12.5, W::Reg, MUT);
         y += 116;
     }
 
     if view.promotions {
-        panel(p, mx, y, mw, 150, 18);
-        p.text(mx + 20, y + 18, 26, "Les promotions arrivent bientôt", 18.0, W::Semi, TXT);
-        p.paragraph(mx + 20, y + 54, mw - 40, 20,
-            "Cette vue sera dédiée aux jeux réellement en réduction, avec le prix actuel, l’ancien prix, le pourcentage économisé et la boutique concernée.",
-            13.0, W::Reg, SOFT, 3);
-        p.paragraph(mx + 20, y + 106, mw - 40, 18,
-            "Le catalogue actuel référence les jeux et leurs boutiques, mais ne fournit pas encore de prix ni d’historique de promotions. Aucun faux prix ne sera affiché.",
-            11.5, W::Reg, MUT, 3);
-        return y + 174;
+        if view.promotion_results.is_empty() {
+            panel(p, mx, y, mw, 132, 18);
+            p.text(mx + 20, y + 18, 26,
+                if view.loading { "Recherche des meilleures offres…" } else { "Aucune promotion disponible" },
+                18.0, W::Semi, TXT);
+            p.paragraph(mx + 20, y + 56, mw - 40, 20,
+                "Les offres sont récupérées en direct auprès de CheapShark. Réessayez plus tard si le service est temporairement indisponible.",
+                12.5, W::Reg, SOFT, 3);
+            p.text(mx + 20, y + 102, 16, "Prix fournis en USD · Données CheapShark", 10.5, W::Reg, MUT);
+            return y + 156;
+        }
+
+        let cols = lay.columns().min(if lay.compact() { 2 } else { 3 }).max(1);
+        let gap = 14;
+        let card_w = (mw - gap * (cols - 1)) / cols;
+        let card_h = 154;
+        for (index, deal) in view.promotion_results.iter().take(60).enumerate() {
+            let col = index as i32 % cols;
+            let row = index as i32 / cols;
+            let x = mx + col * (card_w + gap);
+            let cy = y + row * (card_h + gap);
+            panel(p, x, cy, card_w, card_h, 14);
+            chip(p, x + 12, cy + 10, &format!("-{:.0}%", deal.savings_percent), card_w - 24);
+            p.paragraph(x + 12, cy + 42, card_w - 24, 20, &deal.title, 13.5, W::Semi, TXT, 2);
+            p.text(x + 12, cy + 88, 16, &deal.store_name, 11.0, W::Med, MUT);
+            p.text(x + 12, cy + 110, 22, &format!("USD {:.2}", deal.sale_price_usd), 16.0, W::Semi, VIO_HI);
+            let old_price_x = x + 104;
+            p.text(old_price_x, cy + 112, 20, &format!("USD {:.2}", deal.normal_price_usd), 11.5, W::Reg, MUT);
+            p.hit_with(x, cy, card_w, card_h, 14, Action::OpenPromotionDeal(index), false, Hover::Card);
+        }
+        let rows = (view.promotion_results.len().min(60) as i32 + cols - 1) / cols;
+        let footer_y = y + rows * (card_h + gap) + 4;
+        p.text(mx, footer_y, 18, "Prix en USD · Offres fournies par CheapShark · Les prix peuvent évoluer.", 10.5, W::Reg, MUT);
+        return footer_y + 28;
     }
 
     if view.query.trim().is_empty() {
