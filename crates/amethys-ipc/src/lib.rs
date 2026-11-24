@@ -263,6 +263,9 @@ pub fn dispatch_request_with_games(
         | IpcCommand::AddDetectedGame { .. }
         | IpcCommand::SetGameExecutable { .. }
         | IpcCommand::RemoveGame { .. }
+        | IpcCommand::ListOwnedGames
+        | IpcCommand::AddOwnedGame { .. }
+        | IpcCommand::RemoveOwnedGame { .. }
         | IpcCommand::SyncMasterCatalog
         | IpcCommand::SearchMasterCatalog { .. }
         | IpcCommand::SearchRecommendedCatalog { .. }
