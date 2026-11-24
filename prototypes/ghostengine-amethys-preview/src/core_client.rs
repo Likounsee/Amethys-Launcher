@@ -287,7 +287,33 @@ pub fn set_game_executable(id: &str, executable: &str) -> Result<IpcGameEntry, S
     })
 }
 
-/// Connects to the running agent or starts the bundled agent beside the desktop executable.
+/// Finds the agent beside a packaged launcher or in an ancestor Cargo workspace target directory.
+fn find_agent_executable(launcher_executable: &std::path::Path) -> Option<std::path::PathBuf> {
+    let directory = launcher_executable.parent()?;
+    #[cfg(windows)]
+    let agent_name = "amethys-agent.exe";
+    #[cfg(not(windows))]
+    let agent_name = "amethys-agent";
+
+    // Packaged builds keep the agent beside the launcher. Development builds
+    // of this nested preview crate have their own target directory, while the
+    // Core agent is built in the repository workspace's target directory.
+    let profile = directory.file_name()
+        .and_then(std::ffi::OsStr::to_str)
+        .filter(|name| *name == "debug" || *name == "release")
+        .unwrap_or("debug");
+
+    let beside_launcher = directory.join(agent_name);
+    if beside_launcher.is_file() {
+        return Some(beside_launcher);
+    }
+
+    directory.ancestors()
+        .map(|ancestor| ancestor.join("target").join(profile).join(agent_name))
+        .find(|candidate| candidate.is_file())
+}
+
+/// Connects to the running agent or starts the bundled/development agent automatically.
 pub fn list_games_or_start_agent() -> Result<Vec<IpcGameEntry>, String> {
     match list_games() {
         Ok(games) => Ok(games),
@@ -296,17 +322,12 @@ pub fn list_games_or_start_agent() -> Result<Vec<IpcGameEntry>, String> {
                 .map_err(|error| format!("Impossible de localiser le launcher : {error}"))?;
             let directory = executable.parent()
                 .ok_or_else(|| "Impossible de localiser le dossier du launcher.".to_owned())?;
-            #[cfg(windows)]
-            let agent_path = directory.join("amethys-agent.exe");
-            #[cfg(not(windows))]
-            let agent_path = directory.join("amethys-agent");
-
-            if !agent_path.is_file() {
+            let Some(agent_path) = find_agent_executable(&executable) else {
                 return Err(format!(
-                    "Amethys Core est inaccessible ({initial_error}) et amethys-agent est absent de {}. Placez l'agent à côté du launcher ou démarrez-le séparément.",
+                    "Amethys Core est inaccessible ({initial_error}) et amethys-agent est introuvable. Compilez-le depuis la racine du dépôt avec « cargo build --release -p amethys-agent », puis relancez le launcher. Dossier du launcher : {}",
                     directory.display()
                 ));
-            }
+            };
 
             let mut command = std::process::Command::new(&agent_path);
             #[cfg(windows)]
@@ -357,6 +378,36 @@ mod tests {
             executable: Some("bin/game.exe".to_owned()),
         };
         (root, game)
+    }
+
+    #[test]
+    fn finds_agent_in_parent_workspace_target_directory() {
+        let root = std::env::temp_dir().join(format!("amethys-agent-search-{}", std::process::id()));
+        let launcher_dir = root.join("prototypes/preview/target/release");
+        let agent_dir = root.join("target/release");
+        std::fs::create_dir_all(&launcher_dir).unwrap();
+        std::fs::create_dir_all(&agent_dir).unwrap();
+        let launcher = launcher_dir.join(if cfg!(windows) { "amethys-launcher.exe" } else { "amethys-launcher" });
+        let agent = agent_dir.join(if cfg!(windows) { "amethys-agent.exe" } else { "amethys-agent" });
+        std::fs::write(&launcher, b"launcher").unwrap();
+        std::fs::write(&agent, b"agent").unwrap();
+
+        assert_eq!(find_agent_executable(&launcher), Some(agent.clone()));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn prefers_agent_beside_launcher() {
+        let root = std::env::temp_dir().join(format!("amethys-agent-local-{}", std::process::id()));
+        let directory = root.join("release");
+        std::fs::create_dir_all(&directory).unwrap();
+        let launcher = directory.join(if cfg!(windows) { "amethys-launcher.exe" } else { "amethys-launcher" });
+        let agent = directory.join(if cfg!(windows) { "amethys-agent.exe" } else { "amethys-agent" });
+        std::fs::write(&launcher, b"launcher").unwrap();
+        std::fs::write(&agent, b"agent").unwrap();
+
+        assert_eq!(find_agent_executable(&launcher), Some(agent.clone()));
+        std::fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
