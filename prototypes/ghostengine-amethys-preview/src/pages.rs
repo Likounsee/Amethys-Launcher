@@ -1185,8 +1185,11 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
     let search_y = 112;
     let sync_w = button_width(p, "Actualiser", Some(Icon::Refresh));
     let search_w = (mw - sync_w - 12).max(120);
-    search_field(p, mx, search_y, search_w, view.query, view.focused);
+    redraw_store_search(p, lay, view.query, view.focused);
     p.hit_with(mx, search_y, search_w, BTN_H, 12, Action::FocusStoreSearch, false, Hover::Glow);
+    if !view.query.is_empty() {
+        p.hit_with(mx + search_w - 36, search_y + 6, 28, 28, 14, Action::ClearStoreSearch, false, Hover::Glow);
+    }
     button(p, mx + search_w + 12, search_y, Some(sync_w), "Actualiser", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::SyncMasterCatalog));
 
     let mut y = search_y + BTN_H + 26;
