@@ -378,6 +378,7 @@ pub struct App {
     search_focused: bool,
     store_query: String,
     store_search_focused: bool,
+    store_promotions: bool,
     store_results: Vec<IpcCatalogSearchEntry>,
     store_detail: Option<IpcCatalogGameDetail>,
     store_loading: bool,
@@ -470,6 +471,7 @@ impl App {
             search_focused: false,
             store_query: String::new(),
             store_search_focused: false,
+            store_promotions: false,
             store_results: Vec::new(),
             store_detail: None,
             store_loading: false,
@@ -829,6 +831,7 @@ impl App {
                 focused: self.store_search_focused,
                 results: &self.store_results,
                 recommended: self.store_query.trim().is_empty() && self.has_recommendation_profile(),
+                promotions: self.store_promotions,
                 loading: self.store_loading,
                 catalog_version: self.store_catalog_version.as_deref(),
                 game_count: self.store_game_count,
@@ -1013,6 +1016,13 @@ impl App {
             Action::ClearStoreSearch => {
                 self.store_query.clear();
                 self.redraw_store_search_only();
+            }
+            Action::SetStoreMode(promotions) => {
+                if self.store_promotions != promotions {
+                    self.store_promotions = promotions;
+                    self.keyboard_focus = None;
+                    self.render(true);
+                }
             }
             Action::SearchStore => self.start_store_task(false),
             Action::SyncMasterCatalog => self.start_store_task(true),
