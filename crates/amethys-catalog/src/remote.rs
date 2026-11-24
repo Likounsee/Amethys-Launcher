@@ -204,20 +204,28 @@ pub async fn fetch_cheapshark_deals(limit: usize) -> RemoteCatalogResult<Vec<Che
         .build()
         .map_err(|error| RemoteCatalogError::Network(error.to_string()))?;
 
-    let stores_response = http.get("https://www.cheapshark.com/api/1.0/stores")
-        .send().await
+    let stores_response = http
+        .get("https://www.cheapshark.com/api/1.0/stores")
+        .send()
+        .await
         .map_err(|error| RemoteCatalogError::Network(format!("CheapShark stores: {error}")))?
         .error_for_status()
         .map_err(|error| RemoteCatalogError::Network(format!("CheapShark stores: {error}")))?;
-    let stores_bytes = stores_response.bytes().await
+    let stores_bytes = stores_response
+        .bytes()
+        .await
         .map_err(|error| RemoteCatalogError::Network(format!("CheapShark stores: {error}")))?;
     let stores: Vec<CheapSharkStoreResponse> = serde_json::from_slice(&stores_bytes)
-        .map_err(|error| RemoteCatalogError::InvalidData(format!("CheapShark stores JSON: {error}")))?;
-    let store_names = stores.into_iter()
+        .map_err(|error| {
+            RemoteCatalogError::InvalidData(format!("CheapShark stores JSON: {error}"))
+        })?;
+    let store_names = stores
+        .into_iter()
         .map(|store| (store.store_id, store.store_name))
         .collect::<std::collections::HashMap<_, _>>();
 
-    let deals_response = http.get("https://www.cheapshark.com/api/1.0/deals")
+    let deals_response = http
+        .get("https://www.cheapshark.com/api/1.0/deals")
         .query(&[
             ("onSale", "1".to_owned()),
             ("pageNumber", "0".to_owned()),
@@ -225,14 +233,19 @@ pub async fn fetch_cheapshark_deals(limit: usize) -> RemoteCatalogResult<Vec<Che
             ("sortBy", "DealRating".to_owned()),
             ("desc", "1".to_owned()),
         ])
-        .send().await
+        .send()
+        .await
         .map_err(|error| RemoteCatalogError::Network(format!("CheapShark deals: {error}")))?
         .error_for_status()
         .map_err(|error| RemoteCatalogError::Network(format!("CheapShark deals: {error}")))?;
-    let deals_bytes = deals_response.bytes().await
+    let deals_bytes = deals_response
+        .bytes()
+        .await
         .map_err(|error| RemoteCatalogError::Network(format!("CheapShark deals: {error}")))?;
     let deals: Vec<CheapSharkDealResponse> = serde_json::from_slice(&deals_bytes)
-        .map_err(|error| RemoteCatalogError::InvalidData(format!("CheapShark deals JSON: {error}")))?;
+        .map_err(|error| {
+            RemoteCatalogError::InvalidData(format!("CheapShark deals JSON: {error}"))
+        })?;
 
     let mut result = Vec::with_capacity(deals.len().min(limit));
     for deal in deals {
@@ -240,9 +253,15 @@ pub async fn fetch_cheapshark_deals(limit: usize) -> RemoteCatalogResult<Vec<Che
             deal.sale_price.parse::<f64>(),
             deal.normal_price.parse::<f64>(),
             deal.savings.parse::<f64>(),
-        ) else { continue };
-        if deal.is_on_sale != "1" || !sale_price.is_finite() || !normal_price.is_finite()
-            || !savings_percent.is_finite() || sale_price < 0.0 || normal_price <= sale_price
+        ) else {
+            continue;
+        };
+        if deal.is_on_sale != "1"
+            || !sale_price.is_finite()
+            || !normal_price.is_finite()
+            || !savings_percent.is_finite()
+            || sale_price < 0.0
+            || normal_price <= sale_price
             || savings_percent <= 0.0
         {
             continue;
@@ -260,16 +279,22 @@ pub async fn fetch_cheapshark_deals(limit: usize) -> RemoteCatalogResult<Vec<Che
         result.push(CheapSharkDeal {
             deal_id: deal.deal_id,
             title: deal.title,
-            store_name: store_names.get(&deal.store_id)
-                .cloned().unwrap_or_else(|| format!("Boutique {}", deal.store_id)),
+            store_name: store_names
+                .get(&deal.store_id)
+                .cloned()
+                .unwrap_or_else(|| format!("Boutique {}", deal.store_id)),
             sale_price_usd: sale_price,
             normal_price_usd: normal_price,
             savings_percent: savings_percent.clamp(0.0, 100.0),
-            deal_rating: deal.deal_rating.and_then(|value| value.parse::<f64>().ok())
+            deal_rating: deal
+                .deal_rating
+                .and_then(|value| value.parse::<f64>().ok())
                 .filter(|value| value.is_finite()),
             url: url.to_string(),
         });
-        if result.len() >= limit { break; }
+        if result.len() >= limit {
+            break;
+        }
     }
     Ok(result)
 }
@@ -277,7 +302,8 @@ pub async fn fetch_cheapshark_deals(limit: usize) -> RemoteCatalogResult<Vec<Che
 /// Normalizes punctuation and casing so minor title-format differences do not
 /// prevent a local game from contributing to the player's taste profile.
 fn normalize_game_title(value: &str) -> String {
-    value.chars()
+    value
+        .chars()
         .filter(|character| character.is_alphanumeric())
         .flat_map(char::to_lowercase)
         .collect()
