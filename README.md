@@ -50,7 +50,7 @@ The Core can synchronize the verified search index and search it offline through
 
 ## Development roadmap — 0.3
 
-The 0.2 release is frozen. The next development cycle is Amethys Launcher 0.3: a real catalogue, authorized distribution sources, persistent download/install operations, managed installations, updates and repairs. The [0.3 roadmap](ROADMAP-0.3.md), [complete baseline audit](doc/technical/LOT-1-AUDIT-0.3.md) and [target architecture](doc/technical/ARCHITECTURE-0.3.md) define the implementation order and boundaries. The global Quality Check campaign is deferred to 0.4.
+The 0.2 release is frozen. Amethys Launcher 0.3 focuses on a unified Windows/Linux game library, personalized recommendations based on games present in the library, a real static master catalogue, and a demonstrable Steam integration foundation. Steam playtime/account statistics and commercial real-time prices require appropriate integration and permissions; direct Amethys-managed downloads, installs, updates and repairs are deferred beyond 0.3. The [revised 0.3 roadmap](ROADMAP-0.3.md), [complete baseline audit](doc/technical/LOT-1-AUDIT-0.3.md) and [target architecture](doc/technical/ARCHITECTURE-0.3.md) document the boundaries. The global Quality Check campaign is deferred to 0.4.
 
 ## Project status and scope
 
