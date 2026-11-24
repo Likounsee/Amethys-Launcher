@@ -4,6 +4,12 @@
 
 Le catalogue global distribué aux clients Amethys est un snapshot SQLite public, généré côté GitHub Actions à partir d'IGDB. Aucun appel IGDB ni secret Twitch n'est effectué depuis le launcher. Le fichier publié est `catalog.db.zst`, asset de la dernière GitHub Release du dépôt.
 
+## Séparation stricte Store / bibliothèque locale
+
+`catalog.db.zst` est le catalogue Store global commun à tous les utilisateurs. Il ne contient que les fiches maîtres et leurs identités de boutiques. Il ne contient ni jeux installés, ni chemins, ni état de téléchargement, ni compte/possession. Un jeu présent dans `games` n’est donc pas réputé possédé ou installé.
+
+La bibliothèque locale est stockée dans la base privée du Core de chaque PC (`games` / `local_game_locations` / `local_game_metadata`). Elle ne liste que les installations détectées, importées ou gérées sur ce PC. Une installation locale peut ne correspondre à aucun jeu du catalogue et conserver alors un `amethys_id` nul. La correspondance ne se fait que par une identité externe vérifiée ou une validation explicite, jamais par le titre seul. Désinstaller un jeu retire son état d’installation local, pas sa fiche du catalogue Store.
+
 ## Schéma SQLite
 
 - `games` : une fiche par jeu IGDB Windows PC principal, avec l'ID Amethys stable, le nom, le slug, le résumé, la date de sortie, l'URL de jaquette et les genres.
@@ -16,7 +22,7 @@ Les index couvrent la recherche de jeux par nom/slug, la résolution d'ID Amethy
 
 Le générateur utilise IGDB `games` avec `category = 0` et `platforms = (6)` (PC Windows). La pagination est faite par curseur `id > last_id`, pas avec un offset croissant, afin de dépasser les limites d'offset. Les sources de boutiques reconnues sont Steam, GOG, Epic, EA, Ubisoft, Battle.net, Amazon Games et Humble. itch.io et les sources inconnues sont ignorés. Les identifiants externes ne sont jamais convertis en nombres.
 
-Les IDs Amethys existants sont conservés depuis le registre du dépôt et les identités déjà présentes dans le catalogue maître. Les nouveaux IDs sont attribués par le job central, jamais à partir de l'ordre d'import local. Les IDs déjà connus restent réservés.
+Les IDs Amethys existants sont conservés depuis le registre du dépôt et les identités déjà présentes dans le catalogue maître. Les nouveaux IDs sont attribués par le job central, jamais à partir de l’ordre d’import local. Les IDs déjà connus restent réservés et ne sont jamais réutilisés. Aucun scan ou import local ne peut attribuer un `amethys_id`.
 
 Une identité de boutique déjà attribuée à une autre fiche IGDB est ignorée et comptabilisée plutôt que de créer une association ambiguë.
 
