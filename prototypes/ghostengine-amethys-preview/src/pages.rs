@@ -1199,16 +1199,71 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
     p.rrect(switch_x, switch_y, switch_w, switch_h, 10, PANEL_HI);
     let selected_x = switch_x + if view.promotions { switch_w / 2 } else { 0 };
     p.rrect(selected_x, switch_y, switch_w / 2, switch_h, 10, VIO);
-    p.text(switch_x + 12, switch_y, switch_h, "Pour vous", 12.5, W::Semi,
-        if view.promotions {
+    p.text(
+        switch_x + 12,
+        switch_y,
+        switch_h,
+        "Pour vous",
+        12.5,
+        W::Semi,
+        if view.promotions { MUT } else { TXT },
+    );
+    p.text(
+        switch_x + switch_w / 2 + 12,
+        switch_y,
+        switch_h,
+        "Promotions",
+        12.5,
+        W::Semi,
+        if view.promotions { TXT } else { MUT },
+    );
+    p.hit_with(
+        switch_x,
+        switch_y,
+        switch_w / 2,
+        switch_h,
+        10,
+        Action::SetStoreMode(false),
+        false,
+        Hover::Soft,
+    );
+    p.hit_with(
+        switch_x + switch_w / 2,
+        switch_y,
+        switch_w / 2,
+        switch_h,
+        10,
+        Action::SetStoreMode(true),
+        false,
+        Hover::Soft,
+    );
+
+    let mut y = switch_y + switch_h + 28;
+    if view.promotions {
         panel(p, mx, y, mw, 158, 18);
         p.text(mx + 20, y + 18, 26, "Votre espace promotions", 18.0, W::Semi, TXT);
-        p.paragraph(mx + 20, y + 54, mw - 40, 20,
-            "Le moteur interne des offres Amethys est en préparation. Il aura son propre format pour les prix, les boutiques, les réductions et l'historique.",
-            13.0, W::Reg, SOFT, 3);
-        p.paragraph(mx + 20, y + 108, mw - 40, 18,
-            "SteamDB pourra être étudié comme source de données, sans devenir une dépendance obligatoire du launcher.",
-            11.5, W::Reg, MUT, 2);
+        p.paragraph(
+            mx + 20,
+            y + 54,
+            mw - 40,
+            20,
+            "Les promotions seront affichées uniquement lorsque le prix, la devise, la source et la date de vérification seront fiables.",
+            13.0,
+            W::Reg,
+            SOFT,
+            3,
+        );
+        p.paragraph(
+            mx + 20,
+            y + 108,
+            mw - 40,
+            18,
+            "Aucune réduction n'est inventée. Cette section sera enrichie lorsque des sources autorisées seront disponibles.",
+            11.5,
+            W::Reg,
+            MUT,
+            2,
+        );
         return y + 182;
     }
 
