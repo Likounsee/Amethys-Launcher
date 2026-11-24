@@ -1226,6 +1226,9 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
         panel(p, x, cy, card_w, card_h, 14);
         p.cover_or_placeholder(&game.amethys_id.to_string(), "", &game.name, x + 1, cy + 1, card_w - 2, art_h);
         p.scrim(x + 1, cy + 1, card_w - 2, art_h, 0.42, 175);
+        // Match the card's rounded frame and reveal its real panel surface at
+        // the image corners rather than leaving square artwork underneath.
+        p.round_corners(x + 1, cy + 1, card_w - 2, art_h, 14, PANEL);
         chip(p, x + 12, cy + 12, "PC", card_w - 24);
         p.paragraph(x + 14, cy + art_h + 10, card_w - 28, 21, &game.name, 14.0, W::Semi, TXT, 2);
         p.text(x + 14, cy + card_h - 29, 11, "Consulter la fiche produit", 11.5, W::Med, VIO_HI);
