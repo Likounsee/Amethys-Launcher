@@ -1,61 +1,39 @@
-# Catalogue PC SQLite distribué indépendamment du launcher
+# Catalogue maître Amethys — dépôt et distribution
 
-## Objectif
+Le catalogue mondial de la Store est désormais maintenu dans le dépôt dédié
+[Likounsee/Amethys-Catalog](https://github.com/Likounsee/Amethys-Catalog).
 
-Le catalogue global distribué aux clients Amethys est un snapshot SQLite public, généré côté GitHub Actions à partir d'IGDB. Aucun appel IGDB ni secret Twitch n'est effectué depuis le launcher. Le catalogue est publié sur **GitHub Pages**, indépendamment des Releases et versions du launcher.
+Son endpoint statique prévu est :
 
-Les URLs stables du site sont :
+- Manifeste : `https://likounsee.github.io/Amethys-Catalog/manifest.json`
+- Index de recherche : `https://likounsee.github.io/Amethys-Catalog/index/games-index.json.zst`
 
-- Manifeste : `https://likounsee.github.io/Amethys-Launcher/catalog-manifest.json`
-- Base compressée : `https://likounsee.github.io/Amethys-Launcher/catalog.db.zst`
+Le format publié est décrit dans le [README du dépôt catalogue](https://github.com/Likounsee/Amethys-Catalog#published-format) et dans sa documentation
+[IGDB-CATALOG.md](https://github.com/Likounsee/Amethys-Catalog/blob/main/doc/IGDB-CATALOG.md).
 
-Le workflow remplace le contenu publié à chaque génération. Il ne crée aucune Release et ne pousse pas le binaire de la base dans l'historique Git de `main`.
+## Séparation des données
 
-## Séparation stricte Store / bibliothèque locale
+Le catalogue global contient les fiches maîtres des jeux PC Windows et leurs identités de boutiques. Il ne signifie ni possession ni installation.
 
-`catalog.db.zst` est le catalogue Store global commun à tous les utilisateurs. Il ne contient que les fiches maîtres et leurs identités de boutiques. Il ne contient ni jeux installés, ni chemins, ni état de téléchargement, ni compte/possession. Un jeu présent dans `games` n’est donc pas réputé possédé ou installé.
+La bibliothèque locale est conservée dans la base privée du Core de chaque PC. Elle ne contient que les installations détectées, importées ou gérées sur cette machine, leurs chemins et leur état. Les deux ensembles restent séparés et ne sont rapprochés que par des identifiants stables vérifiés, jamais par le titre seul.
 
-La bibliothèque locale est stockée dans la base privée du Core de chaque PC (`games` / `local_game_locations` / `local_game_metadata`). Elle ne liste que les installations détectées, importées ou gérées sur ce PC. Une installation locale peut ne correspondre à aucun jeu du catalogue et conserver alors un `amethys_id` nul. La correspondance ne se fait que par une identité externe vérifiée ou une validation explicite, jamais par le titre seul. Désinstaller un jeu retire son état d’installation local, pas sa fiche du catalogue Store.
+## Distribution et cache
 
-## Schéma SQLite
+Le catalogue est distribué sous forme de fichiers statiques versionnés :
 
-- `games` : une fiche par jeu IGDB Windows PC principal, avec l'ID Amethys stable, le nom, le slug, le résumé, la date de sortie, l'URL de jaquette et les genres.
-- `game_stores` : zéro à plusieurs identités de boutiques par jeu. `external_id` est toujours TEXT. La contrainte `UNIQUE(store, external_id)` empêche qu'un même identifiant de boutique associe deux jeux différents.
-- `catalog_meta` : version du schéma, filtres, date de génération et compteurs.
+- `manifest.json` : version, compteurs, schéma, checksums et liste des fragments ;
+- `index/games-index.json.zst` : index compact ID/nom/slug pour la recherche hors ligne ;
+- `shards/*.json.zst` : détails et identités de boutiques chargés à la demande ;
+- `metadata/genres.json` : liste commune des genres.
 
-Les index couvrent la recherche de jeux par nom/slug, la résolution d'ID Amethys et la correspondance exacte boutique + identifiant externe.
+Le launcher doit télécharger l'index compact, puis uniquement les fragments de détails nécessaires. Chaque fichier est vérifié par SHA-256 et placé dans un cache local borné. La base SQLite complète utilisée pendant la génération reste temporaire dans le runner ; elle n'est pas publiée ni téléchargée par les utilisateurs.
 
-## Filtrage et déduplication
+Le Core consommera un contrat de fournisseur abstrait. GitHub Pages est le premier adaptateur statique ; un hébergement Amethys pourra être ajouté ultérieurement sans réécrire le Store.
 
-Le générateur utilise IGDB `games` avec `category = 0` et `platforms = (6)` (PC Windows). La pagination est faite par curseur `id > last_id`, pas avec un offset croissant, afin de dépasser les limites d'offset. Les sources de boutiques reconnues sont Steam, GOG, Epic, EA, Ubisoft, Battle.net, Amazon Games et Humble. itch.io et les sources inconnues sont ignorés. Les identifiants externes ne sont jamais convertis en nombres.
+## Génération
 
-Les IDs Amethys existants sont conservés depuis le registre du dépôt et les identités déjà présentes dans le catalogue maître. Les nouveaux IDs sont attribués par le job central, jamais à partir de l’ordre d’import local. Les IDs déjà connus restent réservés et ne sont jamais réutilisés. Aucun scan ou import local ne peut attribuer un `amethys_id`.
+Le pipeline et les secrets IGDB résident désormais dans le dépôt catalogue. Configurer `IGDB_CLIENT_ID` et `IGDB_CLIENT_SECRET` dans les Actions secrets de ce dépôt, puis activer GitHub Pages avec la source **GitHub Actions**. Le workflow s'exécute chaque lundi à 04:17 UTC et peut être déclenché manuellement.
 
-Une identité de boutique déjà attribuée à une autre fiche IGDB est ignorée et comptabilisée plutôt que de créer une association ambiguë.
+Le registre d'identifiants Amethys est initialisé depuis l'ancien dépôt launcher lors du premier build, puis conservé et mis à jour dans le dépôt catalogue. Ne jamais supprimer ce registre : les IDs publiés sont permanents et ne sont jamais réutilisés.
 
-## Génération manuelle
-
-```powershell
-$env:IGDB_CLIENT_ID = "..."
-$env:IGDB_CLIENT_SECRET = "..."
-python -m pip install zstandard==0.25.0
-python scripts/build_igdb_catalog_db.py
-```
-
-Le script produit `catalog.db`, `catalog.db.zst`, `catalog-manifest.json` et met à jour `catalogs/amethys-id-registry.json`. Le manifeste contient notamment le nombre de jeux, la date/version du catalogue, les tailles et les SHA-256 de la base compressée et de la base SQLite. Le script valide la base avec `PRAGMA integrity_check`.
-
-## Publication automatique avec GitHub Actions
-
-Le workflow `.github/workflows/build-igdb-catalog.yml` s'exécute chaque lundi à 04:17 UTC et peut aussi être lancé manuellement. Configurer les secrets de dépôt `IGDB_CLIENT_ID` et `IGDB_CLIENT_SECRET` dans **Settings → Secrets and variables → Actions**.
-
-La première activation nécessite de sélectionner **Settings → Pages → Build and deployment → Source: GitHub Actions**. Ensuite, le workflow construit la base, met à jour le registre d'identifiants sur `main`, puis déploie uniquement les deux fichiers de catalogue sur GitHub Pages. Il ne crée pas de Release, ne modifie pas la version du launcher et ne stocke pas la base dans l'historique Git.
-
-## Côté client
-
-Le client Rust devra télécharger d'abord `catalog-manifest.json` depuis l'URL stable, comparer `catalog_version` avec la version locale, puis récupérer `database.file` si le catalogue est plus récent. Il doit vérifier `compressed_sha256` avant décompression, puis `uncompressed_sha256` après décompression, vérifier SQLite en lecture seule et remplacer le fichier local de façon atomique (fichier temporaire puis renommage). Les recherches et associations locales se feront ensuite dans cette base via `rusqlite`; les jaquettes seront téléchargées séparément à la demande.
-
-Ce pipeline assure la génération et la publication du catalogue. Le téléchargement, la mise à jour atomique et le cache de jaquettes côté Rust constituent l'étape d'intégration client suivante.
-
-## Attribution IGDB
-
-Avant toute distribution commerciale, respecter les conditions IGDB applicables, notamment l'attribution visible et les éventuelles obligations de partenariat.
+La génération respecte les conditions IGDB applicables, notamment les obligations d'attribution et de partenariat avant toute distribution commerciale.
