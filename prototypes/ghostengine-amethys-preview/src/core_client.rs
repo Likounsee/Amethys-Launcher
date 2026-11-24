@@ -423,6 +423,124 @@ pub fn list_games_or_start_agent() -> Result<Vec<IpcGameEntry>, String> {
 }
 
 
+/// Sends a Core command over the same local IPC endpoint used by the library.
+fn send_core_command(
+    command: IpcCommand,
+    request_timeout: std::time::Duration,
+) -> Result<IpcResponsePayload, String> {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(|error| format!("Impossible de démarrer le client IPC : {error}"))?;
+
+    runtime.block_on(async {
+        #[cfg(windows)]
+        let mut stream = tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            transport::connect(r"\\.\pipe\amethys-core"),
+        )
+        .await
+        .map_err(|_| "Délai dépassé lors de la connexion à Amethys Core (10 s).".to_owned())?
+        .map_err(|error| error.to_string())?;
+
+        #[cfg(unix)]
+        let mut stream = {
+            let directory = amethys_config::data_directory()
+                .map_err(|error| format!("Dossier de données Amethys indisponible : {error}"))?;
+            tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                transport::connect(directory.join("amethys.sock")),
+            )
+            .await
+            .map_err(|_| "Délai dépassé lors de la connexion à Amethys Core (10 s).".to_owned())?
+            .map_err(|error| error.to_string())?
+        };
+
+        let response = tokio::time::timeout(
+            request_timeout,
+            send_request(&mut stream, IpcRequest::new(command)),
+        )
+        .await
+        .map_err(|_| {
+            format!(
+                "Amethys Core n'a pas répondu dans les {:.0} secondes.",
+                request_timeout.as_secs_f32()
+            )
+        })?
+        .map_err(|error| error.to_string())?;
+
+        response
+            .result
+            .map_err(|error| format!("{} : {}", error.code, error.message))
+    })
+}
+
+/// Downloads and verifies the public master-catalogue index through Core.
+pub fn sync_master_catalog() -> Result<(String, u64), String> {
+    match send_core_command(
+        IpcCommand::SyncMasterCatalog,
+        std::time::Duration::from_secs(180),
+    )? {
+        IpcResponsePayload::CatalogSynchronized {
+            catalog_version,
+            game_count,
+        } => Ok((catalog_version, game_count)),
+        other => Err(format!("Réponse IPC inattendue : {other:?}")),
+    }
+}
+
+/// Searches the locally cached public catalogue without opening the database.
+pub fn search_master_catalog(
+    query: &str,
+    limit: usize,
+) -> Result<Vec<IpcCatalogSearchEntry>, String> {
+    match send_core_command(
+        IpcCommand::SearchMasterCatalog {
+            query: query.to_owned(),
+            limit: limit.clamp(1, 100),
+        },
+        std::time::Duration::from_secs(30),
+    )? {
+        IpcResponsePayload::CatalogSearchResults { games } => Ok(games),
+        other => Err(format!("Réponse IPC inattendue : {other:?}")),
+    }
+}
+
+/// Builds a personalized storefront feed from the user's existing local library.
+pub fn recommend_master_catalog(
+    genres: Vec<String>,
+    owned_ids: Vec<u64>,
+    owned_names: Vec<String>,
+    limit: usize,
+) -> Result<Vec<IpcCatalogSearchEntry>, String> {
+    match send_core_command(
+        IpcCommand::SearchRecommendedCatalog {
+            genres,
+            owned_ids,
+            owned_names,
+            limit: limit.clamp(1, 100),
+        },
+        std::time::Duration::from_secs(30),
+    )? {
+        IpcResponsePayload::CatalogSearchResults { games } => Ok(games),
+        other => Err(format!("Réponse IPC inattendue : {other:?}")),
+    }
+}
+
+/// Loads a single catalogue detail and its store identities through Core.
+pub fn get_master_catalog_game(
+    amethys_id: u64,
+) -> Result<IpcCatalogGameDetail, String> {
+    match send_core_command(
+        IpcCommand::GetMasterCatalogGame { amethys_id },
+        std::time::Duration::from_secs(60),
+    )? {
+        IpcResponsePayload::CatalogGameDetails { game } => Ok(game),
+        other => Err(format!("Réponse IPC inattendue : {other:?}")),
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -549,120 +667,3 @@ mod tests {
     }
 }
 
-
-/// Sends a Core command over the same local IPC endpoint used by the library.
-fn send_core_command(
-    command: IpcCommand,
-    request_timeout: std::time::Duration,
-) -> Result<IpcResponsePayload, String> {
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|error| format!("Impossible de démarrer le client IPC : {error}"))?;
-
-    runtime.block_on(async {
-        #[cfg(windows)]
-        let mut stream = tokio::time::timeout(
-            std::time::Duration::from_secs(10),
-            transport::connect(r"\\.\pipe\amethys-core"),
-        )
-        .await
-        .map_err(|_| "Délai dépassé lors de la connexion à Amethys Core (10 s).".to_owned())?
-        .map_err(|error| error.to_string())?;
-
-        #[cfg(unix)]
-        let mut stream = {
-            let directory = amethys_config::data_directory()
-                .map_err(|error| format!("Dossier de données Amethys indisponible : {error}"))?;
-            tokio::time::timeout(
-                std::time::Duration::from_secs(10),
-                transport::connect(directory.join("amethys.sock")),
-            )
-            .await
-            .map_err(|_| "Délai dépassé lors de la connexion à Amethys Core (10 s).".to_owned())?
-            .map_err(|error| error.to_string())?
-        };
-
-        let response = tokio::time::timeout(
-            request_timeout,
-            send_request(&mut stream, IpcRequest::new(command)),
-        )
-        .await
-        .map_err(|_| {
-            format!(
-                "Amethys Core n'a pas répondu dans les {:.0} secondes.",
-                request_timeout.as_secs_f32()
-            )
-        })?
-        .map_err(|error| error.to_string())?;
-
-        response
-            .result
-            .map_err(|error| format!("{} : {}", error.code, error.message))
-    })
-}
-
-/// Downloads and verifies the public master-catalogue index through Core.
-pub fn sync_master_catalog() -> Result<(String, u64), String> {
-    match send_core_command(
-        IpcCommand::SyncMasterCatalog,
-        std::time::Duration::from_secs(180),
-    )? {
-        IpcResponsePayload::CatalogSynchronized {
-            catalog_version,
-            game_count,
-        } => Ok((catalog_version, game_count)),
-        other => Err(format!("Réponse IPC inattendue : {other:?}")),
-    }
-}
-
-/// Searches the locally cached public catalogue without opening the database.
-pub fn search_master_catalog(
-    query: &str,
-    limit: usize,
-) -> Result<Vec<IpcCatalogSearchEntry>, String> {
-    match send_core_command(
-        IpcCommand::SearchMasterCatalog {
-            query: query.to_owned(),
-            limit: limit.clamp(1, 100),
-        },
-        std::time::Duration::from_secs(30),
-    )? {
-        IpcResponsePayload::CatalogSearchResults { games } => Ok(games),
-        other => Err(format!("Réponse IPC inattendue : {other:?}")),
-    }
-}
-
-/// Builds a personalized storefront feed from the user's existing local library.
-pub fn recommend_master_catalog(
-    genres: Vec<String>,
-    owned_ids: Vec<u64>,
-    owned_names: Vec<String>,
-    limit: usize,
-) -> Result<Vec<IpcCatalogSearchEntry>, String> {
-    match send_core_command(
-        IpcCommand::SearchRecommendedCatalog {
-            genres,
-            owned_ids,
-            owned_names,
-            limit: limit.clamp(1, 100),
-        },
-        std::time::Duration::from_secs(30),
-    )? {
-        IpcResponsePayload::CatalogSearchResults { games } => Ok(games),
-        other => Err(format!("Réponse IPC inattendue : {other:?}")),
-    }
-}
-
-/// Loads a single catalogue detail and its store identities through Core.
-pub fn get_master_catalog_game(
-    amethys_id: u64,
-) -> Result<IpcCatalogGameDetail, String> {
-    match send_core_command(
-        IpcCommand::GetMasterCatalogGame { amethys_id },
-        std::time::Duration::from_secs(60),
-    )? {
-        IpcResponsePayload::CatalogGameDetails { game } => Ok(game),
-        other => Err(format!("Réponse IPC inattendue : {other:?}")),
-    }
-}
