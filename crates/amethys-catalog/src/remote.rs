@@ -677,6 +677,27 @@ mod tests {
     }
 
     #[test]
+    fn master_catalogue_details_do_not_require_an_igdb_identity() {
+        let detail: CatalogGameDetail = serde_json::from_str(
+            r#"{
+                "amethys_id": 1001,
+                "name": "Provider-independent game",
+                "slug": "provider-independent-game",
+                "summary": null,
+                "release_date": null,
+                "cover_url": null,
+                "genres": ["Adventure"],
+                "stores": []
+            }"#,
+        )
+        .unwrap();
+
+        assert_eq!(detail.amethys_id, 1001);
+        assert_eq!(detail.igdb_id, None);
+        assert!(detail.stores.is_empty());
+    }
+
+    #[test]
     fn rejects_non_sha256_hashes() {
         assert!(!valid_sha256("not-a-hash"));
         assert!(valid_sha256(&"a".repeat(64)));
