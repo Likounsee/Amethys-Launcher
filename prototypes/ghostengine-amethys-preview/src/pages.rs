@@ -1131,7 +1131,6 @@ pub struct StoreView<'a> {
     pub query: &'a str,
     pub focused: bool,
     pub results: &'a [IpcCatalogSearchEntry],
-    pub promotion_results: &'a [amethys_catalog::remote::CheapSharkDeal],
     pub recommended: bool,
     pub promotions: bool,
     pub loading: bool,
@@ -1201,74 +1200,16 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
     let selected_x = switch_x + if view.promotions { switch_w / 2 } else { 0 };
     p.rrect(selected_x, switch_y, switch_w / 2, switch_h, 10, VIO);
     p.text(switch_x + 12, switch_y, switch_h, "Pour vous", 12.5, W::Semi,
-        if view.promotions { MUT } else { Color::WHITE });
-    p.text(switch_x + switch_w / 2 + 14, switch_y, switch_h, "Promotions", 12.5, W::Semi,
-        if view.promotions { Color::WHITE } else { MUT });
-    p.hit_with(switch_x, switch_y, switch_w / 2, switch_h, 10, Action::SetStoreMode(false), false, Hover::Glow);
-    p.hit_with(switch_x + switch_w / 2, switch_y, switch_w / 2, switch_h, 10, Action::SetStoreMode(true), false, Hover::Glow);
-
-    let search_y = 112;
-    let mut y = if view.promotions { 98 } else {
-        let sync_w = button_width(p, "Actualiser", Some(Icon::Refresh));
-        let search_w = (mw - sync_w - 12).max(120);
-        redraw_store_search(p, lay, view.query, view.focused);
-        button(p, mx + search_w + 12, search_y, Some(sync_w), "Actualiser", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::SyncMasterCatalog));
-        search_y + BTN_H + 26
-    };
-    if view.promotions && !lay.compact() {
-        p.text(mx, 82, 20, "Offres et baisses de prix vérifiées", 13.0, W::Reg, MUT);
-    }
-    if let Some(error) = view.error {
-        panel(p, mx, y, mw, 76, 14);
-        p.text(mx + 18, y + 11, 20, "Boutique indisponible", 14.0, W::Semi, AMBER);
-        p.paragraph(mx + 18, y + 34, mw - 36, 18, error, 12.0, W::Reg, SOFT, 2);
-        y += 90;
-    } else if view.loading && (if view.promotions { view.promotion_results.is_empty() } else { view.results.is_empty() }) {
-        panel(p, mx, y, mw, 100, 16);
-        p.text(mx + 20, y + 16, 24,
-            if view.promotions { "Recherche des promotions…" } else { "Chargement du catalogue…" },
-            16.0, W::Semi, TXT);
-        p.text(mx + 20, y + 48, 20,
-            if view.promotions { "Récupération des offres de prix en cours." } else { "La boutique reste disponible pendant la synchronisation." },
-            12.5, W::Reg, MUT);
-        y += 116;
-    }
-
-    if view.promotions {
-        if view.promotion_results.is_empty() {
-            panel(p, mx, y, mw, 132, 18);
-            p.text(mx + 20, y + 18, 26,
-                if view.loading { "Recherche des meilleures offres…" } else { "Aucune promotion disponible" },
-                18.0, W::Semi, TXT);
-            p.paragraph(mx + 20, y + 56, mw - 40, 20,
-                "Les offres sont récupérées en direct auprès de CheapShark. Réessayez plus tard si le service est temporairement indisponible.",
-                12.5, W::Reg, SOFT, 3);
-            p.text(mx + 20, y + 102, 16, "Prix fournis en USD · Données CheapShark", 10.5, W::Reg, MUT);
-            return y + 156;
-        }
-
-        let cols = lay.columns().min(if lay.compact() { 2 } else { 3 }).max(1);
-        let gap = 14;
-        let card_w = (mw - gap * (cols - 1)) / cols;
-        let card_h = 154;
-        for (index, deal) in view.promotion_results.iter().take(60).enumerate() {
-            let col = index as i32 % cols;
-            let row = index as i32 / cols;
-            let x = mx + col * (card_w + gap);
-            let cy = y + row * (card_h + gap);
-            panel(p, x, cy, card_w, card_h, 14);
-            chip(p, x + 12, cy + 10, &format!("-{:.0}%", deal.savings_percent), card_w - 24);
-            p.paragraph(x + 12, cy + 42, card_w - 24, 20, &deal.title, 13.5, W::Semi, TXT, 2);
-            p.text(x + 12, cy + 88, 16, &deal.store_name, 11.0, W::Med, MUT);
-            p.text(x + 12, cy + 110, 22, &format!("USD {:.2}", deal.sale_price_usd), 16.0, W::Semi, VIO_HI);
-            let old_price_x = x + 104;
-            p.text(old_price_x, cy + 112, 20, &format!("USD {:.2}", deal.normal_price_usd), 11.5, W::Reg, MUT);
-            p.hit_with(x, cy, card_w, card_h, 14, Action::OpenPromotionDeal(index), false, Hover::Card);
-        }
-        let rows = (view.promotion_results.len().min(60) as i32 + cols - 1) / cols;
-        let footer_y = y + rows * (card_h + gap) + 4;
-        p.text(mx, footer_y, 18, "Prix en USD · Offres fournies par CheapShark · Les prix peuvent évoluer.", 10.5, W::Reg, MUT);
-        return footer_y + 28;
+        if view.promotions {
+        panel(p, mx, y, mw, 158, 18);
+        p.text(mx + 20, y + 18, 26, "Votre espace promotions", 18.0, W::Semi, TXT);
+        p.paragraph(mx + 20, y + 54, mw - 40, 20,
+            "Le moteur interne des offres Amethys est en préparation. Il aura son propre format pour les prix, les boutiques, les réductions et l'historique.",
+            13.0, W::Reg, SOFT, 3);
+        p.paragraph(mx + 20, y + 108, mw - 40, 18,
+            "SteamDB pourra être étudié comme source de données, sans devenir une dépendance obligatoire du launcher.",
+            11.5, W::Reg, MUT, 2);
+        return y + 182;
     }
 
     if view.query.trim().is_empty() {
