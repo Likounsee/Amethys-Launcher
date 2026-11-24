@@ -215,7 +215,7 @@ Aucun prix, avis, promotion, disponibilité ou contenu de catalogue fictif. Les 
 
 ## 13. Stratégie sans backend obligatoire
 
-Le catalogue public peut être distribué sous forme de fichiers versionnés (par exemple via GitHub Pages/Releases ou un hébergement statique comparable) et mis en cache localement. Le format doit rester indépendant du fournisseur d'hébergement.
+Le catalogue public est maintenu dans le dépôt dédié `Likounsee/Amethys-Catalog` et distribué sous forme de fichiers statiques versionnés (index compact + fragments de détails à la demande). Le Core doit utiliser un contrat `CatalogProvider` indépendant de GitHub ; GitHub Pages est le premier adaptateur, un serveur Amethys pourra le remplacer ultérieurement sans réécrire le Store. Le cache local permet la recherche hors ligne et les fragments sont téléchargés à la demande.
 
 Cette approche ne fournit pas à elle seule des comptes, des achats, des licences, des API privées ou des fichiers de jeux commerciaux. Les intégrations dépendant d'un backend, d'accords éditeur ou de secrets utilisateurs restent optionnelles et explicites.
 
