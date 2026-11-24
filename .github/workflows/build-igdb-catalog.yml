@@ -47,3 +47,15 @@ jobs:
           test -n "$TAG"
           gh release upload "$TAG" catalog.db.zst --clobber
           echo "Updated catalog.db.zst on latest release: $TAG"
+
+      - name: Persist stable Amethys ID registry
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add catalogs/amethys-id-registry.json
+          if git diff --cached --quiet; then
+            echo "ID registry is unchanged."
+            exit 0
+          fi
+          git commit -m "Update stable Amethys catalogue ID registry"
+          git push origin HEAD:main
