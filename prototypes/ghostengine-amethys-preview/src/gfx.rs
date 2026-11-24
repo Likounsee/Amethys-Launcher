@@ -75,6 +75,10 @@ pub enum Action {
     ConfirmRemoveGame,
     CancelRemoveGame,
     SelectGame(usize),
+    FocusStoreSearch,
+    SearchStore,
+    SyncMasterCatalog,
+    SelectCatalogGame(u64),
 }
 
 /// How a hit region reacts when the pointer (or keyboard focus) is on it.

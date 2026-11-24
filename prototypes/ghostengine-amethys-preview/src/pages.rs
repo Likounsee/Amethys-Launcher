@@ -1127,8 +1127,68 @@ fn measure_rows(p: &mut Painter, inner: i32, rows: &[(&str, bool)]) -> i32 {
 }
 
 // ------------------------------------------------------------------- store
-/// The catalogue has no connected provider yet; nothing is invented here.
-pub fn store(p: &mut Painter, lay: &Layout) -> i32 {
+pub struct StoreView<'a> {
+    pub query: &'a str,
+    pub focused: bool,
+    pub results: &'a [IpcCatalogSearchEntry],
+    pub loading: bool,
+    pub catalog_version: Option<&'a str>,
+    pub game_count: Option<u64>,
+    pub error: Option<&'a str>,
+}
+
+pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
+    backdrop(p, lay);
+    let (mx, mw) = (lay.mx, lay.mw);
+    p.text(mx, 28, 42, "Boutique", 34.0, W::Disp, TXT);
+    let status = if view.loading {
+        "Chargement du catalogue…".to_owned()
+    } else if let (Some(version), Some(count)) = (view.catalog_version, view.game_count) {
+        format!("Catalogue {version} · {count} jeux PC")
+    } else {
+        "Catalogue mondial de jeux PC".to_owned()
+    };
+    p.text(mx, 72, 22, &status, 13.5, W::Reg, MUT);
+
+    let search_y = 112;
+    let button_w = 132;
+    let gap = 10;
+    let search_w = (mw - button_w - gap).max(120);
+    search_field(p, mx, search_y, search_w, view.query, view.focused);
+    p.hit_with(mx, search_y, search_w, BTN_H, 12, Action::FocusStoreSearch, false, Hover::Glow);
+    button(p, mx + search_w + gap, search_y, Some(button_w), "Rechercher", Some(Icon::Search), Btn::Primary, PANEL, Some(Action::SearchStore));
+
+    let sync_y = search_y + BTN_H + 12;
+    button(p, mx, sync_y, None, "Synchroniser le catalogue", Some(Icon::Refresh), Btn::Secondary, PANEL, Some(Action::SyncMasterCatalog));
+    if let Some(error) = view.error {
+        panel(p, mx, sync_y + 54, mw, 76, 14);
+        p.text(mx + 18, sync_y + 65, 20, "Catalogue indisponible", 14.0, W::Semi, AMBER);
+        p.paragraph(mx + 18, sync_y + 88, mw - 36, 18, error, 12.0, W::Reg, SOFT, 2);
+    } else if view.loading {
+        p.text(mx + 4, sync_y + 56, 24, "La requête est exécutée en arrière-plan. L'interface reste disponible.", 12.5, W::Reg, MUT);
+    }
+
+    let mut y = sync_y + 100;
+    if view.results.is_empty() && !view.loading && view.error.is_none() {
+        panel(p, mx, y, mw, 116, 18);
+        p.text(mx + 20, y + 18, 26, "Recherchez parmi les jeux du catalogue", 17.0, W::Semi, TXT);
+        p.paragraph(mx + 20, y + 52, mw - 40, 20,
+            "Les résultats proviennent du catalogue public Amethys. Une fiche ne signifie pas que le jeu est possédé, installé ou téléchargeable directement.",
+            12.5, W::Reg, MUT, 3);
+        y += 132;
+    }
+    for (index, game) in view.results.iter().enumerate() {
+        let h = 66;
+        panel(p, mx, y, mw, h, 14);
+        p.text(mx + 16, y + 10, 24, &game.name, 15.0, W::Semi, TXT);
+        p.text(mx + 16, y + 36, 18, &format!("Amethys ID · {}", game.amethys_id), 11.5, W::Reg, MUT);
+        p.text(mx + mw - 104, y + 22, 20, "Voir la fiche  ›", 11.5, W::Med, VIO_HI);
+        p.hit_with(mx, y, mw, h, 14, Action::SelectCatalogGame(game.amethys_id), false, Hover::Card);
+        y += h + 8;
+        if index >= 47 { break; }
+    }
+    y + 28
+}
     backdrop(p, lay);
     let (mx, mw) = (lay.mx, lay.mw);
     p.text(mx, 28, 42, "Boutique", 34.0, W::Disp, TXT);

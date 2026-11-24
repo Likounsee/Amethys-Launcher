@@ -14,7 +14,7 @@ use crate::covers::CoverStore;
 use crate::gfx::{self, alpha, fb_fill, fb_fill_rrect, fb_stroke_rrect, Action, Fonts, Hit, Hover, Icon, Page, Painter, State, W};
 use crate::pages::{self, Active, DetailView, Layout, LibraryView, SettingsView, SidebarInfo};
 use crate::status::{self, GameStatus};
-use amethys_ipc::IpcGameEntry;
+use amethys_ipc::{IpcCatalogSearchEntry, IpcGameEntry};
 use ghostengine::{
     Color, FrameOutcome, Framebuffer, InputState, LayoutDirection, Point, Rect, ScrollViewport,
     UiInteraction,
@@ -40,6 +40,11 @@ enum CoreMutationTask {
     },
     Remove { id: String },
     SetExecutable { id: String, executable: String },
+}
+
+enum StoreTaskResult {
+    Search(Result<Vec<IpcCatalogSearchEntry>, String>),
+    Synchronized(Result<(String, u64), String>),
 }
 
 enum CoreMutationResult {
@@ -328,6 +333,14 @@ pub struct App {
     pending_remove: Option<usize>,
     search_query: String,
     search_focused: bool,
+    store_query: String,
+    store_search_focused: bool,
+    store_results: Vec<IpcCatalogSearchEntry>,
+    store_loading: bool,
+    store_catalog_version: Option<String>,
+    store_game_count: Option<u64>,
+    store_error: Option<String>,
+    store_receiver: Option<std::sync::mpsc::Receiver<StoreTaskResult>>,
     executable_draft: String,
     editing_executable: bool,
     executable_focused: bool,
@@ -411,6 +424,14 @@ impl App {
             pending_remove: None,
             search_query: String::new(),
             search_focused: false,
+            store_query: String::new(),
+            store_search_focused: false,
+            store_results: Vec::new(),
+            store_loading: false,
+            store_catalog_version: None,
+            store_game_count: None,
+            store_error: None,
+            store_receiver: None,
             executable_draft: String::new(),
             editing_executable: false,
             executable_focused: false,
@@ -462,6 +483,68 @@ impl App {
         self.library_refreshing = refreshing;
         if !refreshing {
             self.core_error = None;
+        }
+        self.render(false);
+    }
+
+    /// Runs a master-catalogue request away from the window thread.
+    fn start_store_task(&mut self, synchronize: bool) {
+        if self.store_loading {
+            return;
+        }
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let query = self.store_query.trim().to_owned();
+        std::thread::spawn(move || {
+            if synchronize {
+                let result = crate::core_client::sync_master_catalog();
+                let _ = sender.send(StoreTaskResult::Synchronized(result));
+            } else {
+                let result = crate::core_client::search_master_catalog(&query, 48);
+                let _ = sender.send(StoreTaskResult::Search(result));
+            }
+        });
+        self.store_receiver = Some(receiver);
+        self.store_loading = true;
+        self.store_error = None;
+        self.render(false);
+    }
+
+    fn poll_store_task(&mut self) {
+        let result = match self.store_receiver.as_ref().map(|receiver| receiver.try_recv()) {
+            Some(Ok(result)) => Some(result),
+            Some(Err(std::sync::mpsc::TryRecvError::Disconnected)) => {
+                self.store_receiver = None;
+                self.store_loading = false;
+                self.store_error = Some("La requête du catalogue s'est interrompue.".to_owned());
+                self.render(false);
+                return;
+            }
+            Some(Err(std::sync::mpsc::TryRecvError::Empty)) | None => None,
+        };
+        let Some(result) = result else { return };
+        self.store_receiver = None;
+        self.store_loading = false;
+        match result {
+            StoreTaskResult::Search(Ok(games)) => {
+                self.store_results = games;
+                self.store_error = None;
+            }
+            StoreTaskResult::Search(Err(error)) => self.store_error = Some(error),
+            StoreTaskResult::Synchronized(Ok((version, count))) => {
+                self.store_catalog_version = Some(version);
+                self.store_game_count = Some(count);
+                self.store_error = None;
+                self.notify(ToastKind::Success, format!("Catalogue synchronisé : {count} jeux."));
+                // Search the current query immediately against the newly cached index.
+                let query = self.store_query.trim().to_owned();
+                let (sender, receiver) = std::sync::mpsc::channel();
+                std::thread::spawn(move || {
+                    let _ = sender.send(crate::core_client::search_master_catalog(&query, 48));
+                });
+                self.store_receiver = Some(receiver.map(StoreTaskResult::Search));
+                self.store_loading = true;
+            }
+            StoreTaskResult::Synchronized(Err(error)) => self.store_error = Some(error),
         }
         self.render(false);
     }
@@ -663,7 +746,15 @@ impl App {
         let side_ms = t_side.elapsed().as_secs_f64() * 1000.0;
         let t_page = Instant::now();
         let h = match self.page {
-            Page::Store => pages::store(&mut p, &lay),
+            Page::Store => pages::store(&mut p, &lay, &pages::StoreView {
+                query: &self.store_query,
+                focused: self.store_search_focused,
+                results: &self.store_results,
+                loading: self.store_loading,
+                catalog_version: self.store_catalog_version.as_deref(),
+                game_count: self.store_game_count,
+                error: self.store_error.as_deref(),
+            }),
             Page::Library => pages::library(
                 &mut p,
                 &lay,
@@ -806,12 +897,28 @@ impl App {
         match action {
             Action::Go(page) => {
                 self.page = page;
+                self.store_search_focused = false;
+                if page == Page::Store && self.store_catalog_version.is_none() && !self.store_loading {
+                    self.start_store_task(true);
+                }
                 if page == Page::Library {
                     self.selected_game = None;
                 }
                 self.keyboard_focus = None;
                 self.start_page_fade();
                 self.render(true);
+            }
+            Action::FocusStoreSearch => {
+                self.store_search_focused = true;
+                self.search_focused = false;
+                self.keyboard_focus = focus_index_for_action(&self.hits, Action::FocusStoreSearch);
+                self.render(false);
+            }
+            Action::SearchStore => self.start_store_task(false),
+            Action::SyncMasterCatalog => self.start_store_task(true),
+            Action::SelectCatalogGame(amethys_id) => {
+                self.notify(ToastKind::Info, format!("Fiche du jeu {amethys_id} : chargement à connecter."));
+                self.render(false);
             }
             Action::SelectGame(index) => {
                 if let Some(game) = self.games.get(index) {
@@ -1436,12 +1543,13 @@ impl App {
 
     // -------------------------------------------------------------------- input
     fn handle_text_input(&mut self, input: &InputState) {
-        if !self.search_focused && !self.executable_focused {
+        if !self.search_focused && !self.store_search_focused && !self.executable_focused {
             return;
         }
         let mut changed = false;
         let searching = self.search_focused;
-        let target = if searching { &mut self.search_query } else { &mut self.executable_draft };
+        let store_searching = self.store_search_focused;
+        let target = if searching { &mut self.search_query } else if store_searching { &mut self.store_query } else { &mut self.executable_draft };
         if input.backspace_pressed {
             changed |= target.pop().is_some();
         }
@@ -1476,12 +1584,17 @@ impl App {
         if searching && changed {
             self.library_limit = PAGE_SIZE;
         }
-        let submitted = input.enter_pressed && searching;
+        let submitted = input.enter_pressed && (searching || store_searching);
         if submitted {
             self.search_focused = false;
+            self.store_search_focused = false;
         }
         if changed || submitted {
-            self.render(false);
+            if submitted && store_searching {
+                self.start_store_task(false);
+            } else {
+                self.render(false);
+            }
         }
     }
 
@@ -1594,6 +1707,7 @@ impl App {
 
         self.poll_library_load();
         self.poll_core_mutation();
+        self.poll_store_task();
         self.poll_scan();
 
         // Core discovers missing executables asynchronously. Keep the visible
