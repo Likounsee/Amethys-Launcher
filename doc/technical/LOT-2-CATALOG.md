@@ -59,8 +59,14 @@ Le fichier [catalog-v1.example.json](../../catalogs/catalog-v1.example.json) est
 - rejet des capacités non autorisées par un fournisseur ;
 - rejet des doublons et versions de schéma inconnues ;
 - rejet de l'installation directe sans autorisation explicite et manifeste ;
+- rejet des documents vides, trop volumineux et contenant des champs inconnus ;
+- validation stricte des URL HTTPS, hôtes et identifiants intégrés ;
+- rejet des identifiants externes dupliqués pour un même fournisseur ;
+- refus des fichiers sources trop volumineux et des liens symboliques sur Unix ;
 - synchronisation, persistance et recherche hors ligne ;
 - conservation de l'ancien cache après un rafraîchissement invalide ;
+- suppression des offres obsolètes sans suppression de l'identité canonique ;
+- monotonie des versions et immutabilité du contenu à version égale ;
 - initialisation idempotente du schéma.
 
 La campagne CQ globale reste reportée à la 0.4. Ces tests ciblés sont des tests de développement du Lot 2, pas une validation complète de release.
