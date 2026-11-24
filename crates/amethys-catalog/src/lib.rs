@@ -1235,8 +1235,7 @@ mod tests {
             use std::os::unix::fs::symlink;
             let link = directory.path().join("catalog-link.json");
             symlink(&path, &link).unwrap();
-            let linked_source =
-                StaticJsonCatalogSource::new("linked", "Linked", &link).unwrap();
+            let linked_source = StaticJsonCatalogSource::new("linked", "Linked", &link).unwrap();
             assert!(linked_source.load_document().is_err());
         }
     }
