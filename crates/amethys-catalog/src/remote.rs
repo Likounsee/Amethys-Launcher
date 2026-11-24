@@ -326,7 +326,7 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
 
         let mut ranked = entries.iter()
             .filter(|entry| !owned_ids.contains(&entry.amethys_id)
-                && !owned_names.contains(&entry.name.trim().to_lowercase()))
+                && !owned_names.contains(&normalize_game_title(&entry.name)))
             .map(|entry| {
                 let mut seen = std::collections::HashSet::new();
                 let score = entry.genres.iter()
@@ -337,11 +337,13 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
                 (score, entry)
             })
             .collect::<Vec<_>>();
-        if genre_weights.is_empty() {
-            ranked.sort_by_cached_key(|(_, entry)| entry.name.to_lowercase());
-        } else {
-            ranked.sort_by(|left, right| right.0.cmp(&left.0));
-        }
+        // Keep the ranking deterministic when multiple games share the same
+        // genre score. A zero-score catalogue must not look personalized.
+        ranked.sort_by(|left, right| {
+            right.0.cmp(&left.0)
+                .then_with(|| left.1.name.to_lowercase().cmp(&right.1.name.to_lowercase()))
+                .then_with(|| left.1.amethys_id.cmp(&right.1.amethys_id))
+        });
         Ok(ranked.into_iter().take(limit).map(|(_, entry)| entry.clone()).collect())
     }
 
