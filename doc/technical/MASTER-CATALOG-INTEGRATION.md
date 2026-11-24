@@ -20,11 +20,13 @@ Le client ne télécharge jamais la base SQLite temporaire du pipeline. Le cache
 Le Core expose :
 - `SyncMasterCatalog` : synchronise le manifeste et l'index ;
 - `SearchMasterCatalog` : recherche dans l'index local déjà synchronisé.
+- `GetMasterCatalogGame` : récupère la fiche complète d'un jeu par son ID Amethys et ne télécharge que le shard concerné.
 
 Commandes :
 ```sh
 amethysctl catalog sync
 amethysctl catalog search "hollow knight"
+amethysctl catalog show 12345
 ```
 
 La recherche est hors ligne. La première synchronisation nécessite une connexion HTTPS. Le cache est conservé dans `<AMETHYS_DATA_DIR>/catalog-cache` ou dans le dossier de données Amethys standard.
@@ -40,6 +42,6 @@ Pour tester un autre hébergement statique compatible, définir `AMETHYS_CATALOG
 ## Limites actuelles
 
 - La recherche du catalogue maître est disponible via Core IPC et CLI ; l'écran Store graphique doit encore être raccordé à ces commandes.
-- Les détails de jeux disposent d'une API Rust de chargement à la demande ; une commande IPC/UI de détail et la présentation des identités de boutiques restent à intégrer.
+- Les détails de jeux sont accessibles via IPC et CLI ; l'écran Store graphique et la présentation interactive des identités de boutiques restent à intégrer.
 - Les métadonnées du catalogue distant ne sont pas fusionnées avec les installations locales.
 - Une entrée du catalogue n'implique ni achat, ni propriété, ni installation, ni autorisation de téléchargement.

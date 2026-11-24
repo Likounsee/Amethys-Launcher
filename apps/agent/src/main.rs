@@ -1,7 +1,8 @@
 use amethys_events::EventBus;
 use amethys_ipc::{
     IpcCommand, IpcCoreStatus, IpcEnvelope, IpcGameEntry, IpcRemoteError, IpcRequest, IpcResponse,
-    IpcResponsePayload, IpcCatalogSearchEntry, read_envelope, transport::IpcListener, write_message,
+    IpcResponsePayload, IpcCatalogSearchEntry, IpcCatalogGameDetail, IpcCatalogStoreIdentity,
+    read_envelope, transport::IpcListener, write_message,
 };
 use amethys_runtime::{CoreRuntime, RuntimeState};
 use amethys_storage::Database;
@@ -64,6 +65,38 @@ fn search_master_catalog(query: &str, limit: usize) -> Result<IpcResponsePayload
     Ok(IpcResponsePayload::CatalogSearchResults { games })
 }
 
+async fn get_master_catalog_game(amethys_id: u64) -> Result<IpcResponsePayload, String> {
+    let data_dir = amethys_config::prepare_data_directory().map_err(|error| error.to_string())?;
+    let base_url = std::env::var("AMETHYS_CATALOG_URL")
+        .unwrap_or_else(|_| DEFAULT_MASTER_CATALOG_URL.to_owned());
+    let provider = amethys_catalog::remote::StaticCatalogProvider::new(&base_url)
+        .map_err(|error| error.to_string())?;
+    let client = amethys_catalog::remote::RemoteCatalogClient::new(
+        provider,
+        data_dir.join("catalog-cache"),
+    ).map_err(|error| error.to_string())?;
+    let manifest = client.fetch_manifest().await.map_err(|error| error.to_string())?;
+    let game = client.fetch_game(&manifest, amethys_id).await.map_err(|error| error.to_string())?;
+    Ok(IpcResponsePayload::CatalogGameDetails {
+        game: IpcCatalogGameDetail {
+            amethys_id: game.amethys_id,
+            igdb_id: game.igdb_id,
+            name: game.name,
+            slug: game.slug,
+            summary: game.summary,
+            release_date: game.release_date,
+            cover_url: game.cover_url,
+            genres: game.genres,
+            stores: game.stores.into_iter().map(|store| IpcCatalogStoreIdentity {
+                store: store.store,
+                external_id: store.external_id,
+                name: store.name,
+                url: store.url,
+            }).collect(),
+        },
+    })
+}
+
 fn mutation_allowed(state: IpcCoreStatus) -> bool {
     state == IpcCoreStatus::Running
 }
@@ -102,6 +135,17 @@ where
                 Err(message) => IpcResponse::failure(
                     request.request_id,
                     IpcRemoteError::new("AM-CATALOG-0001", message),
+                ),
+            };
+            write_message(stream, &response).await?;
+            return Ok(());
+        }
+        IpcCommand::GetMasterCatalogGame { amethys_id } => {
+            let response = match get_master_catalog_game(*amethys_id).await {
+                Ok(payload) => IpcResponse::success(request.request_id, payload),
+                Err(message) => IpcResponse::failure(
+                    request.request_id,
+                    IpcRemoteError::new("AM-CATALOG-0003", message),
                 ),
             };
             write_message(stream, &response).await?;
@@ -261,7 +305,8 @@ where
                     .remove_game(&id)
                     .map(|removed| IpcResponsePayload::GameRemoved { removed }),
                 IpcCommand::Ping | IpcCommand::GetStatus | IpcCommand::SyncMasterCatalog
-                | IpcCommand::SearchMasterCatalog { .. } => unreachable!("handled above"),
+                | IpcCommand::SearchMasterCatalog { .. }
+                | IpcCommand::GetMasterCatalogGame { .. } => unreachable!("handled above"),
             }
         }
     };

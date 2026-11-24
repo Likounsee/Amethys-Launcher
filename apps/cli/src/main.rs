@@ -28,6 +28,7 @@ COMMANDES:
     games remove <id>                 Retire un jeu de la bibliothèque Amethys
     catalog sync                      Télécharge et vérifie l'index catalogue mondial
     catalog search <terme>            Recherche hors ligne dans le catalogue mondial
+    catalog show <amethys-id>         Affiche la fiche détaillée d'un jeu du catalogue
 
 OPTIONS:
     -h, --help                        Affiche cette aide
@@ -103,6 +104,11 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
         [group, action] if group == "catalog" && action == "sync" => Ok(IpcCommand::SyncMasterCatalog),
         [group, action, query] if group == "catalog" && action == "search" => {
             Ok(IpcCommand::SearchMasterCatalog { query: query.clone(), limit: 50 })
+        },
+        [group, action, id] if group == "catalog" && action == "show" => {
+            let amethys_id = id.parse::<u64>().map_err(|_| "L'identifiant Amethys doit être un entier positif.")?;
+            if amethys_id == 0 { return Err("L'identifiant Amethys doit être un entier positif."); }
+            Ok(IpcCommand::GetMasterCatalogGame { amethys_id })
         },
         [group, action, name, platform, install_path] if group == "games" && action == "add" => {
             Ok(IpcCommand::AddGame {
@@ -936,6 +942,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         Ok(IpcResponsePayload::CatalogSynchronized { catalog_version, game_count }) => {
             println!("Catalogue mondial synchronisé : {game_count} jeux (version {catalog_version}).");
+            Ok(())
+        }
+        Ok(IpcResponsePayload::CatalogGameDetails { game }) => {
+            println!("{} (Amethys ID: {}, IGDB ID: {})", game.name, game.amethys_id, game.igdb_id);
+            if let Some(date) = game.release_date { println!("Sortie : {date}"); }
+            if !game.genres.is_empty() { println!("Genres : {}", game.genres.join(", ")); }
+            if let Some(summary) = game.summary { println!("\\n{summary}"); }
+            if let Some(cover) = game.cover_url { println!("\\nCouverture : {cover}"); }
+            if !game.stores.is_empty() {
+                println!("\\nBoutiques :");
+                for store in game.stores {
+                    let identity = store.external_id.map(|id| format!(" — ID {id}")).unwrap_or_default();
+                    let url = store.url.map(|url| format!(" — {url}")).unwrap_or_default();
+                    println!("- {}{}{}", store.name.unwrap_or(store.store), identity, url);
+                }
+            }
             Ok(())
         }
         Ok(IpcResponsePayload::CatalogSearchResults { games }) => {

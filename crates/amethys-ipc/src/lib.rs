@@ -37,6 +37,8 @@ pub enum IpcCommand {
     SyncMasterCatalog,
     /// Searches the locally cached master catalogue index.
     SearchMasterCatalog { query: String, limit: usize },
+    /// Loads one master-catalogue game detail by its stable Amethys ID.
+    GetMasterCatalogGame { amethys_id: u64 },
     /// Removes a game by its identifier.
     RemoveGame { id: String },
 }
@@ -75,6 +77,7 @@ pub enum IpcResponsePayload {
     GameRemoved { removed: bool },
     CatalogSynchronized { catalog_version: String, game_count: u64 },
     CatalogSearchResults { games: Vec<IpcCatalogSearchEntry> },
+    CatalogGameDetails { game: IpcCatalogGameDetail },
 }
 
 /// Canonical metadata shared by all local installations of one Amethys game.
@@ -111,6 +114,29 @@ pub struct IpcCatalogSearchEntry {
     pub amethys_id: u64,
     pub name: String,
     pub slug: Option<String>,
+}
+
+/// Full game details from the public master catalogue.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct IpcCatalogGameDetail {
+    pub amethys_id: u64,
+    pub igdb_id: u64,
+    pub name: String,
+    pub slug: Option<String>,
+    pub summary: Option<String>,
+    pub release_date: Option<String>,
+    pub cover_url: Option<String>,
+    pub genres: Vec<String>,
+    pub stores: Vec<IpcCatalogStoreIdentity>,
+}
+
+/// External store identity attached to a master-catalogue game.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct IpcCatalogStoreIdentity {
+    pub store: String,
+    pub external_id: Option<String>,
+    pub name: Option<String>,
+    pub url: Option<String>,
 }
 
 /// A safe, serializable error returned by the remote core process.
@@ -213,7 +239,8 @@ pub fn dispatch_request_with_games(
         | IpcCommand::SetGameExecutable { .. }
         | IpcCommand::RemoveGame { .. }
         | IpcCommand::SyncMasterCatalog
-        | IpcCommand::SearchMasterCatalog { .. } => {
+        | IpcCommand::SearchMasterCatalog { .. }
+        | IpcCommand::GetMasterCatalogGame { .. } => {
             return IpcResponse::failure(
                 request.request_id,
                 IpcRemoteError::new(
