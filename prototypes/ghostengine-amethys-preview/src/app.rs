@@ -883,6 +883,8 @@ impl App {
         );
         let mut painter = Painter::from_framebuffer(old, self.fonts).with_scale(self.lay.scale);
         pages::redraw_store_search(&mut painter, &self.lay, &self.store_query, self.store_search_focused);
+        self.hits.retain(|hit| !matches!(hit.action, Action::FocusStoreSearch | Action::ClearStoreSearch));
+        self.hits.extend(painter.hits.drain(..));
         self.content = painter.fb;
     }
 
