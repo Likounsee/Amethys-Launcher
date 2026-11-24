@@ -60,7 +60,7 @@ def http_request(url: str, *, data: bytes | None = None,
         except urllib.error.HTTPError as error:
             if error.code not in (429, 500, 502, 503, 504) or attempt == MAX_RETRIES - 1:
                 detail = error.read().decode("utf-8", "replace")
-                raise RuntimeError(f"IGDB HTTP {error.code}: {detail[:500]}") from error
+                raise RuntimeError(f"IGDB/Twitch HTTP {error.code}: {detail[:500]}") from None
             retry_after = error.headers.get("Retry-After")
             time.sleep(float(retry_after) if retry_after else min(2 ** attempt, 30))
         except (urllib.error.URLError, TimeoutError):
