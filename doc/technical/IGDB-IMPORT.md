@@ -44,3 +44,17 @@ Les doublons d'IDs Amethys ou de couples plateforme/ID externe font échouer la 
 ## Limites connues à compléter
 
 IGDB ne fournit pas nécessairement une correspondance de boutique pour chaque jeu. Les jeux sans ID externe restent dans le catalogue de métadonnées. Les sources de boutiques non prises en charge ne sont pas transformées en offres. Les développeurs/éditeurs et les types de jeu pourront être enrichis dans une évolution du schéma.
+
+
+## Import automatisé depuis GitHub Actions
+
+Le workflow manuel `.github/workflows/igdb-catalog-import.yml` lance le même import puis valide les IDs et pousse le catalogue généré sur `main`.
+
+Configurer les deux secrets de dépôt suivants dans **Settings → Secrets and variables → Actions** :
+
+- `IGDB_CLIENT_ID`
+- `IGDB_CLIENT_SECRET`
+
+Ensuite lancer **Actions → Import IGDB master catalogue → Run workflow**. Ne jamais placer le Client Secret dans le dépôt, dans un fichier de configuration versionné ou dans le chat.
+
+Le premier import essaie de conserver les IDs des 30 fiches actuelles en rapprochant les identifiants externes déjà connus. Le registre `catalogs/amethys-id-registry.json` conserve ensuite les correspondances IGDB → Amethys, y compris les IDs connus qui ne sont plus présents dans le catalogue courant.
