@@ -539,13 +539,19 @@ impl App {
         }
         let (sender, receiver) = std::sync::mpsc::channel();
         let query = self.store_query.trim().to_owned();
+        let (genres, owned_ids, owned_names) = self.recommendation_profile();
+        let personalized = query.is_empty() && !genres.is_empty();
         std::thread::spawn(move || {
             if synchronize {
                 let result = crate::core_client::sync_master_catalog();
                 let _ = sender.send(StoreTaskResult::Synchronized(result));
+            } else if personalized {
+                let result = crate::core_client::recommend_master_catalog(
+                    genres, owned_ids, owned_names, 48,
+                );
+                let _ = sender.send(StoreTaskResult::Search(result));
             } else {
-                let limit = if query.is_empty() { 500 } else { 48 };
-                let result = crate::core_client::search_master_catalog(&query, limit);
+                let result = crate::core_client::search_master_catalog(&query, 48);
                 let _ = sender.send(StoreTaskResult::Search(result));
             }
         });
@@ -572,7 +578,7 @@ impl App {
         self.store_loading = false;
         match result {
             StoreTaskResult::Search(Ok(games)) => {
-                self.store_results = self.rank_store_recommendations(games);
+                self.store_results = games;
                 self.store_error = None;
             }
             StoreTaskResult::Search(Err(error)) => self.store_error = Some(error),
@@ -589,16 +595,8 @@ impl App {
                 self.store_game_count = Some(count);
                 self.store_error = None;
                 self.notify(ToastKind::Success, format!("Catalogue synchronisé : {count} jeux."));
-                // Search the current query immediately against the newly cached index.
-                let query = self.store_query.trim().to_owned();
-                let (sender, receiver) = std::sync::mpsc::channel();
-                std::thread::spawn(move || {
-                    let limit = if query.is_empty() { 500 } else { 48 };
-                    let result = crate::core_client::search_master_catalog(&query, limit);
-                    let _ = sender.send(StoreTaskResult::Search(result));
-                });
-                self.store_receiver = Some(receiver);
-                self.store_loading = true;
+                // Re-run the current query, now using the freshly synchronized index.
+                self.start_store_task(false);
             }
             StoreTaskResult::Synchronized(Err(error)) => self.store_error = Some(error),
         }
@@ -771,53 +769,21 @@ impl App {
             .is_some_and(|metadata| !metadata.genres.is_empty()))
     }
 
-    /// Ranks the default storefront feed from games already present in the local library.
-    /// No Steam account or network profile is required.
-    fn rank_store_recommendations(&self, mut results: Vec<IpcCatalogSearchEntry>) -> Vec<IpcCatalogSearchEntry> {
-        if !self.store_query.trim().is_empty() {
-            return results;
-        }
-
-        let mut genre_weights: HashMap<String, usize> = HashMap::new();
-        let mut owned_ids = HashSet::new();
-        let mut owned_names = HashSet::new();
+    /// Extracts the local ownership and genre profile without contacting Steam.
+    fn recommendation_profile(&self) -> (Vec<String>, Vec<u64>, Vec<String>) {
+        let mut genres = Vec::new();
+        let mut owned_ids = Vec::new();
+        let mut owned_names = Vec::with_capacity(self.games.len());
         for game in &self.games {
-            owned_names.insert(game.name.trim().to_lowercase());
+            owned_names.push(game.name.clone());
             if let Some(id) = game.catalogue_game_id.as_deref().and_then(|value| value.parse::<u64>().ok()) {
-                owned_ids.insert(id);
+                owned_ids.push(id);
             }
             if let Some(metadata) = game.catalogue_metadata.as_ref() {
-                let mut seen = HashSet::new();
-                for genre in &metadata.genres {
-                    let normalized = genre.trim().to_lowercase();
-                    if !normalized.is_empty() && seen.insert(normalized.clone()) {
-                        *genre_weights.entry(normalized).or_default() += 1;
-                    }
-                }
+                genres.extend(metadata.genres.iter().cloned());
             }
         }
-
-        // Do not recommend titles the user already has in their library.
-        results.retain(|entry| {
-            !owned_ids.contains(&entry.amethys_id)
-                && !owned_names.contains(&entry.name.trim().to_lowercase())
-        });
-
-        if genre_weights.is_empty() {
-            return results;
-        }
-
-        results.sort_by(|left, right| {
-            let score = |entry: &IpcCatalogSearchEntry| -> usize {
-                let mut seen = HashSet::new();
-                entry.genres.iter().map(|genre| genre.trim().to_lowercase())
-                    .filter(|genre| !genre.is_empty() && seen.insert(genre.clone()))
-                    .map(|genre| genre_weights.get(&genre).copied().unwrap_or(0))
-                    .sum()
-            };
-            score(right).cmp(&score(left))
-        });
-        results
+        (genres, owned_ids, owned_names)
     }
 
     /// Replaces the library and recomputes every launch status once.
