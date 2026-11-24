@@ -589,44 +589,55 @@ impl<'a> Painter<'a> {
         self.round_corners(x, y, w, h, r, bg);
     }
 
-    /// Rounds the four corners of an already painted rectangle by blending
-    /// the surrounding background colour back over the outside of the arc.
-    pub fn round_corners(&mut self, x: i32, y: i32, w: i32, h: i32, r: i32, bg: Color) {
+    /// Clips an already painted rectangle to rounded corners. The corner
+    /// pixels are restored from the pixels immediately outside the rectangle,
+    /// so artwork reveals the actual surface beneath it (including blurred
+    /// banners) instead of painting a hard-coded, often incorrect background.
+    pub fn round_corners(&mut self, x: i32, y: i32, w: i32, h: i32, r: i32, fallback: Color) {
         let (x, y, w, h, r) = (self.px(x), self.px(y), self.px(w), self.px(h), self.px(r));
+        if w <= 0 || h <= 0 { return; }
         let r = r.min(w / 2).min(h / 2).max(0);
-        if r == 0 {
-            return;
-        }
+        if r == 0 { return; }
         let rf = r as f32;
         for corner in 0..4 {
-            let (ox, oy, cx, cy) = match corner {
-                0 => (x, y, x + r, y + r),
-                1 => (x + w - r, y, x + w - r, y + r),
-                2 => (x, y + h - r, x + r, y + h - r),
-                _ => (x + w - r, y + h - r, x + w - r, y + h - r),
+            let (ox, oy, cx, cy, sx, sy) = match corner {
+                0 => (x, y, x + r, y + r, x - 1, 0),
+                1 => (x + w - r, y, x + w - r, y + r, x + w, 0),
+                2 => (x, y + h - r, x + r, y + h - r, x - 1, 0),
+                _ => (x + w - r, y + h - r, x + w - r, y + h - r, x + w, 0),
             };
             for py in oy..oy + r {
                 for px in ox..ox + r {
                     let mut inside = 0;
-                    for sy in 0..4 {
-                        for sx in 0..4 {
-                            let fx = px as f32 + (sx as f32 + 0.5) / 4.0 - cx as f32;
-                            let fy = py as f32 + (sy as f32 + 0.5) / 4.0 - cy as f32;
-                            if fx * fx + fy * fy <= rf * rf {
-                                inside += 1;
-                            }
+                    for sy_sample in 0..4 {
+                        for sx_sample in 0..4 {
+                            let fx = px as f32 + (sx_sample as f32 + 0.5) / 4.0 - cx as f32;
+                            let fy = py as f32 + (sy_sample as f32 + 0.5) / 4.0 - cy as f32;
+                            if fx * fx + fy * fy <= rf * rf { inside += 1; }
                         }
                     }
                     let outside = 16 - inside;
-                    if outside == 0 || px < 0 || py < 0 {
-                        continue;
-                    }
+                    if outside == 0 || px < 0 || py < 0 { continue; }
+                    let edge_x = if corner == 0 || corner == 2 { x - 1 } else { x + w };
+                    let edge_y = if corner < 2 { y - 1 } else { y + h };
+                    let horizontal = (edge_x >= 0).then(|| self.fb.get_pixel(edge_x as u32, py as u32)).flatten();
+                    let vertical = (edge_y >= 0).then(|| self.fb.get_pixel(px as u32, edge_y as u32)).flatten();
+                    let under = match (horizontal, vertical) {
+                        (Some(a), Some(b)) => Color::rgb(
+                            ((u16::from(a.r) + u16::from(b.r)) / 2) as u8,
+                            ((u16::from(a.g) + u16::from(b.g)) / 2) as u8,
+                            ((u16::from(a.b) + u16::from(b.b)) / 2) as u8,
+                        ),
+                        (Some(a), None) | (None, Some(a)) => a,
+                        (None, None) => fallback,
+                    };
                     if let Some(cur) = self.fb.get_pixel(px as u32, py as u32) {
-                        let over = Color::rgba(bg.r, bg.g, bg.b, (outside * 255 / 16) as u8);
+                        let over = Color::rgba(under.r, under.g, under.b, (outside * 255 / 16) as u8);
                         self.fb.set_pixel(px as u32, py as u32, over.blend_over(cur));
                     }
                 }
             }
+            let _ = (sx, sy);
         }
     }
 
