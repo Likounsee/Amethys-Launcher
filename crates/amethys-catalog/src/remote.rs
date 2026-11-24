@@ -133,6 +133,12 @@ pub struct CatalogSearchEntry {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct CatalogSourceIdentity {
+    pub source: String,
+    pub external_id: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 pub struct CatalogStoreIdentity {
     pub store: String,
     pub external_id: Option<String>,
@@ -153,6 +159,8 @@ pub struct CatalogGameDetail {
     pub cover_url: Option<String>,
     #[serde(default)]
     pub genres: Vec<String>,
+    #[serde(default)]
+    pub source_ids: Vec<CatalogSourceIdentity>,
     #[serde(default)]
     pub stores: Vec<CatalogStoreIdentity>,
 }
