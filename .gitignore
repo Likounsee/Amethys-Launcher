@@ -1,0 +1,8 @@
+/target
+/.idea
+/.vscode
+*.log
+.amethys/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

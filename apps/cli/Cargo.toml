@@ -1,0 +1,22 @@
+[package]
+name = "amethys-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "amethysctl"
+path = "src/main.rs"
+
+[dependencies]
+amethys-discovery = { path = "../../crates/amethys-discovery" }
+amethys-ipc.workspace = true
+tokio.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
+
+[target.'cfg(unix)'.dependencies]
+amethys-config.workspace = true

@@ -1,0 +1,36 @@
+[package]
+default-run = "amethys-launcher"
+name = "amethyst-preview"
+version = "0.2.0"
+edition = "2021"
+description = "Experimental Amethys desktop UI using the vendored GhostEngine snapshot and the real Amethys Core IPC library."
+license = "UNLICENSED"
+
+[lib]
+name = "amethyst_preview"
+path = "src/lib.rs"
+
+[[bin]]
+name = "amethys-launcher"
+path = "src/window_main.rs"
+required-features = ["window"]
+
+[[bin]]
+name = "gen-covers"
+path = "src/bin/gen_covers.rs"
+
+[features]
+default = ["window"]
+# Interactive window (winit + softbuffer) built on the vendored GhostEngine native-window feature.
+window = ["ghostengine/native-window"]
+
+[dependencies]
+ghostengine = { path = "../../vendor/ghostengine", features = ["image-decoding"] }
+amethys-config = { path = "../../crates/amethys-config" }
+amethys-ipc = { path = "../../crates/amethys-ipc" }
+amethys-discovery = { path = "../../crates/amethys-discovery" }
+amethys-media = { path = "../../crates/amethys-media" }
+tokio = { version = "1", features = ["io-util", "net", "rt", "time"] }
+png = "0.17"
+
+[workspace]

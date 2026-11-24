@@ -1,0 +1,274 @@
+name: Release
+
+'on':
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build and publish as a draft release
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Validate release tag
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          if ($env:RELEASE_TAG -notmatch '^v[0-9]+[.][0-9]+[.][0-9]+(?:-[0-9A-Za-z.-]+)?(?:[+][0-9A-Za-z.-]+)?$') {
+            throw "Release tag must be a semantic version such as v0.1.0."
+          }
+          git check-ref-format "refs/tags/$($env:RELEASE_TAG)"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Release tag is not a valid Git reference."
+          }
+          git rev-parse --verify "refs/tags/$($env:RELEASE_TAG)^{commit}" | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            throw "The requested release tag does not exist in the checkout."
+          }
+
+          $manifest = Get-Content Cargo.toml -Raw
+          if ($manifest -notmatch '(?ms)^\[workspace\.package\]\s*.*?^version\s*=\s*"([^"]+)"') {
+            throw "Could not read the workspace package version from Cargo.toml."
+          }
+          $workspaceVersion = $Matches[1]
+          $stableTag = "v$workspaceVersion"
+          if ($env:RELEASE_TAG -ne $stableTag -and -not $env:RELEASE_TAG.StartsWith("$stableTag-")) {
+            throw "Release tag $($env:RELEASE_TAG) must match workspace version $stableTag, optionally followed by a prerelease suffix."
+          }
+
+      - name: Install Linux desktop dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes pkg-config libxkbcommon-dev libwayland-dev libx11-dev libxcb1-dev libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libudev-dev
+
+      - name: Install stable Rust target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Run release tests
+        run: cargo test --workspace --all-targets
+
+      - name: Check desktop launcher with Clippy
+        run: cargo clippy --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml --all-targets -- -D warnings
+
+      - name: Test desktop launcher
+        run: cargo test --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml --all-targets
+
+      - name: Build release binaries
+        run: cargo build --workspace --release --target ${{ matrix.target }}
+
+      - name: Build desktop launcher
+        env:
+          CARGO_TARGET_DIR: ${{ github.workspace }}/target
+        run: cargo build --release --target ${{ matrix.target }} --manifest-path prototypes/ghostengine-amethys-preview/Cargo.toml --bin amethys-launcher
+
+      - name: Stage Windows binaries
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item "target/${{ matrix.target }}/release/amethys-agent.exe" dist/
+          Copy-Item "target/${{ matrix.target }}/release/amethysctl.exe" dist/
+          Copy-Item "target/${{ matrix.target }}/release/amethys-launcher.exe" dist/
+          New-Item -ItemType Directory -Force dist/assets | Out-Null
+          Copy-Item prototypes/ghostengine-amethys-preview/assets/fonts dist/assets/ -Recurse
+          Copy-Item prototypes/ghostengine-amethys-preview/assets/covers dist/assets/ -Recurse
+          Copy-Item README.md,LICENSE,doc/technical/RELEASES.md -Destination dist/
+          @'
+          Amethys Launcher desktop preview — Windows x64
+          
+          Run amethys-launcher.exe to open the graphical launcher. The agent starts automatically when needed.
+          Use amethysctl.exe --help for command-line tools.
+          Fonts and cover assets are included in assets/.
+          This is a portable archive, not an installer.
+          '@ | Set-Content -Encoding UTF8 dist/LIRE-MOI.txt
+          $archive = "amethys-$($env:RELEASE_TAG)-${{ matrix.target }}.zip"
+          Compress-Archive -Path dist/* -DestinationPath $archive
+          $verify = "archive-check"
+          Expand-Archive -Path $archive -DestinationPath $verify
+          $expected = @("amethys-agent.exe", "amethysctl.exe", "amethys-launcher.exe", "README.md", "LICENSE", "RELEASES.md", "LIRE-MOI.txt", "assets/fonts", "assets/covers")
+          foreach ($file in $expected) {
+            if (-not (Test-Path (Join-Path $verify $file))) { throw "Release archive is missing $file." }
+          }
+          foreach ($binary in @("amethys-agent.exe", "amethysctl.exe", "amethys-launcher.exe")) {
+            if ((Get-Item (Join-Path $verify $binary)).Length -le 0) {
+              throw "Release archive contains an empty binary: $binary."
+            }
+          }
+          $cli = Join-Path (Resolve-Path $verify).Path "amethysctl.exe"
+          $versionOutput = & $cli --version
+          if ($LASTEXITCODE -ne 0 -or $versionOutput -ne "Amethys Launcher $($env:RELEASE_TAG.Substring(1))") {
+            throw "Packaged Windows CLI returned an unexpected version: $versionOutput"
+          }
+          $helpOutput = & $cli --help
+          if ($LASTEXITCODE -ne 0 -or ($helpOutput -join "`n") -notmatch "games scan") {
+            throw "Packaged Windows CLI help smoke test failed."
+          }
+
+          # Verify the agent from the extracted archive, not only the workspace build.
+          $dataDir = Join-Path $env:RUNNER_TEMP ("amethys-release-smoke-" + [guid]::NewGuid())
+          New-Item -ItemType Directory -Force $dataDir | Out-Null
+          $env:AMETHYS_DATA_DIR = $dataDir
+          $agentPath = Join-Path (Resolve-Path $verify).Path "amethys-agent.exe"
+          $agent = Start-Process -FilePath $agentPath -PassThru -NoNewWindow
+          try {
+            $ready = $false
+            for ($attempt = 0; $attempt -lt 30; $attempt++) {
+              if ($agent.HasExited) { throw "Packaged Windows agent exited during startup (code $($agent.ExitCode))." }
+              & $cli ping *> $null
+              if ($LASTEXITCODE -eq 0) { $ready = $true; break }
+              Start-Sleep -Seconds 1
+            }
+            if (-not $ready) { throw "Packaged Windows agent did not become ready within 30 seconds." }
+            & $cli status
+            if ($LASTEXITCODE -ne 0) { throw "Packaged Windows agent status request failed." }
+          }
+          finally {
+            if (-not $agent.HasExited) { Stop-Process -Id $agent.Id -Force }
+            Wait-Process -Id $agent.Id -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $dataDir -Recurse -Force -ErrorAction SilentlyContinue
+          }
+
+      - name: Stage Unix binaries
+        if: runner.os != 'Windows'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/amethys-agent" dist/
+          cp "target/${{ matrix.target }}/release/amethysctl" dist/
+          cp "target/${{ matrix.target }}/release/amethys-launcher" dist/
+          mkdir -p dist/assets
+          cp -R prototypes/ghostengine-amethys-preview/assets/fonts dist/assets/
+          cp -R prototypes/ghostengine-amethys-preview/assets/covers dist/assets/
+          cp README.md LICENSE doc/technical/RELEASES.md dist/
+          cat > dist/LIRE-MOI.txt <<'EOF'
+          Amethys Launcher desktop preview — Linux x86_64
+          
+          Run ./amethys-launcher to open the graphical launcher. The agent starts automatically when needed.
+          Use ./amethysctl --help for command-line tools.
+          Fonts and cover assets are included in assets/.
+          This is a portable archive, not an installer.
+          EOF
+          archive="amethys-${RELEASE_TAG}-${{ matrix.target }}.tar.gz"
+          tar -czf "$archive" -C dist amethys-agent amethysctl amethys-launcher README.md LICENSE RELEASES.md LIRE-MOI.txt assets
+          tar -tzf "$archive" | sort > archive-contents.txt
+          mkdir archive-check
+          tar -xzf "$archive" -C archive-check
+          for required in LICENSE README.md RELEASES.md LIRE-MOI.txt amethys-agent amethysctl amethys-launcher; do
+            test -s "archive-check/$required" || { echo "Archive is missing $required"; exit 1; }
+          done
+          test -x archive-check/amethys-agent
+          test -x archive-check/amethysctl
+          test -x archive-check/amethys-launcher
+          test -d archive-check/assets/fonts
+          test -d archive-check/assets/covers
+          version_output="$(archive-check/amethysctl --version)"
+          test "$version_output" = "Amethys Launcher $(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
+          archive-check/amethysctl --help | grep -Fq "games scan"
+
+          # Verify the agent from the extracted archive, not only the workspace build.
+          data_dir="$(mktemp -d)"
+          export AMETHYS_DATA_DIR="$data_dir"
+          archive-check/amethys-agent &
+          agent_pid=$!
+          cleanup() {
+            kill "$agent_pid" 2>/dev/null || true
+            wait "$agent_pid" 2>/dev/null || true
+            rm -rf "$data_dir"
+          }
+          trap cleanup EXIT
+          ready=false
+          for _ in {1..30}; do
+            if ! kill -0 "$agent_pid" 2>/dev/null; then
+              echo "Packaged Linux agent exited during startup."
+              exit 1
+            fi
+            if archive-check/amethysctl ping >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            echo "Packaged Linux agent did not become ready within 30 seconds."
+            exit 1
+          fi
+          archive-check/amethysctl status
+
+      - name: Upload platform archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: amethys-${{ matrix.target }}
+          path: amethys-${{ inputs.tag || github.ref_name }}-${{ matrix.target }}.${{ matrix.archive }}
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish draft GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download platform archives
+        uses: actions/download-artifact@v4
+        with:
+          pattern: amethys-*
+          path: dist
+          merge-multiple: true
+
+      - name: Generate and verify SHA-256 checksums
+        working-directory: dist
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t archives < <(find . -maxdepth 1 -type f \( -name 'amethys-*.zip' -o -name 'amethys-*.tar.gz' \) -printf '%f\n' | sort)
+          test "${#archives[@]}" -eq 2
+          sha256sum "${archives[@]}" > SHA256SUMS
+          sha256sum --check SHA256SUMS
+          test "$(wc -l < SHA256SUMS)" -eq 2
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
+          name: Amethys Launcher ${{ inputs.tag || github.ref_name }}
+          draft: true
+          prerelease: ${{ contains(inputs.tag || github.ref_name, '-') }}
+          generate_release_notes: true
+          files: dist/*
