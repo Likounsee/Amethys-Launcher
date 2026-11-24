@@ -1020,6 +1020,7 @@ impl App {
             Action::SetStoreMode(promotions) => {
                 if self.store_promotions != promotions {
                     self.store_promotions = promotions;
+                    self.store_search_focused = false;
                     self.keyboard_focus = None;
                     self.render(true);
                 }
