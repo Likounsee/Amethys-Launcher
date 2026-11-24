@@ -1178,7 +1178,7 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
             let art_w = if lay.compact() { 116 } else { 164 };
             let art_x = mx + 14;
             let art_y = y + 14;
-            p.placeholder_cover(&featured.name, art_x, art_y, art_w, hero_h - 28);
+            p.cover_or_placeholder(&featured.amethys_id.to_string(), "", &featured.name, art_x, art_y, art_w, hero_h - 28);
             p.scrim(art_x, art_y, art_w, hero_h - 28, 0.35, 170);
             let tx = art_x + art_w + 20;
             let tw = mw - art_w - 58;
@@ -1221,7 +1221,7 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
         let x = mx + col * (card_w + gap);
         let cy = y + row * (art_h + 76 + gap);
         panel(p, x, cy, card_w, art_h + 76, 14);
-        p.placeholder_cover(&game.name, x + 1, cy + 1, card_w - 2, art_h);
+        p.cover_or_placeholder(&game.amethys_id.to_string(), "", &game.name, x + 1, cy + 1, card_w - 2, art_h);
         p.scrim(x + 1, cy + 1, card_w - 2, art_h, 0.35, 165);
         chip(p, x + 12, cy + 12, "JEU PC", card_w - 24);
         p.paragraph(x + 13, cy + art_h - 46, card_w - 26, 20, &game.name, 14.0, W::Semi, Color::WHITE, 2);
@@ -1262,7 +1262,7 @@ pub fn store_product(p: &mut Painter, lay: &Layout, detail: Option<&IpcCatalogGa
     let cover_h = if compact { 190 } else { hero_h - 28 };
     let cover_x = mx + 14;
     let cover_y = hero_y + 14;
-    p.placeholder_cover(&detail.name, cover_x, cover_y, cover_w, cover_h);
+    p.cover_or_placeholder(&detail.amethys_id.to_string(), "", &detail.name, cover_x, cover_y, cover_w, cover_h);
     p.scrim(cover_x, cover_y, cover_w, cover_h, 0.30, 170);
 
     let info_x = if compact { mx + 20 } else { cover_x + cover_w + 24 };
