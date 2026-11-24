@@ -1192,6 +1192,82 @@ mod tests {
     }
 
     #[test]
+    fn parser_rejects_empty_oversized_and_unknown_field_documents() {
+        let providers = ProviderRegistry::with_baseline_providers();
+        assert!(parse_and_validate(&[], &providers).is_err());
+        assert!(parse_and_validate(&vec![b' '; MAX_CATALOG_BYTES + 1], &providers).is_err());
+
+        let mut value = serde_json::to_value(valid_document()).unwrap();
+        value["unexpected"] = serde_json::Value::Bool(true);
+        let bytes = serde_json::to_vec(&value).unwrap();
+        assert!(parse_and_validate(&bytes, &providers).is_err());
+    }
+
+    #[test]
+    fn rejects_duplicate_provider_external_identity_even_when_offer_ids_differ() {
+        let providers = ProviderRegistry::with_baseline_providers();
+        let mut document = valid_document();
+        let mut duplicate = document.games[0].offers[0].clone();
+        duplicate.id = "another-offer".into();
+        document.games[0].offers.push(duplicate);
+        assert!(validate_document(&document, &providers).is_err());
+    }
+
+    #[test]
+    fn static_source_enforces_size_limit_and_regular_file_requirement() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("catalog.json");
+        std::fs::write(&path, b"{}").unwrap();
+
+        let source = StaticJsonCatalogSource::new("community", "Community", &path)
+            .unwrap()
+            .with_max_bytes(1)
+            .unwrap();
+        assert!(source.load_document().is_err());
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            let link = directory.path().join("catalog-link.json");
+            symlink(&path, &link).unwrap();
+            let linked_source =
+                StaticJsonCatalogSource::new("linked", "Linked", &link).unwrap();
+            assert!(linked_source.load_document().is_err());
+        }
+    }
+
+    #[test]
+    fn source_refresh_removes_stale_offers_without_deleting_canonical_game() {
+        let (_directory, database) = database();
+        let providers = ProviderRegistry::with_baseline_providers();
+        let first = MemorySource {
+            bytes: serde_json::to_vec(&valid_document()).unwrap(),
+        };
+        CatalogService::synchronize(&database, &first, &providers).unwrap();
+
+        let mut updated_document = valid_document();
+        updated_document.catalog_version = 2;
+        updated_document.games[0].offers.clear();
+        let updated = MemorySource {
+            bytes: serde_json::to_vec(&updated_document).unwrap(),
+        };
+        CatalogService::synchronize(&database, &updated, &providers).unwrap();
+
+        assert!(
+            CatalogRepository::list_offers_for_game(&database, "amethys-game-10001")
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(
+            database
+                .get_catalogue_game("amethys-game-10001")
+                .unwrap()
+                .map(|game| game.id),
+            Some("amethys-game-10001".into())
+        );
+    }
+
+    #[test]
     fn source_schema_is_initialized_idempotently() {
         let (_directory, database) = database();
         CatalogRepository::initialize(&database).unwrap();
