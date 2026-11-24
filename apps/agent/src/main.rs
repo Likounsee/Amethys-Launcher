@@ -132,6 +132,14 @@ async fn get_master_catalog_game(amethys_id: u64) -> Result<IpcResponsePayload, 
             release_date: game.release_date,
             cover_url: game.cover_url,
             genres: game.genres,
+            source_ids: game
+                .source_ids
+                .into_iter()
+                .map(|source_id| IpcCatalogSourceIdentity {
+                    source: source_id.source,
+                    external_id: source_id.external_id,
+                })
+                .collect(),
             stores: game
                 .stores
                 .into_iter()
