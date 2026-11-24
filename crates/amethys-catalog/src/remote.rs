@@ -215,8 +215,8 @@ pub async fn fetch_cheapshark_deals(limit: usize) -> RemoteCatalogResult<Vec<Che
         .bytes()
         .await
         .map_err(|error| RemoteCatalogError::Network(format!("CheapShark stores: {error}")))?;
-    let stores: Vec<CheapSharkStoreResponse> = serde_json::from_slice(&stores_bytes)
-        .map_err(|error| {
+    let stores: Vec<CheapSharkStoreResponse> =
+        serde_json::from_slice(&stores_bytes).map_err(|error| {
             RemoteCatalogError::InvalidData(format!("CheapShark stores JSON: {error}"))
         })?;
     let store_names = stores
@@ -242,8 +242,8 @@ pub async fn fetch_cheapshark_deals(limit: usize) -> RemoteCatalogResult<Vec<Che
         .bytes()
         .await
         .map_err(|error| RemoteCatalogError::Network(format!("CheapShark deals: {error}")))?;
-    let deals: Vec<CheapSharkDealResponse> = serde_json::from_slice(&deals_bytes)
-        .map_err(|error| {
+    let deals: Vec<CheapSharkDealResponse> =
+        serde_json::from_slice(&deals_bytes).map_err(|error| {
             RemoteCatalogError::InvalidData(format!("CheapShark deals JSON: {error}"))
         })?;
 
@@ -733,16 +733,44 @@ mod tests {
         let client = RemoteCatalogClient::new(
             StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
             std::env::temp_dir().join("amethys-recommendation-test"),
-        ).unwrap();
+        )
+        .unwrap();
         let entries = vec![
-            CatalogSearchEntry { amethys_id: 1, name: "Owned".into(), slug: None, genres: vec!["Action".into()] },
-            CatalogSearchEntry { amethys_id: 2, name: "Puzzle".into(), slug: None, genres: vec!["Puzzle".into()] },
-            CatalogSearchEntry { amethys_id: 3, name: "Action Adventure".into(), slug: None, genres: vec!["Action".into(), "Adventure".into()] },
+            CatalogSearchEntry {
+                amethys_id: 1,
+                name: "Owned".into(),
+                slug: None,
+                genres: vec!["Action".into()],
+            },
+            CatalogSearchEntry {
+                amethys_id: 2,
+                name: "Puzzle".into(),
+                slug: None,
+                genres: vec!["Puzzle".into()],
+            },
+            CatalogSearchEntry {
+                amethys_id: 3,
+                name: "Action Adventure".into(),
+                slug: None,
+                genres: vec!["Action".into(), "Adventure".into()],
+            },
         ];
-        let results = client.recommend_cached(
-            &entries, &["Action".into(), "Adventure".into()], &[1], &["Owned".into()], 10,
-        ).unwrap();
-        assert_eq!(results.iter().map(|game| game.amethys_id).collect::<Vec<_>>(), vec![3, 2]);
+        let results = client
+            .recommend_cached(
+                &entries,
+                &["Action".into(), "Adventure".into()],
+                &[1],
+                &["Owned".into()],
+                10,
+            )
+            .unwrap();
+        assert_eq!(
+            results
+                .iter()
+                .map(|game| game.amethys_id)
+                .collect::<Vec<_>>(),
+            vec![3, 2]
+        );
     }
 
     #[test]
@@ -750,7 +778,8 @@ mod tests {
         let client = RemoteCatalogClient::new(
             StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
             std::env::temp_dir().join("amethys-normalized-recommendation-test"),
-        ).unwrap();
+        )
+        .unwrap();
         let entries = vec![
             CatalogSearchEntry {
                 amethys_id: 10,
@@ -771,15 +800,20 @@ mod tests {
                 genres: vec!["Puzzle".into()],
             },
         ];
-        let results = client.recommend_cached(
-            &entries,
-            &[],
-            &[],
-            &["clair obscur: expedition 33".into()],
-            10,
-        ).unwrap();
+        let results = client
+            .recommend_cached(
+                &entries,
+                &[],
+                &[],
+                &["clair obscur: expedition 33".into()],
+                10,
+            )
+            .unwrap();
         assert_eq!(
-            results.iter().map(|game| game.amethys_id).collect::<Vec<_>>(),
+            results
+                .iter()
+                .map(|game| game.amethys_id)
+                .collect::<Vec<_>>(),
             vec![11, 12],
         );
     }
