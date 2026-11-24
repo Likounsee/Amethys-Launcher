@@ -262,13 +262,63 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         }
         let needle = query.trim().to_lowercase();
         if needle.is_empty() {
-            return Ok(entries.iter().take(limit).cloned().collect());
+            let mut results = entries.to_vec();
+            // Do not let stable internal IDs dictate the first page of the Store.
+            results.sort_by_cached_key(|entry| entry.name.to_lowercase());
+            results.truncate(limit);
+            return Ok(results);
         }
         Ok(entries.iter()
             .filter(|entry| entry.name.to_lowercase().contains(&needle))
             .take(limit)
             .cloned()
             .collect())
+    }
+
+    /// Recommends games against the genres and ownership already known locally.
+    /// The full cached index is ranked before truncation, so recommendations are
+    /// not biased toward the first Amethys IDs in the catalogue.
+    pub fn recommend_cached(
+        &self,
+        entries: &[CatalogSearchEntry],
+        owned_genres: &[String],
+        owned_ids: &[u64],
+        owned_names: &[String],
+        limit: usize,
+    ) -> RemoteCatalogResult<Vec<CatalogSearchEntry>> {
+        if limit == 0 || limit > 100 || owned_genres.len() > 512
+            || owned_ids.len() > 10_000 || owned_names.len() > 10_000
+            || owned_genres.iter().any(|value| value.trim().is_empty() || value.len() > 128)
+            || owned_names.iter().any(|value| value.trim().is_empty() || value.len() > 512)
+        {
+            return Err(RemoteCatalogError::InvalidData(
+                "recommendation profile or result limit is outside allowed bounds".into()
+            ));
+        }
+
+        let mut genre_weights = std::collections::HashMap::<String, usize>::new();
+        for genre in owned_genres {
+            *genre_weights.entry(genre.trim().to_lowercase()).or_default() += 1;
+        }
+        let owned_ids = owned_ids.iter().copied().collect::<std::collections::HashSet<_>>();
+        let owned_names = owned_names.iter().map(|name| name.trim().to_lowercase())
+            .collect::<std::collections::HashSet<_>>();
+
+        let mut ranked = entries.iter()
+            .filter(|entry| !owned_ids.contains(&entry.amethys_id)
+                && !owned_names.contains(&entry.name.trim().to_lowercase()))
+            .map(|entry| {
+                let mut seen = std::collections::HashSet::new();
+                let score = entry.genres.iter()
+                    .map(|genre| genre.trim().to_lowercase())
+                    .filter(|genre| !genre.is_empty() && seen.insert(genre.clone()))
+                    .map(|genre| genre_weights.get(&genre).copied().unwrap_or(0))
+                    .sum::<usize>();
+                (score, entry)
+            })
+            .collect::<Vec<_>>();
+        ranked.sort_by(|left, right| right.0.cmp(&left.0));
+        Ok(ranked.into_iter().take(limit).map(|(_, entry)| entry.clone()).collect())
     }
 
     /// Downloads a single ID-range shard, verifies its compressed checksum and
@@ -506,6 +556,23 @@ mod tests {
         let rows: Vec<(u64, String, Option<String>)> =
             serde_json::from_str(r#"[[1001,"Example", "example"],[1002,"No slug",null]]"#).unwrap();
         assert_eq!(rows[1].2, None);
+    }
+
+    #[test]
+    fn recommendations_prioritize_library_genres_and_exclude_owned_games() {
+        let client = RemoteCatalogClient::new(
+            StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
+            std::env::temp_dir().join("amethys-recommendation-test"),
+        ).unwrap();
+        let entries = vec![
+            CatalogSearchEntry { amethys_id: 1, name: "Owned".into(), slug: None, genres: vec!["Action".into()] },
+            CatalogSearchEntry { amethys_id: 2, name: "Puzzle".into(), slug: None, genres: vec!["Puzzle".into()] },
+            CatalogSearchEntry { amethys_id: 3, name: "Action Adventure".into(), slug: None, genres: vec!["Action".into(), "Adventure".into()] },
+        ];
+        let results = client.recommend_cached(
+            &entries, &["Action".into(), "Adventure".into()], &[1], &["Owned".into()], 10,
+        ).unwrap();
+        assert_eq!(results.iter().map(|game| game.amethys_id).collect::<Vec<_>>(), vec![3, 2]);
     }
 
     #[test]
