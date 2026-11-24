@@ -114,6 +114,8 @@ pub struct IpcCatalogSearchEntry {
     pub amethys_id: u64,
     pub name: String,
     pub slug: Option<String>,
+    #[serde(default)]
+    pub genres: Vec<String>,
 }
 
 /// Full game details from the public master catalogue.
