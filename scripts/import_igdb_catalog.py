@@ -23,6 +23,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG_PATH = ROOT / "catalogs" / "master-games-v1.json"
+REGISTRY_PATH = ROOT / "catalogs" / "amethys-id-registry.json"
 TOKEN_URL = "https://id.twitch.tv/oauth2/token"
 API_ROOT = "https://api.igdb.com/v4"
 PAGE_SIZE = 500
@@ -129,8 +130,15 @@ def main():
         )
 
     old = load_existing()
-    previous = {}
-    used_ids = set()
+    registry = {"schema_version": 1, "igdb_to_amethys_id": {}, "retired_or_known_ids": []}
+    if REGISTRY_PATH.exists():
+        registry = json.loads(REGISTRY_PATH.read_text(encoding="utf-8"))
+    igdb_to_amethys = {
+        int(key): int(value)
+        for key, value in registry.get("igdb_to_amethys_id", {}).items()
+    }
+    used_ids = {int(value) for value in registry.get("retired_or_known_ids", [])}
+    previous_by_external = {}
     for game in old.get("games", []):
         igdb_id = game.get("igdb_id")
         if igdb_id is None and str(game.get("id", "")).startswith("igdb-"):
@@ -139,9 +147,14 @@ def main():
             except ValueError:
                 pass
         if igdb_id is not None:
-            previous[int(igdb_id)] = game
+            igdb_to_amethys.setdefault(int(igdb_id), int(game["amethys_id"]))
         used_ids.add(int(game["amethys_id"]))
+        for offer in game.get("offers", []):
+            previous_by_external[
+                (offer.get("provider_id"), str(offer.get("external_id", "")))
+            ] = int(game["amethys_id"])
 
+    used_ids.update(igdb_to_amethys.values())
     next_id = max(used_ids | {1_000_000}) + 1
     token = get_token(client_id, client_secret)
     games = []
@@ -164,10 +177,6 @@ def main():
             break
         for item in page:
             igdb_id = int(item["id"])
-            prior = previous.get(igdb_id)
-            amethys_id = int(prior["amethys_id"]) if prior else next_id
-            if prior is None:
-                next_id += 1
             name = str(item.get("name", "")).strip()
             if not name:
                 continue
@@ -181,6 +190,20 @@ def main():
                 offer = make_offer(igdb_id, external, index)
                 if offer:
                     offers.append(offer)
+            known_id = igdb_to_amethys.get(igdb_id)
+            if known_id is None:
+                for offer in offers:
+                    known_id = previous_by_external.get(
+                        (offer["provider_id"], offer["external_id"])
+                    )
+                    if known_id is not None:
+                        break
+            if known_id is None:
+                known_id = next_id
+                next_id += 1
+            igdb_to_amethys[igdb_id] = known_id
+            used_ids.add(known_id)
+            amethys_id = known_id
             release_date = item.get("first_release_date")
             release = None
             if isinstance(release_date, (int, float)):
@@ -230,6 +253,16 @@ def main():
         "generated_at": dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
         "games": games,
     }
+    REGISTRY_PATH.write_text(
+        json.dumps({
+            "schema_version": 1,
+            "igdb_to_amethys_id": {
+                str(key): value for key, value in sorted(igdb_to_amethys.items())
+            },
+            "retired_or_known_ids": sorted(used_ids),
+        }, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
     CATALOG_PATH.write_text(
         json.dumps(document, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
