@@ -170,11 +170,15 @@ impl ProviderRegistry {
     pub fn with_baseline_providers() -> Self {
         let mut registry = Self::default();
         registry.register(ExternalLinkProvider).expect("static provider is valid");
+            .register(ExternalLinkProvider)
+            .expect("static provider is valid");
+        registry
+            .register(MetadataOnlyProvider)
+            .expect("static provider is valid");
+        registry
         registry.register(MetadataOnlyProvider).expect("static provider is valid");
         registry
     }
-}
-
 pub struct ExternalLinkProvider;
 impl DistributionProviderAdapter for ExternalLinkProvider {
     fn descriptor(&self) -> ProviderDescriptor {
@@ -262,11 +266,12 @@ impl CatalogSourceAdapter for StaticJsonCatalogSource {
     }
 
     fn load_document(&self) -> CatalogResult<Vec<u8>> {
+        let metadata = fs::symlink_metadata(&self.path).map_err(|error| {
+            CatalogError::Source(format!("cannot inspect source file: {error}"))
+        })?;
         let metadata = fs::symlink_metadata(&self.path)
             .map_err(|error| CatalogError::Source(format!("cannot inspect source file: {error}")))?;
         if metadata.file_type().is_symlink() || !metadata.is_file() {
-            return Err(CatalogError::Source(
-                "catalogue source must be a regular file, not a symlink".into(),
             ));
         }
         if metadata.len() > self.max_bytes as u64 {
@@ -349,10 +354,12 @@ pub fn validate_document(
         validate_optional_text(&game.cover_ref, 2048, "cover reference")?;
         validate_optional_text(&game.banner_ref, 2048, "banner reference")?;
         if game.genres.len() > 64 {
+            return Err(CatalogError::InvalidDocument(
+                "a game has more than 64 genres".into(),
+            ));
             return Err(CatalogError::InvalidDocument("a game has more than 64 genres".into()));
         }
         for genre in &game.genres {
-            validate_text(genre, 128, "genre")?;
         }
 
         offer_count = offer_count.saturating_add(game.offers.len());
@@ -370,10 +377,11 @@ pub fn validate_document(
                     offer.id
                 )));
             }
+            if !provider_external_ids.insert((offer.provider_id.clone(), offer.external_id.clone()))
+            {
             if !provider_external_ids.insert((offer.provider_id.clone(), offer.external_id.clone())) {
                 return Err(CatalogError::InvalidDocument(format!(
                     "duplicate external identity '{}' for provider '{}'",
-                    offer.external_id, offer.provider_id
                 )));
             }
             let provider = providers.get(&offer.provider_id).ok_or_else(|| {
@@ -412,10 +420,13 @@ fn validate_offer(offer: &CatalogOffer, provider: &ProviderCapabilities) -> Cata
                     offer.id
                 )));
             }
+            validate_https_reference(
+                offer.manifest_reference.as_deref().unwrap(),
+                "manifest reference",
+            )?;
             validate_https_reference(offer.manifest_reference.as_deref().unwrap(), "manifest reference")?;
             if offer.external_url.is_some() {
                 return Err(CatalogError::InvalidDocument(format!(
-                    "Amethys-managed offer '{}' must not also declare an external URL",
                     offer.id
                 )));
             }
@@ -427,10 +438,14 @@ fn validate_offer(offer: &CatalogOffer, provider: &ProviderCapabilities) -> Cata
                     offer.id
                 )));
             }
+            if requested.direct_install
+                || requested.update
+                || requested.repair
+                || offer.manifest_reference.is_some()
+            {
             if requested.direct_install || requested.update || requested.repair || offer.manifest_reference.is_some() {
                 return Err(CatalogError::InvalidDocument(format!(
                     "official-platform offer '{}' cannot claim Amethys-managed file operations",
-                    offer.id
                 )));
             }
             validate_https_reference(offer.external_url.as_deref().unwrap(), "external URL")?;
@@ -451,11 +466,15 @@ fn validate_offer(offer: &CatalogOffer, provider: &ProviderCapabilities) -> Cata
             validate_https_reference(offer.external_url.as_deref().unwrap(), "external URL")?;
         }
         DistributionMode::MetadataOnly => {
+            if requested.official_launch
+                || requested.direct_install
+                || requested.update
+                || requested.repair
+                || offer.external_url.is_some()
+                || offer.manifest_reference.is_some()
             if requested.official_launch || requested.direct_install || requested.update
                 || requested.repair || offer.external_url.is_some() || offer.manifest_reference.is_some()
             {
-                return Err(CatalogError::InvalidDocument(format!(
-                    "metadata-only offer '{}' cannot advertise executable actions",
                     offer.id
                 )));
             }
@@ -467,10 +486,15 @@ fn validate_offer(offer: &CatalogOffer, provider: &ProviderCapabilities) -> Cata
 fn validate_https_reference(value: &str, label: &str) -> CatalogResult<()> {
     validate_text(value, 2048, label)?;
     let lower = value.to_ascii_lowercase();
+    let authority = value
+        .get(8..)
+        .unwrap_or("")
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or("");
     let authority = value.get(8..).unwrap_or("").split(['/', '?', '#']).next().unwrap_or("");
     if !lower.starts_with("https://")
         || authority.is_empty()
-        || authority.contains('@')
         || value.chars().any(char::is_whitespace)
     {
         return Err(CatalogError::InvalidDocument(format!(
@@ -483,12 +507,12 @@ fn validate_https_reference(value: &str, label: &str) -> CatalogResult<()> {
 fn validate_identifier(value: &str, label: &str) -> CatalogResult<()> {
     if value.is_empty()
         || value.len() > 128
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':'))
         || !value.bytes().all(|byte| {
             byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':')
         })
-    {
-        return Err(CatalogError::InvalidDocument(format!(
-            "{label} is empty, too long or contains unsupported characters"
         )));
     }
     Ok(())
@@ -569,36 +593,39 @@ pub struct CatalogRepository;
 impl CatalogRepository {
     pub fn initialize(database: &Database) -> CatalogResult<()> {
         let connection = database.connection();
+        let table_exists: bool = connection
+            .query_row(
+                "SELECT EXISTS(
         let table_exists: bool = connection.query_row(
             "SELECT EXISTS(
                 SELECT 1 FROM sqlite_master
-                WHERE type = 'table' AND name = 'catalog_schema_migrations'
-            )",
             [],
             |row| row.get(0),
+            )
+            .map_err(db_error)?;
+        let detected_version: i64 = if table_exists {
+            connection
+                .query_row(
+                    "SELECT COALESCE(MAX(version), 0) FROM catalog_schema_migrations",
+                    [],
+                    |row| row.get(0),
+                )
+                .map_err(db_error)?
         ).map_err(db_error)?;
         let detected_version: i64 = if table_exists {
             connection.query_row(
-                "SELECT COALESCE(MAX(version), 0) FROM catalog_schema_migrations",
-                [],
-                |row| row.get(0),
-            ).map_err(db_error)?
-        } else {
-            0
-        };
         if detected_version > 1 {
             return Err(CatalogError::Database(format!(
                 "catalogue cache schema version {detected_version} is newer than this build supports"
             )));
         }
+        let transaction = connection.unchecked_transaction().map_err(db_error)?;
+        transaction
+            .execute_batch(
+                "CREATE TABLE IF NOT EXISTS catalog_schema_migrations (
         let transaction = connection
             .unchecked_transaction()
             .map_err(db_error)?;
-        transaction.execute_batch(
-            "CREATE TABLE IF NOT EXISTS catalog_schema_migrations (
-                version INTEGER PRIMARY KEY NOT NULL,
-                applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
             CREATE TABLE IF NOT EXISTS catalog_sources (
                 source_id TEXT PRIMARY KEY NOT NULL,
                 display_name TEXT NOT NULL,
@@ -641,28 +668,36 @@ impl CatalogRepository {
                 ON catalog_source_games(title COLLATE NOCASE);
             CREATE INDEX IF NOT EXISTS idx_catalog_offers_game
                 ON catalog_offers(catalogue_game_id);
+            INSERT OR IGNORE INTO catalog_schema_migrations(version) VALUES (1);",
+            )
+            .map_err(db_error)?;
             INSERT OR IGNORE INTO catalog_schema_migrations(version) VALUES (1);"
         ).map_err(db_error)?;
         transaction.commit().map_err(db_error)
-    }
-
     fn replace_source_snapshot(
         database: &Database,
         descriptor: &CatalogSourceDescriptor,
         document: &CatalogDocument,
         content_sha256: &str,
     ) -> CatalogResult<()> {
+        let catalog_version = i64::try_from(document.catalog_version).map_err(|_| {
+            CatalogError::InvalidDocument("catalogue version exceeds SQLite range".into())
+        })?;
+        let transaction = database
+            .connection()
+            .unchecked_transaction()
+            .map_err(db_error)?;
+        let existing: Option<(i64, String)> = transaction
+            .query_row(
+                "SELECT catalog_version, content_sha256 FROM catalog_sources WHERE source_id = ?1",
+                [&descriptor.id],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .optional()
+            .map_err(db_error)?;
         let catalog_version = i64::try_from(document.catalog_version)
             .map_err(|_| CatalogError::InvalidDocument("catalogue version exceeds SQLite range".into()))?;
         let transaction = database.connection().unchecked_transaction().map_err(db_error)?;
-        let existing: Option<(i64, String)> = transaction.query_row(
-            "SELECT catalog_version, content_sha256 FROM catalog_sources WHERE source_id = ?1",
-            [&descriptor.id],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        ).optional().map_err(db_error)?;
-        if let Some((previous_version, previous_hash)) = existing {
-            if catalog_version < previous_version {
-                return Err(CatalogError::InvalidDocument(
                     "catalogue version cannot move backwards".into(),
                 ));
             }
@@ -692,36 +727,52 @@ impl CatalogRepository {
                 content_sha256
             ],
         ).map_err(db_error)?;
+        transaction
+            .execute(
+                "DELETE FROM catalog_offers WHERE source_id = ?1",
+                [&descriptor.id],
+            )
+            .map_err(db_error)?;
+        transaction
+            .execute(
+                "DELETE FROM catalog_source_games WHERE source_id = ?1",
+                [&descriptor.id],
+            )
+            .map_err(db_error)?;
         transaction.execute(
             "DELETE FROM catalog_offers WHERE source_id = ?1",
             [&descriptor.id],
-        ).map_err(db_error)?;
-        transaction.execute(
-            "DELETE FROM catalog_source_games WHERE source_id = ?1",
-            [&descriptor.id],
-        ).map_err(db_error)?;
-
-        for game in &document.games {
-            let genres = serde_json::to_string(&game.genres)
                 .map_err(|error| CatalogError::InvalidDocument(error.to_string()))?;
+            transaction
+                .execute(
+                    "INSERT INTO catalogue_games(id, name) VALUES (?1, ?2)
             transaction.execute(
+                    params![game.id, game.title],
+                )
+                .map_err(db_error)?;
+            transaction
+                .execute(
+                    "INSERT INTO catalog_source_games (
                 "INSERT INTO catalogue_games(id, name) VALUES (?1, ?2)
                  ON CONFLICT(id) DO NOTHING",
                 params![game.id, game.title],
-            ).map_err(db_error)?;
-            transaction.execute(
-                "INSERT INTO catalog_source_games (
-                    source_id, catalogue_game_id, title, description, genres_json,
-                    developer, publisher, release_date, cover_ref, banner_ref
-                 ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                    params![
+                        descriptor.id,
+                        game.id,
+                        game.title,
+                        game.description,
+                        genres,
+                        game.developer,
+                        game.publisher,
+                        game.release_date,
+                        game.cover_ref,
+                        game.banner_ref
+                    ],
+                )
+                .map_err(db_error)?;
                 params![
                     descriptor.id, game.id, game.title, game.description, genres,
                     game.developer, game.publisher, game.release_date, game.cover_ref, game.banner_ref
-                ],
-            ).map_err(db_error)?;
-
-            for offer in &game.offers {
-                let capabilities = serde_json::to_string(&offer.capabilities)
                     .map_err(|error| CatalogError::InvalidDocument(error.to_string()))?;
                 transaction.execute(
                     "INSERT INTO catalog_offers (
@@ -744,93 +795,118 @@ impl CatalogRepository {
             "SELECT source_id, display_name, source_kind, catalog_version, content_sha256, last_synced_at
              FROM catalog_sources ORDER BY source_id"
         ).map_err(db_error)?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok(CachedCatalogSource {
+                    source_id: row.get(0)?,
+                    display_name: row.get(1)?,
+                    source_kind: row.get(2)?,
+                    catalog_version: row.get::<_, i64>(3)? as u64,
+                    content_sha256: row.get(4)?,
+                    last_synced_at: row.get(5)?,
+                })
         let rows = statement.query_map([], |row| {
+            .map_err(db_error)?;
             Ok(CachedCatalogSource {
                 source_id: row.get(0)?,
                 display_name: row.get(1)?,
-                source_kind: row.get(2)?,
-                catalog_version: row.get::<_, i64>(3)? as u64,
-                content_sha256: row.get(4)?,
-                last_synced_at: row.get(5)?,
-            })
-        }).map_err(db_error)?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(db_error)
-    }
-
+    pub fn search_games(
+        database: &Database,
+        query: &str,
+        limit: usize,
+    ) -> CatalogResult<Vec<CachedCatalogGame>> {
     pub fn search_games(database: &Database, query: &str, limit: usize) -> CatalogResult<Vec<CachedCatalogGame>> {
+            return Err(CatalogError::InvalidDocument(
+                "search query or result limit is outside allowed bounds".into(),
+            ));
         if query.len() > 256 || limit == 0 || limit > 500 {
+        let mut statement = database
+            .connection()
+            .prepare(
+                "SELECT source_id, catalogue_game_id, title, description, genres_json,
             return Err(CatalogError::InvalidDocument("search query or result limit is outside allowed bounds".into()));
         }
         let mut statement = database.connection().prepare(
-            "SELECT source_id, catalogue_game_id, title, description, genres_json,
-                    developer, publisher, release_date, cover_ref, banner_ref
-             FROM catalog_source_games
-             WHERE instr(lower(title), lower(?1)) > 0
              ORDER BY title COLLATE NOCASE, source_id
+             LIMIT ?2",
+            )
+            .map_err(db_error)?;
+        let rows = statement
+            .query_map(params![query.trim(), limit as i64], |row| {
+                let genres_json: String = row.get(4)?;
+                let genres = serde_json::from_str(&genres_json).map_err(|error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        4,
+                        rusqlite::types::Type::Text,
+                        Box::new(error),
+                    )
+                })?;
+                Ok(CachedCatalogGame {
+                    source_id: row.get(0)?,
+                    id: row.get(1)?,
+                    title: row.get(2)?,
+                    description: row.get(3)?,
+                    genres,
+                    developer: row.get(5)?,
+                    publisher: row.get(6)?,
+                    release_date: row.get(7)?,
+                    cover_ref: row.get(8)?,
+                    banner_ref: row.get(9)?,
+                })
              LIMIT ?2"
+            .map_err(db_error)?;
         ).map_err(db_error)?;
         let rows = statement.query_map(params![query.trim(), limit as i64], |row| {
             let genres_json: String = row.get(4)?;
-            let genres = serde_json::from_str(&genres_json).map_err(|error| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    4, rusqlite::types::Type::Text, Box::new(error)
-                )
-            })?;
-            Ok(CachedCatalogGame {
-                source_id: row.get(0)?,
-                id: row.get(1)?,
-                title: row.get(2)?,
-                description: row.get(3)?,
-                genres,
-                developer: row.get(5)?,
-                publisher: row.get(6)?,
-                release_date: row.get(7)?,
-                cover_ref: row.get(8)?,
-                banner_ref: row.get(9)?,
-            })
-        }).map_err(db_error)?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(db_error)
-    }
-
+    pub fn list_offers_for_game(
+        database: &Database,
+        game_id: &str,
+    ) -> CatalogResult<Vec<CachedCatalogOffer>> {
     pub fn list_offers_for_game(database: &Database, game_id: &str) -> CatalogResult<Vec<CachedCatalogOffer>> {
+        let mut statement = database
+            .connection()
+            .prepare(
+                "SELECT source_id, offer_id, catalogue_game_id, provider_id, external_id,
         validate_identifier(game_id, "game ID")?;
         let mut statement = database.connection().prepare(
+             ORDER BY source_id, offer_id",
+            )
+            .map_err(db_error)?;
+        let rows = statement
+            .query_map([game_id], |row| {
+                let mode: String = row.get(6)?;
+                let capabilities_json: String = row.get(7)?;
+                let capabilities = serde_json::from_str(&capabilities_json).map_err(|error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        7,
+                        rusqlite::types::Type::Text,
+                        Box::new(error),
+                    )
+                })?;
+                let distribution = parse_distribution(&mode).map_err(|error| {
+                    rusqlite::Error::FromSqlConversionFailure(
+                        6,
+                        rusqlite::types::Type::Text,
+                        Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, error)),
+                    )
+                })?;
+                Ok(CachedCatalogOffer {
+                    source_id: row.get(0)?,
+                    offer_id: row.get(1)?,
+                    catalogue_game_id: row.get(2)?,
+                    provider_id: row.get(3)?,
+                    external_id: row.get(4)?,
+                    title: row.get(5)?,
+                    distribution,
+                    capabilities,
+                    external_url: row.get(8)?,
+                    manifest_reference: row.get(9)?,
+                })
             "SELECT source_id, offer_id, catalogue_game_id, provider_id, external_id,
+            .map_err(db_error)?;
                     title, distribution_mode, capabilities_json, external_url, manifest_reference
              FROM catalog_offers WHERE catalogue_game_id = ?1
              ORDER BY source_id, offer_id"
-        ).map_err(db_error)?;
-        let rows = statement.query_map([game_id], |row| {
-            let mode: String = row.get(6)?;
-            let capabilities_json: String = row.get(7)?;
-            let capabilities = serde_json::from_str(&capabilities_json).map_err(|error| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    7, rusqlite::types::Type::Text, Box::new(error)
-                )
-            })?;
-            let distribution = parse_distribution(&mode).map_err(|error| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    6,
-                    rusqlite::types::Type::Text,
-                    Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, error)),
-                )
-            })?;
-            Ok(CachedCatalogOffer {
-                source_id: row.get(0)?,
-                offer_id: row.get(1)?,
-                catalogue_game_id: row.get(2)?,
-                provider_id: row.get(3)?,
-                external_id: row.get(4)?,
-                title: row.get(5)?,
-                distribution,
-                capabilities,
-                external_url: row.get(8)?,
-                manifest_reference: row.get(9)?,
-            })
-        }).map_err(db_error)?;
-        rows.collect::<Result<Vec<_>, _>>().map_err(db_error)
-    }
-}
 
 pub struct CatalogService;
 impl CatalogService {
@@ -857,10 +933,15 @@ impl CatalogService {
         let games = document.games.len();
         let offers = document.games.iter().map(|game| game.offers.len()).sum();
         CatalogRepository::initialize(database)?;
+        CatalogRepository::replace_source_snapshot(
+            database,
+            &descriptor,
+            &document,
+            &content_sha256,
+        )?;
         CatalogRepository::replace_source_snapshot(database, &descriptor, &document, &content_sha256)?;
         Ok(CatalogSyncSummary {
             source_id: descriptor.id,
-            catalog_version: document.catalog_version,
             games,
             offers,
             content_sha256,
@@ -906,18 +987,20 @@ mod tests {
     use super::*;
     fn database() -> (tempfile::TempDir, Database) {
         let directory = tempfile::tempdir().expect("temporary directory");
+        let database =
+            Database::open(directory.path().join("catalog-test.sqlite")).expect("database opens");
         let database = Database::open(directory.path().join("catalog-test.sqlite"))
             .expect("database opens");
         (directory, database)
-    }
-
     fn providers_with_direct_install() -> ProviderRegistry {
         let mut registry = ProviderRegistry::with_baseline_providers();
         registry.register(TestManagedProvider).expect("provider registers");
+            .register(TestManagedProvider)
+            .expect("provider registers");
+        registry
         registry
     }
 
-    struct TestManagedProvider;
     impl DistributionProviderAdapter for TestManagedProvider {
         fn descriptor(&self) -> ProviderDescriptor {
             ProviderDescriptor {
@@ -1027,19 +1110,27 @@ mod tests {
             &database,
             &source,
             &ProviderRegistry::with_baseline_providers(),
+        )
+        .expect("catalogue sync succeeds");
         ).expect("catalogue sync succeeds");
 
         assert_eq!(summary.games, 1);
-        assert_eq!(summary.offers, 1);
         assert_eq!(CatalogRepository::list_sources(&database).unwrap().len(), 1);
         assert_eq!(CatalogRepository::search_games(&database, "example", 10).unwrap().len(), 1);
+            CatalogRepository::search_games(&database, "example", 10)
+                .unwrap()
+                .len(),
         assert_eq!(
             CatalogRepository::list_offers_for_game(&database, "amethys-game-10001").unwrap().len(),
+        assert_eq!(
+            CatalogRepository::list_offers_for_game(&database, "amethys-game-10001")
+                .unwrap()
+                .len(),
+            1
+        );
             1
         );
     }
-
-    #[test]
     fn invalid_refresh_does_not_replace_previous_snapshot() {
         let (_directory, database) = database();
         let valid = MemorySource {
@@ -1048,12 +1139,19 @@ mod tests {
         let providers = ProviderRegistry::with_baseline_providers();
         CatalogService::synchronize(&database, &valid, &providers).unwrap();
 
+        let invalid = MemorySource {
+            bytes: b"{invalid".to_vec(),
+        };
         let invalid = MemorySource { bytes: b"{invalid".to_vec() };
+        assert_eq!(
+            CatalogRepository::search_games(&database, "example", 10)
+                .unwrap()
+                .len(),
+            1
+        );
         assert!(CatalogService::synchronize(&database, &invalid, &providers).is_err());
         assert_eq!(CatalogRepository::search_games(&database, "example", 10).unwrap().len(), 1);
     }
-
-    #[test]
     fn catalogue_versions_are_monotonic_and_immutable() {
         let (_directory, database) = database();
         let providers = ProviderRegistry::with_baseline_providers();
@@ -1070,10 +1168,12 @@ mod tests {
         };
         assert!(CatalogService::synchronize(&database, &changed_source, &providers).is_err());
         assert_eq!(
+            CatalogRepository::search_games(&database, "example", 10)
+                .unwrap()
+                .len(),
             CatalogRepository::search_games(&database, "example", 10).unwrap().len(),
             1
         );
-
         let mut next_version = changed_same_version;
         next_version.catalog_version = 2;
         let next_source = MemorySource {
@@ -1081,16 +1181,23 @@ mod tests {
         };
         CatalogService::synchronize(&database, &next_source, &providers).unwrap();
         assert_eq!(
+            CatalogRepository::search_games(&database, "changed", 10)
+                .unwrap()
+                .len(),
             CatalogRepository::search_games(&database, "changed", 10).unwrap().len(),
             1
         );
-    }
 
     #[test]
     fn source_schema_is_initialized_idempotently() {
         let (_directory, database) = database();
         CatalogRepository::initialize(&database).unwrap();
         CatalogRepository::initialize(&database).unwrap();
+        assert!(
+            CatalogRepository::list_sources(&database)
+                .unwrap()
+                .is_empty()
+        );
         assert!(CatalogRepository::list_sources(&database).unwrap().is_empty());
     }
 }
