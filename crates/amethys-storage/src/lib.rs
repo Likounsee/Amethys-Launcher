@@ -714,15 +714,17 @@ impl Database {
     /// Local discovery/import must never call this method.
     pub fn register_catalogue_game(
         &self,
+        catalogue_game_id: &str,
         amethys_id: u64,
         name: &str,
         retired: bool,
     ) -> Result<(), AmethysError> {
+        let catalogue_game_id = validate_game_id(catalogue_game_id)?;
         let name = name.trim();
         if amethys_id == 0 || amethys_id > i64::MAX as u64 || name.is_empty() || name.len() > MAX_GAME_NAME_BYTES || name.contains('\0') {
             return Err(storage_error("Master catalogue identity or name is invalid."));
         }
-        let id = amethys_id.to_string();
+        let id = catalogue_game_id.to_owned();
         let amethys_id_sql = amethys_id as i64;
         self.connection.execute(
             "INSERT INTO catalogue_games (id, name, amethys_id, retired)
@@ -753,17 +755,16 @@ impl Database {
             || external_id.len() > MAX_PLATFORM_ID_BYTES || external_id.contains('\0') {
             return Err(storage_error("Master catalogue external identity is invalid."));
         }
-        let id = amethys_id.to_string();
-        let exists: bool = self.connection.query_row(
-            "SELECT EXISTS(SELECT 1 FROM catalogue_games WHERE id = ?1 AND retired = 0)",
-            [&id], |row| row.get(0)
-        ).map_err(|error| storage_error(format!("Could not check master catalogue game: {error}")))?;
-        if !exists { return Ok(false); }
+        let catalogue_game_id: Option<String> = self.connection.query_row(
+            "SELECT id FROM catalogue_games WHERE amethys_id = ?1 AND retired = 0",
+            [amethys_id as i64], |row| row.get(0)
+        ).optional().map_err(|error| storage_error(format!("Could not check master catalogue game: {error}")))?;
+        let Some(catalogue_game_id) = catalogue_game_id else { return Ok(false); };
         self.connection.execute(
             "INSERT INTO catalogue_external_ids (catalogue_game_id, provider, external_id)
              VALUES (?1, ?2, ?3)
              ON CONFLICT(catalogue_game_id, provider) DO UPDATE SET external_id = excluded.external_id",
-            params![id, provider, external_id],
+            params![catalogue_game_id, provider, external_id],
         ).map(|changed| changed != 0)
             .map_err(|error| storage_error(format!("Could not save master catalogue identity: {error}")))
     }
@@ -1212,7 +1213,7 @@ mod tests {
     #[test]
     fn deleting_an_installation_preserves_its_master_catalogue_record() {
         let database = Database::open(":memory:").expect("database opens");
-        database.register_catalogue_game(7000, "Master Game", false).unwrap();
+        database.register_catalogue_game("igdb-master-7000", 7000, "Master Game", false).unwrap();
         let game = database.add_game("Master Game", "Steam", "/games/master", None).unwrap();
         assert!(database.set_game_catalogue_id(&game.id, "7000").unwrap());
         database.set_catalogue_external_id(7000, "steam", "98765").unwrap();
@@ -1221,8 +1222,8 @@ mod tests {
         }).unwrap();
         assert!(database.remove_game(&game.id).unwrap());
         assert_eq!(database.get_game_metadata(&game.id).unwrap(), None);
-        assert_eq!(database.get_catalogue_game("7000").unwrap().unwrap().name, "Master Game");
-        assert_eq!(database.get_catalogue_game_by_external_id("steam", "98765").unwrap().unwrap().id, "7000");
+        assert_eq!(database.get_catalogue_game("igdb-master-7000").unwrap().unwrap().name, "Master Game");
+        assert_eq!(database.get_catalogue_game_by_external_id("steam", "98765").unwrap().unwrap().id, "igdb-master-7000");
     }
 
     #[test]
@@ -1261,8 +1262,8 @@ mod tests {
     #[test]
     fn master_external_provider_ids_cannot_be_ambiguous() {
         let database = Database::open(":memory:").expect("database opens");
-        database.register_catalogue_game(100, "First", false).unwrap();
-        database.register_catalogue_game(101, "Second", false).unwrap();
+        database.register_catalogue_game("game-100", 100, "First", false).unwrap();
+        database.register_catalogue_game("game-101", 101, "Second", false).unwrap();
         database.set_catalogue_external_id(100, "steam", "42").unwrap();
         assert!(database.set_catalogue_external_id(101, "steam", "42").is_err());
         assert!(database.set_catalogue_external_id(100, "../steam", "99").is_err());
@@ -2126,19 +2127,19 @@ mod tests {
     fn master_catalogue_ids_are_explicit_and_external_ids_are_global() {
         let path = std::env::temp_dir().join(format!("amethys-master-{}.sqlite", uuid::Uuid::new_v4()));
         let database = Database::open(&path).expect("database opens");
-        database.register_catalogue_game(42, "Master Game", false).unwrap();
+        database.register_catalogue_game("igdb-game-42", 42, "Master Game", false).unwrap();
         assert_eq!(
-            database.get_catalogue_game("42").unwrap(),
-            Some(CatalogueGame { id: "42".into(), name: "Master Game".into() })
+            database.get_catalogue_game("igdb-game-42").unwrap(),
+            Some(CatalogueGame { id: "igdb-game-42".into(), name: "Master Game".into() })
         );
         assert!(database.set_catalogue_external_id(42, "steam", "0000570").unwrap());
         assert_eq!(
             database.get_catalogue_game_by_external_id("steam", "0000570").unwrap(),
             Some(CatalogueGame { id: "42".into(), name: "Master Game".into() })
         );
-        assert!(database.register_catalogue_game(0, "Invalid", false).is_err());
-        database.register_catalogue_game(42, "Updated Master Name", false).unwrap();
-        assert_eq!(database.get_catalogue_game("42").unwrap().unwrap().name, "Updated Master Name");
+        assert!(database.register_catalogue_game("invalid", 0, "Invalid", false).is_err());
+        database.register_catalogue_game("igdb-game-42", 42, "Updated Master Name", false).unwrap();
+        assert_eq!(database.get_catalogue_game("igdb-game-42").unwrap().unwrap().name, "Updated Master Name");
         drop(database);
         let _ = std::fs::remove_file(&path);
         let _ = std::fs::remove_file(format!("{}-wal", path.display()));
