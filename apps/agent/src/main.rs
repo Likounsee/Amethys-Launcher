@@ -1,7 +1,7 @@
 use amethys_events::EventBus;
 use amethys_ipc::{
     IpcCommand, IpcCoreStatus, IpcEnvelope, IpcGameEntry, IpcRemoteError, IpcRequest, IpcResponse,
-    IpcResponsePayload, read_envelope, transport::IpcListener, write_message,
+    IpcResponsePayload, IpcCatalogSearchEntry, read_envelope, transport::IpcListener, write_message,
 };
 use amethys_runtime::{CoreRuntime, RuntimeState};
 use amethys_storage::Database;
@@ -21,6 +21,48 @@ const STATE_CREATED: u8 = 0;
 const STATE_RUNNING: u8 = 1;
 const STATE_STOPPING: u8 = 2;
 const STATE_STOPPED: u8 = 3;
+
+const DEFAULT_MASTER_CATALOG_URL: &str = "https://likounsee.github.io/Amethys-Catalog/";
+
+async fn sync_master_catalog() -> Result<IpcResponsePayload, String> {
+    let data_dir = amethys_config::prepare_data_directory().map_err(|error| error.to_string())?;
+    let base_url = std::env::var("AMETHYS_CATALOG_URL")
+        .unwrap_or_else(|_| DEFAULT_MASTER_CATALOG_URL.to_owned());
+    let provider = amethys_catalog::remote::StaticCatalogProvider::new(&base_url)
+        .map_err(|error| error.to_string())?;
+    let client = amethys_catalog::remote::RemoteCatalogClient::new(
+        provider,
+        data_dir.join("catalog-cache"),
+    ).map_err(|error| error.to_string())?;
+    let manifest = client.fetch_manifest().await.map_err(|error| error.to_string())?;
+    let entries = client.synchronize_index(&manifest).await.map_err(|error| error.to_string())?;
+    Ok(IpcResponsePayload::CatalogSynchronized {
+        catalog_version: manifest.catalog_version,
+        game_count: entries.len() as u64,
+    })
+}
+
+fn search_master_catalog(query: &str, limit: usize) -> Result<IpcResponsePayload, String> {
+    let data_dir = amethys_config::prepare_data_directory().map_err(|error| error.to_string())?;
+    let base_url = std::env::var("AMETHYS_CATALOG_URL")
+        .unwrap_or_else(|_| DEFAULT_MASTER_CATALOG_URL.to_owned());
+    let provider = amethys_catalog::remote::StaticCatalogProvider::new(&base_url)
+        .map_err(|error| error.to_string())?;
+    let client = amethys_catalog::remote::RemoteCatalogClient::new(
+        provider,
+        data_dir.join("catalog-cache"),
+    ).map_err(|error| error.to_string())?;
+    let entries = client.load_cached_index().map_err(|error| error.to_string())?;
+    let games = client.search_cached(&entries, query, limit).map_err(|error| error.to_string())?
+        .into_iter()
+        .map(|entry| IpcCatalogSearchEntry {
+            amethys_id: entry.amethys_id,
+            name: entry.name,
+            slug: entry.slug,
+        })
+        .collect();
+    Ok(IpcResponsePayload::CatalogSearchResults { games })
+}
 
 fn mutation_allowed(state: IpcCoreStatus) -> bool {
     state == IpcCoreStatus::Running
@@ -48,6 +90,36 @@ where
     // Read the lifecycle state when the request is handled, not when its
     // socket was accepted: a client may connect and then stall before sending.
     let state = ipc_status(shared_state);
+    match &request.payload.command {
+        IpcCommand::SyncMasterCatalog => {
+            let result = if mutation_allowed(state) {
+                sync_master_catalog().await
+            } else {
+                Err("Catalogue synchronization is unavailable while Core is not running.".into())
+            };
+            let response = match result {
+                Ok(payload) => IpcResponse::success(request.request_id, payload),
+                Err(message) => IpcResponse::failure(
+                    request.request_id,
+                    IpcRemoteError::new("AM-CATALOG-0001", message),
+                ),
+            };
+            write_message(stream, &response).await?;
+            return Ok(());
+        }
+        IpcCommand::SearchMasterCatalog { query, limit } => {
+            let response = match search_master_catalog(query, *limit) {
+                Ok(payload) => IpcResponse::success(request.request_id, payload),
+                Err(message) => IpcResponse::failure(
+                    request.request_id,
+                    IpcRemoteError::new("AM-CATALOG-0002", message),
+                ),
+            };
+            write_message(stream, &response).await?;
+            return Ok(());
+        }
+        _ => {}
+    }
     if !mutation_allowed(state)
         && matches!(
             &request.payload.command,
@@ -55,6 +127,7 @@ where
                 | IpcCommand::AddDetectedGame { .. }
                 | IpcCommand::SetGameExecutable { .. }
                 | IpcCommand::RemoveGame { .. }
+                | IpcCommand::SyncMasterCatalog
         )
     {
         let response = IpcResponse::failure(
@@ -187,7 +260,8 @@ where
                 IpcCommand::RemoveGame { id } => database
                     .remove_game(&id)
                     .map(|removed| IpcResponsePayload::GameRemoved { removed }),
-                IpcCommand::Ping | IpcCommand::GetStatus => unreachable!("handled above"),
+                IpcCommand::Ping | IpcCommand::GetStatus | IpcCommand::SyncMasterCatalog
+                | IpcCommand::SearchMasterCatalog { .. } => unreachable!("handled above"),
             }
         }
     };

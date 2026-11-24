@@ -33,6 +33,10 @@ pub enum IpcCommand {
     },
     /// Configures the executable path for a game already in the library.
     SetGameExecutable { id: String, executable: String },
+    /// Refreshes the public master catalogue index from its configured provider.
+    SyncMasterCatalog,
+    /// Searches the locally cached master catalogue index.
+    SearchMasterCatalog { query: String, limit: usize },
     /// Removes a game by its identifier.
     RemoveGame { id: String },
 }
@@ -69,6 +73,8 @@ pub enum IpcResponsePayload {
     Games { games: Vec<IpcGameEntry> },
     GameAdded { game: Box<IpcGameEntry> },
     GameRemoved { removed: bool },
+    CatalogSynchronized { catalog_version: String, game_count: u64 },
+    CatalogSearchResults { games: Vec<IpcCatalogSearchEntry> },
 }
 
 /// Canonical metadata shared by all local installations of one Amethys game.
@@ -97,6 +103,14 @@ pub struct IpcGameEntry {
     pub catalogue_metadata: Option<IpcGameMetadata>,
     pub install_path: String,
     pub executable: Option<String>,
+}
+
+/// A compact entry from the public master catalogue search index.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct IpcCatalogSearchEntry {
+    pub amethys_id: u64,
+    pub name: String,
+    pub slug: Option<String>,
 }
 
 /// A safe, serializable error returned by the remote core process.
@@ -197,7 +211,9 @@ pub fn dispatch_request_with_games(
         IpcCommand::AddGame { .. }
         | IpcCommand::AddDetectedGame { .. }
         | IpcCommand::SetGameExecutable { .. }
-        | IpcCommand::RemoveGame { .. } => {
+        | IpcCommand::RemoveGame { .. }
+        | IpcCommand::SyncMasterCatalog
+        | IpcCommand::SearchMasterCatalog { .. } => {
             return IpcResponse::failure(
                 request.request_id,
                 IpcRemoteError::new(
