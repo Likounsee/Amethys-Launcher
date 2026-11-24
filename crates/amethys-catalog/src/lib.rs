@@ -1,3 +1,5 @@
+pub mod remote;
+
 //! Versioned catalogue documents, trusted provider capabilities and an offline SQLite cache.
 //!
 //! The catalogue feed is metadata only. It does not grant distribution rights,

@@ -13,6 +13,8 @@ serde_json.workspace = true
 sha2 = "0.10"
 thiserror.workspace = true
 url = "2"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+zstd = "0.13"
 
 [dev-dependencies]
 tempfile = "3"
