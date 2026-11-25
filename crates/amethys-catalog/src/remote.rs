@@ -1727,6 +1727,8 @@ mod tests {
         std::fs::create_dir_all(&cover_dir).unwrap();
         let cached = cover_dir.join("1001.png");
         std::fs::write(&cached, b"\x89PNG\r\n\x1a\nvalid-test-image").unwrap();
+        let stale_jpeg = cover_dir.join("1001.jpg");
+        std::fs::write(&stale_jpeg, b"not a JPEG").unwrap();
 
         let client = RemoteCatalogClient::new(
             StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
@@ -1743,6 +1745,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(result.as_deref(), Some(cached.as_path()));
+        assert!(!stale_jpeg.exists());
     }
 
     #[test]
