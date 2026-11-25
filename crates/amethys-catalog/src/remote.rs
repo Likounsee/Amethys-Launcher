@@ -521,7 +521,13 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             .get(url.clone())
             .send()
             .await
-            .map_err(|error| RemoteCatalogError::Network(error.to_string()))?
+            .map_err(|error| RemoteCatalogError::Network(error.to_string()))?;
+        if response.status().is_redirection() {
+            return Err(RemoteCatalogError::InvalidUrl(
+                "catalogue cover redirect was rejected".into(),
+            ));
+        }
+        let mut response = response
             .error_for_status()
             .map_err(|error| RemoteCatalogError::Network(error.to_string()))?;
         if !is_valid_cover_url(response.url().as_str())
@@ -657,12 +663,18 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
                 "only HTTPS catalogue files are accepted".into(),
             ));
         }
-        let mut response = self
+        let response = self
             .http
             .get(url.clone())
             .send()
             .await
-            .map_err(|error| RemoteCatalogError::Network(error.to_string()))?
+            .map_err(|error| RemoteCatalogError::Network(error.to_string()))?;
+        if response.status().is_redirection() {
+            return Err(RemoteCatalogError::InvalidUrl(
+                "catalogue redirect was rejected".into(),
+            ));
+        }
+        let mut response = response
             .error_for_status()
             .map_err(|error| RemoteCatalogError::Network(error.to_string()))?;
         if !is_same_https_origin(url, response.url()) {
