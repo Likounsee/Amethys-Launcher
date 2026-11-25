@@ -347,11 +347,46 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             results.truncate(limit);
             return Ok(results);
         }
-        Ok(entries
+
+        let normalized_needle = normalize_game_title(&needle);
+        let mut ranked = entries
             .iter()
-            .filter(|entry| entry.name.to_lowercase().contains(&needle))
+            .filter_map(|entry| {
+                let name = entry.name.to_lowercase();
+                let normalized_name = normalize_game_title(&entry.name);
+                let slug = entry.slug.as_deref().unwrap_or_default().to_lowercase();
+                let normalized_slug = normalize_game_title(&slug);
+                let genre_match = entry
+                    .genres
+                    .iter()
+                    .any(|genre| genre.to_lowercase().contains(&needle)
+                        || normalize_game_title(genre).contains(&normalized_needle));
+
+                let rank = if name == needle || normalized_name == normalized_needle {
+                    0
+                } else if name.starts_with(&needle) || normalized_name.starts_with(&normalized_needle) {
+                    1
+                } else if name.contains(&needle) || normalized_name.contains(&normalized_needle) {
+                    2
+                } else if slug.contains(&needle) || normalized_slug.contains(&normalized_needle) {
+                    3
+                } else if genre_match {
+                    4
+                } else {
+                    return None;
+                };
+                Some((rank, name, entry.amethys_id, entry))
+            })
+            .collect::<Vec<_>>();
+        ranked.sort_by(|left, right| {
+            left.0.cmp(&right.0)
+                .then_with(|| left.1.cmp(&right.1))
+                .then_with(|| left.2.cmp(&right.2))
+        });
+        Ok(ranked
+            .into_iter()
             .take(limit)
-            .cloned()
+            .map(|(_, _, _, entry)| entry.clone())
             .collect())
     }
 
@@ -799,6 +834,53 @@ mod tests {
 
         fs::write(&cache_path, r#"{"catalog_version":"unvalidated"}"#).unwrap();
         assert!(client.load_cached_manifest().is_err());
+    }
+
+    #[test]
+    fn search_matches_normalized_titles_slugs_and_genres_with_relevance_order() {
+        let client = RemoteCatalogClient::new(
+            StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
+            std::env::temp_dir().join("amethys-catalog-search-ranking-test"),
+        )
+        .unwrap();
+        let entries = vec![
+            CatalogSearchEntry {
+                amethys_id: 30,
+                name: "A Game".into(),
+                slug: Some("clair-obscur-expedition-33".into()),
+                genres: vec!["RPG".into()],
+            },
+            CatalogSearchEntry {
+                amethys_id: 20,
+                name: "Clair Obscur: Expedition 33".into(),
+                slug: Some("expedition-33".into()),
+                genres: vec!["Adventure".into()],
+            },
+            CatalogSearchEntry {
+                amethys_id: 10,
+                name: "Another Title".into(),
+                slug: None,
+                genres: vec!["Action RPG".into()],
+            },
+        ];
+
+        let title_results = client.search_cached(&entries, "clair obscur", 10).unwrap();
+        assert_eq!(
+            title_results.iter().map(|entry| entry.amethys_id).collect::<Vec<_>>(),
+            vec![20, 30]
+        );
+
+        let slug_results = client.search_cached(&entries, "expedition 33", 10).unwrap();
+        assert_eq!(
+            slug_results.iter().map(|entry| entry.amethys_id).collect::<Vec<_>>(),
+            vec![20, 30]
+        );
+
+        let genre_results = client.search_cached(&entries, "action", 10).unwrap();
+        assert_eq!(
+            genre_results.iter().map(|entry| entry.amethys_id).collect::<Vec<_>>(),
+            vec![10]
+        );
     }
 
     #[test]
