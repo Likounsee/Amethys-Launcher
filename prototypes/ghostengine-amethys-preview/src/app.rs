@@ -104,7 +104,9 @@ fn recommendation_profile_for_games(
             // incorrectly mark a different catalogue game with the same
             // display name as owned.
             owned_ids.push(id);
-        } else {
+        } else if !normalized_name.is_empty() {
+            // Empty or punctuation-only titles cannot identify a catalogue
+            // entry and would make the entire recommendation request invalid.
             owned_names.push(game.name.clone());
         }
     }
@@ -2071,6 +2073,7 @@ mod tests {
             make_game("77", "Another Game", &["Puzzle"]),
             make_game("not-a-number", "Another-Game", &["Puzzle"]),
             make_game("missing-id", "Legacy Game", &["Puzzle"]),
+            make_game("not-a-number", "", &["Puzzle"]),
             make_game("88", "Another Game", &["Strategy"]),
         ];
         let (genres, ids, names) = recommendation_profile_for_games(&games);
