@@ -1231,46 +1231,27 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn cached_detail_shard_rejects_unsorted_or_duplicate_ids() {
+    #[test]
+    fn invalid_cached_detail_shard_is_removed_for_online_recovery() {
         let directory = tempfile::tempdir().unwrap();
-        let client = RemoteCatalogClient::new(
-            StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
-            directory.path(),
-        )
-        .unwrap();
-        let manifest: CatalogManifest = serde_json::from_str(r#"{
-            "manifest_schema_version":2,"catalog_schema_version":1,
-            "catalog_version":"2026-11-24T13:00:00Z","generated_at":"2026-11-24T13:00:00Z",
-            "source":"Amethys","platform":"windows-pc","game_count":2,"store_identity_count":0,
-            "search_index":{"file":"index/games-index.json.zst","compressed_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
-            "shards":{"scheme":"amethys-id-range-v1","bucket_size":1000,
-                "path_template":"shards/{bucket:06d}.json.zst","game_count":2,
-                "files":[{"file":"shards/000001.json.zst","records":2,"compressed_size":10,
-                    "compressed_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-                    "bucket":1,"game_count":2}]},
-            "metadata":{"genres":{"file":"metadata/genres.json"}}
-        }"#).unwrap();
-        let cache_path = directory
-            .path()
-            .join("shards")
-            .join("000001-bbbbbbbbbbbb.json");
-        fs::create_dir_all(cache_path.parent().unwrap()).unwrap();
+        let cache_path = directory.path().join("cached-shard.json");
         fs::write(
             &cache_path,
             r#"[
-                {"amethys_id":1002,"name":"Second","slug":null,"summary":null,"release_date":null,"cover_url":null},
-                {"amethys_id":1001,"name":"First","slug":null,"summary":null,"release_date":null,"cover_url":null}
+                {"amethys_id":1002,"name":"Second"},
+                {"amethys_id":1001,"name":"First"}
             ]"#,
         )
         .unwrap();
 
-        let error = client.fetch_game(&manifest, 1001).await.unwrap_err();
-        assert!(
-            error
-                .to_string()
-                .contains("invalid or unordered game identity")
-        );
+        let cached = load_cached_detail_shard(&cache_path, 1, 1000, 2).unwrap();
+        assert!(cached.is_none());
+        assert!(!cache_path.exists());
+
+        fs::write(&cache_path, b"not valid JSON").unwrap();
+        let cached = load_cached_detail_shard(&cache_path, 1, 1000, 2).unwrap();
+        assert!(cached.is_none());
+        assert!(!cache_path.exists());
     }
 
     #[test]
