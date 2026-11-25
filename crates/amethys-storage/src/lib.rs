@@ -1129,11 +1129,14 @@ impl Database {
         let install_path = install_path.trim();
         let executable = executable.map(str::trim).filter(|value| !value.is_empty());
 
-        if name.is_empty() || install_path.is_empty()
+        if name.is_empty()
+            || install_path.is_empty()
             || name.len() > MAX_GAME_NAME_BYTES
             || install_path.len() > MAX_GAME_PATH_BYTES
-            || name.contains('\0') || install_path.contains('\0')
-            || executable.is_some_and(|value| value.len() > MAX_GAME_PATH_BYTES || value.contains('\0'))
+            || name.contains('\0')
+            || install_path.contains('\0')
+            || executable
+                .is_some_and(|value| value.len() > MAX_GAME_PATH_BYTES || value.contains('\0'))
         {
             return Err(storage_error("Detected installation metadata is invalid."));
         }
@@ -1145,7 +1148,9 @@ impl Database {
                  WHERE id = ?4",
                 params![name, install_path, executable, id],
             )
-            .map_err(|error| storage_error(format!("Could not refresh detected installation: {error}")))?;
+            .map_err(|error| {
+                storage_error(format!("Could not refresh detected installation: {error}"))
+            })?;
         self.get_game(id)
     }
 
@@ -1645,12 +1650,7 @@ mod tests {
             .expect("initial installation is added");
 
         let refreshed = database
-            .refresh_detected_installation(
-                &original.id,
-                "Example renamed",
-                "/games/new",
-                None,
-            )
+            .refresh_detected_installation(&original.id, "Example renamed", "/games/new", None)
             .expect("refresh succeeds")
             .expect("installation remains present");
 
