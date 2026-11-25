@@ -516,7 +516,7 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             }
         }
 
-        let mut response = self
+        let response = self
             .http
             .get(url.clone())
             .send()
