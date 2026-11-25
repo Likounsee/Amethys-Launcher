@@ -1321,7 +1321,7 @@ mod tests {
                 url: None,
             }],
         };
-        assert!(validate_detail_shard(&[valid.clone()], 1, 1000, 1).is_ok());
+        assert!(validate_detail_shard(std::slice::from_ref(&valid), 1, 1000, 1).is_ok());
 
         let mut invalid_name = valid.clone();
         invalid_name.name = "  ".into();
@@ -1358,8 +1358,8 @@ mod tests {
     fn detail_shard_validation_checks_bucket_and_record_count() {
         let record: CatalogGameDetail =
             serde_json::from_str(r#"{"amethys_id":1001,"name":"Valid game"}"#).unwrap();
-        assert!(validate_detail_shard(&[record.clone()], 1, 1000, 1).is_ok());
-        assert!(validate_detail_shard(&[record.clone()], 2, 1000, 1).is_err());
+        assert!(validate_detail_shard(std::slice::from_ref(&record), 1, 1000, 1).is_ok());
+        assert!(validate_detail_shard(std::slice::from_ref(&record), 2, 1000, 1).is_err());
         assert!(validate_detail_shard(&[record], 1, 1000, 2).is_err());
     }
 
