@@ -212,6 +212,17 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         let manifest: CatalogManifest = serde_json::from_slice(&bytes)
             .map_err(|error| RemoteCatalogError::InvalidData(format!("manifest JSON: {error}")))?;
         validate_manifest(&manifest)?;
+        atomic_write(&self.cache_dir.join("manifest.json"), &bytes)?;
+        Ok(manifest)
+    }
+
+    /// Loads the last validated manifest when the catalogue host is unavailable.
+    pub fn load_cached_manifest(&self) -> RemoteCatalogResult<CatalogManifest> {
+        let path = self.cache_dir.join("manifest.json");
+        let bytes = fs::read(path).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+        let manifest: CatalogManifest = serde_json::from_slice(&bytes)
+            .map_err(|error| RemoteCatalogError::InvalidData(format!("cached manifest JSON: {error}")))?;
+        validate_manifest(&manifest)?;
         Ok(manifest)
     }
 
