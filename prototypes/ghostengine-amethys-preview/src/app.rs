@@ -60,6 +60,48 @@ enum CoreMutationResult {
     },
 }
 
+/// Builds one recommendation signal per distinct local game, even when
+/// multiple installations differ only by path, title punctuation, or ID padding.
+fn recommendation_profile_for_games(
+    games: &[IpcGameEntry],
+) -> (Vec<String>, Vec<u64>, Vec<String>) {
+    let mut genres = Vec::new();
+    let mut owned_ids = Vec::new();
+    let mut owned_names = Vec::with_capacity(games.len());
+    let mut seen_ids = std::collections::HashSet::new();
+    let mut seen_names = std::collections::HashSet::new();
+
+    for game in games {
+        let normalized_name = game
+            .name
+            .chars()
+            .filter(|character| character.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect::<String>();
+        let catalogue_id = game
+            .catalogue_game_id
+            .as_deref()
+            .and_then(|value| value.parse::<u64>().ok())
+            .filter(|id| *id != 0);
+        let duplicate_id = catalogue_id.is_some_and(|id| !seen_ids.insert(id));
+        let duplicate_name = !normalized_name.is_empty()
+            && !seen_names.insert(normalized_name);
+        if duplicate_id || duplicate_name {
+            continue;
+        }
+
+        owned_names.push(game.name.clone());
+        if let Some(id) = catalogue_id {
+            owned_ids.push(id);
+        }
+        if let Some(metadata) = game.catalogue_metadata.as_ref() {
+            genres.extend(metadata.genres.iter().cloned());
+        }
+    }
+
+    (genres, owned_ids, owned_names)
+}
+
 /// Default window size (the window itself can be resized freely).
 pub const WIN_W: u32 = 1440;
 pub const WIN_H: u32 = 900;
@@ -790,34 +832,7 @@ impl App {
 
     /// Extracts the local ownership and genre profile without contacting Steam.
     fn recommendation_profile(&self) -> (Vec<String>, Vec<u64>, Vec<String>) {
-        let mut genres = Vec::new();
-        let mut owned_ids = Vec::new();
-        let mut owned_names = Vec::with_capacity(self.games.len());
-        let mut seen_games = std::collections::HashSet::new();
-        for game in &self.games {
-            // Multiple local installations of one canonical game must not
-            // amplify its genre weights in the personalized Store profile.
-            let identity = game
-                .catalogue_game_id
-                .as_deref()
-                .map(|id| format!("id:{id}"))
-                .unwrap_or_else(|| format!("name:{}", game.name.trim().to_lowercase()));
-            if !seen_games.insert(identity) {
-                continue;
-            }
-            owned_names.push(game.name.clone());
-            if let Some(id) = game
-                .catalogue_game_id
-                .as_deref()
-                .and_then(|value| value.parse::<u64>().ok())
-            {
-                owned_ids.push(id);
-            }
-            if let Some(metadata) = game.catalogue_metadata.as_ref() {
-                genres.extend(metadata.genres.iter().cloned());
-            }
-        }
-        (genres, owned_ids, owned_names)
+        recommendation_profile_for_games(&self.games)
     }
 
     /// Replaces the library and recomputes every launch status once.
@@ -2016,6 +2031,38 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recommendation_profile_deduplicates_installations_by_canonical_id_and_title() {
+        let make_game = |id: &str, name: &str, genres: &[&str]| IpcGameEntry {
+            id: format!("local-{id}-{name}"),
+            name: name.to_owned(),
+            platform: "manual".to_owned(),
+            platform_id: None,
+            catalogue_game_id: Some(id.to_owned()),
+            catalogue_metadata: Some(amethys_ipc::IpcGameMetadata {
+                genres: genres.iter().map(|genre| (*genre).to_owned()).collect(),
+                developer: None,
+                publisher: None,
+                release_date: None,
+                description: None,
+            }),
+            install_path: format!("/games/{id}/{name}"),
+            executable: None,
+        };
+
+        let games = vec![
+            make_game("42", "Clair-Obscur: Expedition 33", &["RPG", "Adventure"]),
+            make_game("00042", "Clair Obscur Expedition 33", &["RPG", "Adventure"]),
+            make_game("77", "Another Game", &["Puzzle"]),
+            make_game("not-a-number", "Another-Game", &["Puzzle"]),
+        ];
+        let (genres, ids, names) = recommendation_profile_for_games(&games);
+
+        assert_eq!(ids, vec![42, 77]);
+        assert_eq!(names, vec!["Clair-Obscur: Expedition 33", "Another Game"]);
+        assert_eq!(genres, vec!["RPG", "Adventure", "Puzzle"]);
+    }
 
     #[test]
     fn catalogue_store_urls_only_allow_http_and_https_hosts() {
