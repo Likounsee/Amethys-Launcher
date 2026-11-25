@@ -248,81 +248,7 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             .await?;
         verify_size(descriptor.compressed_size, compressed.len())?;
         let decoded = decompress_bounded(&compressed)?;
-        // Accept legacy three-field rows, genre-aware four-field rows and
-        // artwork-aware five-field rows so published catalogues stay readable.
-        let rows: Vec<serde_json::Value> = serde_json::from_slice(&decoded).map_err(|error| {
-            RemoteCatalogError::InvalidData(format!("search index JSON: {error}"))
-        })?;
-        if rows.len() as u64 != manifest.game_count {
-            return Err(RemoteCatalogError::InvalidData(format!(
-                "search index has {} rows; manifest declares {}",
-                rows.len(),
-                manifest.game_count
-            )));
-        }
-        let mut previous_id = 0;
-        let mut entries = Vec::with_capacity(rows.len());
-        for row in rows {
-            let fields = row.as_array().ok_or_else(|| {
-                RemoteCatalogError::InvalidData("search index rows must be arrays".into())
-            })?;
-            if !(3..=5).contains(&fields.len()) {
-                return Err(RemoteCatalogError::InvalidData(
-                    "search index row has an unsupported field count".into(),
-                ));
-            }
-            let id = fields[0].as_u64().ok_or_else(|| {
-                RemoteCatalogError::InvalidData("search index ID is invalid".into())
-            })?;
-            let name = fields[1]
-                .as_str()
-                .ok_or_else(|| {
-                    RemoteCatalogError::InvalidData("search index name is invalid".into())
-                })?
-                .to_owned();
-            let slug = if fields[2].is_null() {
-                None
-            } else {
-                Some(
-                    fields[2]
-                        .as_str()
-                        .ok_or_else(|| {
-                            RemoteCatalogError::InvalidData("search index slug is invalid".into())
-                        })?
-                        .to_owned(),
-                )
-            };
-            let genres = fields
-                .get(3)
-                .and_then(serde_json::Value::as_array)
-                .map(|items| {
-                    items
-                        .iter()
-                        .filter_map(serde_json::Value::as_str)
-                        .map(str::to_owned)
-                        .collect()
-                })
-                .unwrap_or_default();
-            let cover_url = fields
-                .get(4)
-                .and_then(serde_json::Value::as_str)
-                .filter(|value| !value.trim().is_empty())
-                .map(str::to_owned);
-            if id == 0 || id <= previous_id || name.trim().is_empty() || name.len() > 512 {
-                return Err(RemoteCatalogError::InvalidData(
-                    "search index IDs must be unique, ascending and nonzero; names must be valid"
-                        .into(),
-                ));
-            }
-            previous_id = id;
-            entries.push(CatalogSearchEntry {
-                amethys_id: id,
-                name,
-                slug,
-                genres,
-                cover_url,
-            });
-        }
+        let entries = parse_search_index_rows(&decoded, manifest.game_count)?;
         let cache_path = self.cache_dir.join("index").join("games-index.json");
         let json = serde_json::to_vec(&entries)
             .map_err(|error| RemoteCatalogError::InvalidData(error.to_string()))?;
@@ -726,6 +652,103 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         }
         Ok(bytes)
     }
+}
+
+fn parse_search_index_rows(
+    bytes: &[u8],
+    expected_count: u64,
+) -> RemoteCatalogResult<Vec<CatalogSearchEntry>> {
+    // Keep published legacy indexes readable while validating each optional
+    // field instead of silently discarding malformed genres or artwork URLs.
+    let rows: Vec<serde_json::Value> = serde_json::from_slice(bytes).map_err(|error| {
+        RemoteCatalogError::InvalidData(format!("search index JSON: {error}"))
+    })?;
+    if rows.len() as u64 != expected_count {
+        return Err(RemoteCatalogError::InvalidData(format!(
+            "search index has {} rows; manifest declares {}",
+            rows.len(), expected_count
+        )));
+    }
+
+    let mut previous_id = 0;
+    let mut entries = Vec::with_capacity(rows.len());
+    for row in rows {
+        let fields = row.as_array().ok_or_else(|| {
+            RemoteCatalogError::InvalidData("search index rows must be arrays".into())
+        })?;
+        if !(3..=5).contains(&fields.len()) {
+            return Err(RemoteCatalogError::InvalidData(
+                "search index row has an unsupported field count".into(),
+            ));
+        }
+        let id = fields[0].as_u64().ok_or_else(|| {
+            RemoteCatalogError::InvalidData("search index ID is invalid".into())
+        })?;
+        let name = fields[1]
+            .as_str()
+            .ok_or_else(|| {
+                RemoteCatalogError::InvalidData("search index name is invalid".into())
+            })?
+            .to_owned();
+        let slug = if fields[2].is_null() {
+            None
+        } else {
+            Some(
+                fields[2]
+                    .as_str()
+                    .ok_or_else(|| {
+                        RemoteCatalogError::InvalidData("search index slug is invalid".into())
+                    })?
+                    .to_owned(),
+            )
+        };
+        let genres = if let Some(value) = fields.get(3) {
+            value
+                .as_array()
+                .ok_or_else(|| {
+                    RemoteCatalogError::InvalidData("search index genres must be an array".into())
+                })?
+                .iter()
+                .map(|genre| {
+                    genre.as_str().map(str::to_owned).ok_or_else(|| {
+                        RemoteCatalogError::InvalidData(
+                            "search index genre values must be strings".into(),
+                        )
+                    })
+                })
+                .collect::<RemoteCatalogResult<Vec<_>>>()?
+        } else {
+            Vec::new()
+        };
+        let cover_url = match fields.get(4) {
+            None | Some(serde_json::Value::Null) => None,
+            Some(value) => Some(
+                value
+                    .as_str()
+                    .ok_or_else(|| {
+                        RemoteCatalogError::InvalidData("search index cover URL is invalid".into())
+                    })?
+                    .trim()
+                    .to_owned(),
+            )
+            .filter(|value| !value.is_empty()),
+        };
+        if id == 0 || id <= previous_id || name.trim().is_empty() || name.len() > 512 {
+            return Err(RemoteCatalogError::InvalidData(
+                "search index IDs must be unique, ascending and nonzero; names must be valid"
+                    .into(),
+            ));
+        }
+        previous_id = id;
+        entries.push(CatalogSearchEntry {
+            amethys_id: id,
+            name,
+            slug,
+            genres,
+            cover_url,
+        });
+    }
+    Ok(entries)
 }
 
 fn image_extension(bytes: &[u8]) -> Option<&'static str> {
