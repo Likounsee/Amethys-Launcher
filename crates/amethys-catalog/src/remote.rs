@@ -949,6 +949,11 @@ fn parse_search_index_rows(
             cover_url,
         });
     }
+    // Apply the same field limits to freshly downloaded data and offline
+    // cache entries. Otherwise a malformed but correctly compressed index
+    // could be reported as synchronized, written to disk, and only fail on
+    // the next offline read.
+    validate_cached_search_entries(&entries)?;
     Ok(entries)
 }
 
@@ -1554,6 +1559,34 @@ mod tests {
             entries[2].cover_url.as_deref(),
             Some("https://images.igdb.com/cover.jpg")
         );
+    }
+
+    #[test]
+    fn search_index_parser_rejects_fields_outside_cache_limits() {
+        let oversized_slug = format!(r#"[[1001, "Game", "{}"]]"#, "s".repeat(513));
+        assert!(parse_search_index_rows(oversized_slug.as_bytes(), 1).is_err());
+
+        let empty_genre = br#"[[1001, "Game", null, [" "]]]"#;
+        assert!(parse_search_index_rows(empty_genre, 1).is_err());
+
+        let too_many_genres = serde_json::to_vec(&vec![vec![
+            serde_json::json!(1001),
+            serde_json::json!("Game"),
+            serde_json::Value::Null,
+            serde_json::Value::Array(
+                (0..129)
+                    .map(|index| serde_json::json!(format!("Genre {index}")))
+                    .collect(),
+            ),
+        ]])
+        .unwrap();
+        assert!(parse_search_index_rows(&too_many_genres, 1).is_err());
+
+        let oversized_cover = format!(
+            r#"[[1001, "Game", null, [], "{}"]]"#,
+            format!("https://images.igdb.com/{}", "c".repeat(2048))
+        );
+        assert!(parse_search_index_rows(oversized_cover.as_bytes(), 1).is_err());
     }
 
     #[test]
