@@ -538,39 +538,12 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             bucket,
             &descriptor.compressed_sha256[..12]
         ));
-        let cached_records = if cache_path.is_file() {
-            let cached = read_bounded_cache(
-                &cache_path,
-                MAX_DECOMPRESSED_FILE_BYTES,
-                "cached detail shard",
-            )
-            .and_then(|bytes| {
-                serde_json::from_slice::<Vec<CatalogGameDetail>>(&bytes).map_err(|error| {
-                    RemoteCatalogError::InvalidData(format!("cached shard JSON: {error}"))
-                })
-            });
-
-            match cached {
-                Ok(records)
-                    if validate_detail_shard(
-                        &records,
-                        bucket,
-                        manifest.shards.bucket_size,
-                        descriptor.game_count,
-                    )
-                    .is_ok() =>
-                {
-                    Some(records)
-                }
-                _ => {
-                    fs::remove_file(&cache_path)
-                        .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
-                    None
-                }
-            }
-        } else {
-            None
-        };
+        let cached_records = load_cached_detail_shard(
+            &cache_path,
+            bucket,
+            manifest.shards.bucket_size,
+            descriptor.game_count,
+        )?;
 
         let (records, cache_after_validation) = if let Some(records) = cached_records {
             (records, false)
@@ -704,6 +677,36 @@ fn read_bounded_cache(path: &Path, max_bytes: usize, label: &str) -> RemoteCatal
         )));
     }
     Ok(bytes)
+}
+
+fn load_cached_detail_shard(
+    path: &Path,
+    bucket: u64,
+    bucket_size: u64,
+    expected_count: u64,
+) -> RemoteCatalogResult<Option<Vec<CatalogGameDetail>>> {
+    if !path.is_file() {
+        return Ok(None);
+    }
+
+    let cached = read_bounded_cache(path, MAX_DECOMPRESSED_FILE_BYTES, "cached detail shard")
+        .and_then(|bytes| {
+            serde_json::from_slice::<Vec<CatalogGameDetail>>(&bytes).map_err(|error| {
+                RemoteCatalogError::InvalidData(format!("cached shard JSON: {error}"))
+            })
+        });
+
+    match cached {
+        Ok(records)
+            if validate_detail_shard(&records, bucket, bucket_size, expected_count).is_ok() =>
+        {
+            Ok(Some(records))
+        }
+        _ => {
+            fs::remove_file(path).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+            Ok(None)
+        }
+    }
 }
 
 fn validate_detail_shard(
