@@ -99,7 +99,7 @@ async fn search_master_catalog(query: &str, limit: usize) -> Result<IpcResponseP
     Ok(IpcResponsePayload::CatalogSearchResults { games })
 }
 
-fn recommend_master_catalog(
+async fn recommend_master_catalog(
     genres: &[String],
     owned_ids: &[u64],
     owned_names: &[String],
@@ -116,19 +116,36 @@ fn recommend_master_catalog(
     let entries = client
         .load_cached_index()
         .map_err(|error| error.to_string())?;
-    let games = client
+    let recommendations = client
         .recommend_cached(&entries, genres, owned_ids, owned_names, limit)
-        .map_err(|error| error.to_string())?
-        .into_iter()
-        .map(|entry| IpcCatalogSearchEntry {
+        .map_err(|error| error.to_string())?;
+    let mut games = Vec::with_capacity(recommendations.len());
+    for (index, entry) in recommendations.into_iter().enumerate() {
+        let cover_cache_path = if index < 8 {
+            match entry.cover_url.as_deref() {
+                Some(url) => tokio::time::timeout(
+                    std::time::Duration::from_secs(3),
+                    client.cache_cover(entry.amethys_id, url),
+                )
+                .await
+                .ok()
+                .and_then(Result::ok)
+                .flatten()
+                .map(|path| path.to_string_lossy().into_owned()),
+                None => None,
+            }
+        } else {
+            None
+        };
+        games.push(IpcCatalogSearchEntry {
             amethys_id: entry.amethys_id,
             name: entry.name,
             slug: entry.slug,
             genres: entry.genres,
             cover_url: entry.cover_url,
-            cover_cache_path: None,
-        })
-        .collect();
+            cover_cache_path,
+        });
+    }
     Ok(IpcResponsePayload::CatalogSearchResults { games })
 }
 
@@ -266,7 +283,7 @@ where
             owned_names,
             limit,
         } => {
-            let response = match recommend_master_catalog(genres, owned_ids, owned_names, *limit) {
+            let response = match recommend_master_catalog(genres, owned_ids, owned_names, *limit).await {
                 Ok(payload) => IpcResponse::success(request.request_id, payload),
                 Err(message) => IpcResponse::failure(
                     request.request_id,
