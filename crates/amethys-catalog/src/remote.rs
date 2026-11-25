@@ -952,7 +952,11 @@ mod tests {
         .unwrap();
 
         let error = client.fetch_game(&manifest, 1001).await.unwrap_err();
-        assert!(error.to_string().contains("invalid or unordered game identity"));
+        assert!(
+            error
+                .to_string()
+                .contains("invalid or unordered game identity")
+        );
     }
 
     #[test]
