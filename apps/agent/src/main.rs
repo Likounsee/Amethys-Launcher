@@ -1336,7 +1336,7 @@ mod tests {
         assert_eq!(second_game.id, first_game.id);
         assert_eq!(second_game.platform_id.as_deref(), Some("570"));
         assert_eq!(second_game.name, "Updated name");
-        assert_eq!(second_game.install_path, moved_path.to_string_lossy());
+        assert_eq!(second_game.install_path, moved_path.to_string_lossy().into_owned());
         assert_eq!(second_game.executable.as_deref(), Some("game.exe"));
         let games = database
             .lock()
