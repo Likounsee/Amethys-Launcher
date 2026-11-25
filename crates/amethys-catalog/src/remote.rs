@@ -947,13 +947,15 @@ fn validate_manifest(manifest: &CatalogManifest) -> RemoteCatalogResult<()> {
         ));
     }
     validate_relative_path(&manifest.search_index.file)?;
-    if manifest.search_index.compressed_size.is_some_and(|size| {
-        size == 0 || size > MAX_COMPRESSED_FILE_BYTES as u64
-    }) || manifest
+    if manifest
         .search_index
-        .compressed_sha256
-        .as_deref()
-        .is_none_or(|hash| !valid_sha256(hash))
+        .compressed_size
+        .is_some_and(|size| size == 0 || size > MAX_COMPRESSED_FILE_BYTES as u64)
+        || manifest
+            .search_index
+            .compressed_sha256
+            .as_deref()
+            .is_none_or(|hash| !valid_sha256(hash))
         || manifest
             .search_index
             .format
@@ -989,9 +991,11 @@ fn validate_manifest(manifest: &CatalogManifest) -> RemoteCatalogResult<()> {
                 "manifest contains an invalid shard descriptor".into(),
             ));
         }
-        shard_game_count = shard_game_count.checked_add(shard.game_count).ok_or_else(|| {
-            RemoteCatalogError::InvalidData("manifest shard game count overflows".into())
-        })?;
+        shard_game_count = shard_game_count
+            .checked_add(shard.game_count)
+            .ok_or_else(|| {
+                RemoteCatalogError::InvalidData("manifest shard game count overflows".into())
+            })?;
     }
     if shard_game_count != manifest.game_count {
         return Err(RemoteCatalogError::InvalidData(
@@ -1180,8 +1184,7 @@ mod tests {
         assert!(validate_manifest(&bad_metadata_hash).is_err());
 
         let mut oversized_metadata = manifest;
-        oversized_metadata.metadata.genres.size =
-            Some(MAX_DECOMPRESSED_FILE_BYTES as u64 + 1);
+        oversized_metadata.metadata.genres.size = Some(MAX_DECOMPRESSED_FILE_BYTES as u64 + 1);
         assert!(validate_manifest(&oversized_metadata).is_err());
     }
 
@@ -1191,11 +1194,16 @@ mod tests {
         let path = directory.path().join("oversized-cache.json");
         fs::write(&path, b"12345").unwrap();
 
-        assert!(read_bounded_cache(&path, 4, "test cache")
-            .unwrap_err()
-            .to_string()
-            .contains("exceeds size limit"));
-        assert_eq!(read_bounded_cache(&path, 5, "test cache").unwrap(), b"12345");
+        assert!(
+            read_bounded_cache(&path, 4, "test cache")
+                .unwrap_err()
+                .to_string()
+                .contains("exceeds size limit")
+        );
+        assert_eq!(
+            read_bounded_cache(&path, 5, "test cache").unwrap(),
+            b"12345"
+        );
     }
 
     #[tokio::test]
@@ -1273,7 +1281,9 @@ mod tests {
         assert!(validate_detail_shard(&[invalid_genre], 1, 1000, 1).is_err());
 
         let mut invalid_source = valid.clone();
-        invalid_source.source_ids.push(invalid_source.source_ids[0].clone());
+        invalid_source
+            .source_ids
+            .push(invalid_source.source_ids[0].clone());
         assert!(validate_detail_shard(&[invalid_source], 1, 1000, 1).is_err());
 
         let mut invalid_store_url = valid;
@@ -1283,9 +1293,11 @@ mod tests {
 
     #[test]
     fn detail_shard_rejects_mismatched_igdb_source_identity_and_zero_bucket_size() {
-        let mut record: CatalogGameDetail =
-            serde_json::from_str(r#"{"amethys_id":1001,"igdb_id":77,"name":"Valid game",
-                "source_ids":[{"source":"igdb","external_id":"78"}]}"#).unwrap();
+        let mut record: CatalogGameDetail = serde_json::from_str(
+            r#"{"amethys_id":1001,"igdb_id":77,"name":"Valid game",
+                "source_ids":[{"source":"igdb","external_id":"78"}]}"#,
+        )
+        .unwrap();
         assert!(validate_detail_shard(&[record.clone()], 1, 1000, 1).is_err());
         record.source_ids[0].external_id = "77".into();
         assert!(validate_detail_shard(&[record], 1, 0, 1).is_err());
@@ -1293,10 +1305,8 @@ mod tests {
 
     #[test]
     fn detail_shard_validation_checks_bucket_and_record_count() {
-        let record: CatalogGameDetail = serde_json::from_str(
-            r#"{"amethys_id":1001,"name":"Valid game"}"#,
-        )
-        .unwrap();
+        let record: CatalogGameDetail =
+            serde_json::from_str(r#"{"amethys_id":1001,"name":"Valid game"}"#).unwrap();
         assert!(validate_detail_shard(&[record.clone()], 1, 1000, 1).is_ok());
         assert!(validate_detail_shard(&[record.clone()], 2, 1000, 1).is_err());
         assert!(validate_detail_shard(&[record], 1, 1000, 2).is_err());
@@ -1371,8 +1381,7 @@ mod tests {
         assert!(validate_manifest(&wrong_path).is_err());
 
         let mut oversized_shard = manifest.clone();
-        oversized_shard.shards.files[0].compressed_size =
-            MAX_COMPRESSED_FILE_BYTES as u64 + 1;
+        oversized_shard.shards.files[0].compressed_size = MAX_COMPRESSED_FILE_BYTES as u64 + 1;
         assert!(validate_manifest(&oversized_shard).is_err());
 
         let mut duplicate_path = manifest.clone();
