@@ -220,8 +220,9 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
     pub fn load_cached_manifest(&self) -> RemoteCatalogResult<CatalogManifest> {
         let path = self.cache_dir.join("manifest.json");
         let bytes = fs::read(path).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
-        let manifest: CatalogManifest = serde_json::from_slice(&bytes)
-            .map_err(|error| RemoteCatalogError::InvalidData(format!("cached manifest JSON: {error}")))?;
+        let manifest: CatalogManifest = serde_json::from_slice(&bytes).map_err(|error| {
+            RemoteCatalogError::InvalidData(format!("cached manifest JSON: {error}"))
+        })?;
         validate_manifest(&manifest)?;
         Ok(manifest)
     }
@@ -356,24 +357,26 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
                 let normalized_name = normalize_game_title(&entry.name);
                 let slug = entry.slug.as_deref().unwrap_or_default().to_lowercase();
                 let normalized_slug = normalize_game_title(&slug);
-                let genre_match = entry
-                    .genres
-                    .iter()
-                    .any(|genre| genre.to_lowercase().contains(&needle)
-                        || normalize_game_title(genre).contains(&normalized_needle));
+                let genre_match = entry.genres.iter().any(|genre| {
+                    genre.to_lowercase().contains(&needle)
+                        || normalize_game_title(genre).contains(&normalized_needle)
+                });
 
                 let rank = if name == needle || normalized_name == normalized_needle {
                     0
                 } else if name.starts_with(&needle)
-                    || (!normalized_needle.is_empty() && normalized_name.starts_with(&normalized_needle))
+                    || (!normalized_needle.is_empty()
+                        && normalized_name.starts_with(&normalized_needle))
                 {
                     1
                 } else if name.contains(&needle)
-                    || (!normalized_needle.is_empty() && normalized_name.contains(&normalized_needle))
+                    || (!normalized_needle.is_empty()
+                        && normalized_name.contains(&normalized_needle))
                 {
                     2
                 } else if slug.contains(&needle)
-                    || (!normalized_needle.is_empty() && normalized_slug.contains(&normalized_needle))
+                    || (!normalized_needle.is_empty()
+                        && normalized_slug.contains(&normalized_needle))
                 {
                     3
                 } else if genre_match {
@@ -385,7 +388,8 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             })
             .collect::<Vec<_>>();
         ranked.sort_by(|left, right| {
-            left.0.cmp(&right.0)
+            left.0
+                .cmp(&right.0)
                 .then_with(|| left.1.cmp(&right.1))
                 .then_with(|| left.2.cmp(&right.2))
         });
@@ -495,7 +499,9 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
     ) -> RemoteCatalogResult<Option<PathBuf>> {
         const MAX_COVER_BYTES: usize = 8 * 1024 * 1024;
         if amethys_id == 0 {
-            return Err(RemoteCatalogError::InvalidData("Amethys ID cannot be zero".into()));
+            return Err(RemoteCatalogError::InvalidData(
+                "Amethys ID cannot be zero".into(),
+            ));
         }
         let url = Url::parse(cover_url)
             .map_err(|error| RemoteCatalogError::InvalidUrl(error.to_string()))?;
@@ -515,16 +521,19 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             .map(|extension| directory.join(format!("{amethys_id}.{extension}")))
             .find(|path| path.is_file());
         if let Some(path) = cached {
-            let bytes = fs::read(&path)
-                .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+            let bytes =
+                fs::read(&path).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
             if bytes.len() <= MAX_COVER_BYTES && image_extension(&bytes).is_some() {
                 return Ok(Some(path));
             }
-            fs::remove_file(&path)
-                .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+            fs::remove_file(&path).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
         }
 
-        let mut response = self.http.get(url).send().await
+        let mut response = self
+            .http
+            .get(url)
+            .send()
+            .await
             .map_err(|error| RemoteCatalogError::Network(error.to_string()))?
             .error_for_status()
             .map_err(|error| RemoteCatalogError::Network(error.to_string()))?;
@@ -535,15 +544,24 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
                 "cover redirects must remain on the trusted HTTPS image host".into(),
             ));
         }
-        if response.content_length().is_some_and(|length| length > MAX_COVER_BYTES as u64) {
-            return Err(RemoteCatalogError::InvalidData("cover exceeds size limit".into()));
+        if response
+            .content_length()
+            .is_some_and(|length| length > MAX_COVER_BYTES as u64)
+        {
+            return Err(RemoteCatalogError::InvalidData(
+                "cover exceeds size limit".into(),
+            ));
         }
         let mut bytes = Vec::new();
-        while let Some(chunk) = response.chunk().await
+        while let Some(chunk) = response
+            .chunk()
+            .await
             .map_err(|error| RemoteCatalogError::Network(error.to_string()))?
         {
             if bytes.len().saturating_add(chunk.len()) > MAX_COVER_BYTES {
-                return Err(RemoteCatalogError::InvalidData("cover exceeds size limit".into()));
+                return Err(RemoteCatalogError::InvalidData(
+                    "cover exceeds size limit".into(),
+                ));
             }
             bytes.extend_from_slice(&chunk);
         }
@@ -951,19 +969,28 @@ mod tests {
 
         let title_results = client.search_cached(&entries, "clair obscur", 10).unwrap();
         assert_eq!(
-            title_results.iter().map(|entry| entry.amethys_id).collect::<Vec<_>>(),
+            title_results
+                .iter()
+                .map(|entry| entry.amethys_id)
+                .collect::<Vec<_>>(),
             vec![20, 30]
         );
 
         let slug_results = client.search_cached(&entries, "expedition 33", 10).unwrap();
         assert_eq!(
-            slug_results.iter().map(|entry| entry.amethys_id).collect::<Vec<_>>(),
+            slug_results
+                .iter()
+                .map(|entry| entry.amethys_id)
+                .collect::<Vec<_>>(),
             vec![20, 30]
         );
 
         let genre_results = client.search_cached(&entries, "action", 10).unwrap();
         assert_eq!(
-            genre_results.iter().map(|entry| entry.amethys_id).collect::<Vec<_>>(),
+            genre_results
+                .iter()
+                .map(|entry| entry.amethys_id)
+                .collect::<Vec<_>>(),
             vec![10]
         );
     }
@@ -1131,7 +1158,10 @@ mod tests {
         .unwrap();
 
         let result = client
-            .cache_cover(1001, "https://images.igdb.com/igdb/image/upload/t_cover_big/test.jpg")
+            .cache_cover(
+                1001,
+                "https://images.igdb.com/igdb/image/upload/t_cover_big/test.jpg",
+            )
             .await
             .unwrap();
 
