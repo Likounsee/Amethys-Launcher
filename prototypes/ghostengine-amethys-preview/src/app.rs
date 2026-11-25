@@ -2070,6 +2070,7 @@ mod tests {
             make_game("00042", "Clair Obscur Expedition 33", &["RPG", "Adventure"]),
             make_game("77", "Another Game", &["Puzzle"]),
             make_game("not-a-number", "Another-Game", &["Puzzle"]),
+            make_game("missing-id", "Legacy Game", &["Puzzle"]),
             make_game("88", "Another Game", &["Strategy"]),
         ];
         let (genres, ids, names) = recommendation_profile_for_games(&games);
@@ -2077,7 +2078,7 @@ mod tests {
         assert_eq!(ids, vec![42, 77, 88]);
         assert_eq!(
             names,
-            vec!["Another-Game"]
+            vec!["Legacy Game"]
         );
         assert!(genres.is_empty(), "catalogue client owns genre weighting to avoid duplicate local/catalogue signals");
     }
