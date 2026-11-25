@@ -151,21 +151,23 @@ async fn recommend_master_catalog(
         .load_cached_index()
         .map_err(|error| error.to_string())?;
     let recommendations = client
-        .recommend_cached(&entries, genres, owned_ids, owned_names, limit)
+        .recommend_cached_with_reasons(&entries, genres, owned_ids, owned_names, limit)
         .map_err(|error| error.to_string())?;
     let cover_inputs = recommendations
         .iter()
-        .map(|entry| (entry.amethys_id, entry.cover_url.clone()))
+        .map(|(entry, _)| (entry.amethys_id, entry.cover_url.clone()))
         .collect::<Vec<_>>();
     let cover_paths = cache_visible_covers(&client, &cover_inputs).await;
     let mut games = Vec::with_capacity(recommendations.len());
-    for (index, entry) in recommendations.into_iter().enumerate() {
+    for (index, (entry, matched_genres)) in recommendations.into_iter().enumerate() {
         let cover_cache_path = cover_paths.get(index).cloned().flatten();
         games.push(IpcCatalogSearchEntry {
             amethys_id: entry.amethys_id,
             name: entry.name,
             slug: entry.slug,
-            genres: entry.genres,
+            // In recommendation responses, genres contain only the evidence
+            // that actually contributed to this game's personalized score.
+            genres: matched_genres,
             cover_url: entry.cover_url,
             cover_cache_path,
         });
