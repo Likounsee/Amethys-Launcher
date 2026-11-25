@@ -1087,6 +1087,36 @@ mod tests {
     }
 
     #[test]
+    fn cover_image_signature_accepts_only_jpeg_and_png() {
+        assert_eq!(image_extension(&[0xff, 0xd8, 0xff, 0x00]), Some("jpg"));
+        assert_eq!(image_extension(b"\x89PNG\r\n\x1a\nrest"), Some("png"));
+        assert_eq!(image_extension(b"<html>not an image</html>"), None);
+        assert_eq!(image_extension(&[]), None);
+    }
+
+    #[tokio::test]
+    async fn cover_cache_rejects_untrusted_hosts_before_network_access() {
+        let directory = tempfile::tempdir().unwrap();
+        let client = RemoteCatalogClient::new(
+            StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
+            directory.path(),
+        )
+        .unwrap();
+
+        let error = client
+            .cache_cover(1001, "https://attacker.example/cover.jpg")
+            .await
+            .unwrap_err();
+        assert!(matches!(error, RemoteCatalogError::InvalidUrl(_)));
+
+        let error = client
+            .cache_cover(1001, "http://images.igdb.com/cover.jpg")
+            .await
+            .unwrap_err();
+        assert!(matches!(error, RemoteCatalogError::InvalidUrl(_)));
+    }
+
+    #[test]
     fn rejects_non_sha256_hashes() {
         assert!(!valid_sha256("not-a-hash"));
         assert!(valid_sha256(&"a".repeat(64)));
