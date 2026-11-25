@@ -435,7 +435,7 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
                             && seen.insert(genre.to_lowercase())
                             && genre_weights.get(&genre.to_lowercase()).copied().unwrap_or(0) > 0
                     })
-                    .map(str::to_owned)
+                    .map(|genre| (*genre).to_owned())
                     .collect::<Vec<_>>();
                 let score = matched_genres
                     .iter()
@@ -1758,6 +1758,52 @@ mod tests {
             vec![2, 3],
             "duplicate genre tags must not make RPG outweigh Adventure"
         );
+    }
+
+    #[test]
+    fn recommendation_reasons_only_include_genres_that_contributed_to_score() {
+        let client = RemoteCatalogClient::new(
+            StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
+            std::env::temp_dir().join("amethys-recommendation-reasons-test"),
+        )
+        .unwrap();
+        let entries = vec![
+            CatalogSearchEntry {
+                amethys_id: 1,
+                name: "Owned RPG".into(),
+                slug: None,
+                genres: vec!["RPG".into(), "Adventure".into()],
+                cover_url: None,
+            },
+            CatalogSearchEntry {
+                amethys_id: 2,
+                name: "Adventure Quest".into(),
+                slug: None,
+                genres: vec!["Adventure".into(), "Strategy".into(), " adventure ".into()],
+                cover_url: None,
+            },
+            CatalogSearchEntry {
+                amethys_id: 3,
+                name: "RPG Tactics".into(),
+                slug: None,
+                genres: vec!["RPG".into(), "Strategy".into()],
+                cover_url: None,
+            },
+        ];
+
+        let results = client
+            .recommend_cached_with_reasons(&entries, &[], &[1], &[], 10)
+            .unwrap();
+
+        assert_eq!(
+            results
+                .iter()
+                .map(|(game, _)| game.amethys_id)
+                .collect::<Vec<_>>(),
+            vec![2, 3]
+        );
+        assert_eq!(results[0].1, vec!["Adventure"]);
+        assert_eq!(results[1].1, vec!["RPG"]);
     }
 
     #[test]
