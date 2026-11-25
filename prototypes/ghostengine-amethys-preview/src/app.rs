@@ -2109,10 +2109,9 @@ impl App {
             || self.scan_in_progress
             || self.library_loading
             // Store workers are polled at the start of each frame. Keep frames
-            // flowing while a request is active or a newer request is queued,
-            // otherwise an idle window can stop polling before the result arrives.
+            // flowing while a request is active, otherwise an idle window can
+            // stop polling before the result arrives.
             || self.store_loading
-            || self.store_refresh_pending
             || self.mutation_in_progress;
         if animating {
             // The window loop does not wait for vsync: keep animation near 60 images/s.
