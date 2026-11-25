@@ -768,6 +768,40 @@ mod tests {
     }
 
     #[test]
+    fn cached_manifest_is_validated_before_offline_use() {
+        let directory = tempfile::tempdir().unwrap();
+        let client = RemoteCatalogClient::new(
+            StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
+            directory.path(),
+        )
+        .unwrap();
+        let manifest = r#"{
+            "manifest_schema_version":2,"catalog_schema_version":1,
+            "catalog_version":"2026-11-24T13:00:00Z","generated_at":"2026-11-24T13:00:00Z",
+            "source":"Amethys","platform":"windows-pc","game_count":1,"store_identity_count":0,
+            "search_index":{"file":"index/games-index.json.zst","records":1,"compressed_size":10,
+                "compressed_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "format":"json-array-zstd","record_fields":["amethys_id","name","slug"]},
+            "shards":{"scheme":"amethys-id-range-v1","bucket_size":1000,
+                "path_template":"shards/{bucket:06d}.json.zst","game_count":1,
+                "files":[{"file":"shards/001000.json.zst","records":1,"compressed_size":10,
+                    "compressed_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    "bucket":1000,"game_count":1}]},
+            "metadata":{"genres":{"file":"metadata/genres.json","size":10,
+                "sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}
+        }"#;
+        let cache_path = directory.path().join("manifest.json");
+        fs::write(&cache_path, manifest).unwrap();
+
+        let cached = client.load_cached_manifest().unwrap();
+        assert_eq!(cached.catalog_version, "2026-11-24T13:00:00Z");
+        assert_eq!(cached.game_count, 1);
+
+        fs::write(&cache_path, r#"{"catalog_version":"unvalidated"}"#).unwrap();
+        assert!(client.load_cached_manifest().is_err());
+    }
+
+    #[test]
     fn search_index_tuple_decodes_with_optional_slug() {
         let rows: Vec<(u64, String, Option<String>)> =
             serde_json::from_str(r#"[[1001,"Example", "example"],[1002,"No slug",null]]"#).unwrap();
