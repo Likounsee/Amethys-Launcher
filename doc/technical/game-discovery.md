@@ -44,9 +44,14 @@ receive a null platform ID. If a later scan identifies one of these legacy
 entries by the same platform and canonical installation path, import attaches
 the newly discovered platform ID to that existing row without changing its
 Amethys library ID. Future imports can then find it by stable platform identity,
-even if its installation path changes. Detection remains read-only: importing
-changes only the Amethys database and never modifies the original launcher or
-game installation.
+even if its installation path changes. When a later explicit import finds an
+existing entry by that identity, Amethys refreshes its display name and detected
+installation path in place, preserving the local library ID and any manually
+configured executable when the adapter cannot resolve a replacement. This
+prevents a moved game from remaining attached to a stale path without creating
+a duplicate library entry. Detection remains read-only: importing changes only
+the Amethys database and never modifies the original launcher or game
+installation.
 
 ## Read-only installation verification
 
