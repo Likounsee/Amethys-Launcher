@@ -60,12 +60,16 @@ enum CoreMutationResult {
     },
 }
 
-/// Builds one recommendation signal per distinct local game, even when
-/// multiple installations differ only by path, title punctuation, or ID padding.
+/// Builds one ownership signal per distinct local game, even when multiple
+/// installations differ only by path, title punctuation, or ID padding.
+///
+/// Genre weights are intentionally resolved by the catalogue client: it has
+/// the canonical genre record for each owned catalogue ID and can count each
+/// owned game exactly once. Sending local genres as a flat list here would make
+/// the client count the same game's local and catalogue metadata twice.
 fn recommendation_profile_for_games(
     games: &[IpcGameEntry],
 ) -> (Vec<String>, Vec<u64>, Vec<String>) {
-    let mut genres = Vec::new();
     let mut owned_ids = Vec::new();
     let mut owned_names = Vec::with_capacity(games.len());
     let mut seen_ids = std::collections::HashSet::new();
@@ -99,19 +103,9 @@ fn recommendation_profile_for_games(
         if let Some(id) = catalogue_id {
             owned_ids.push(id);
         }
-        if let Some(metadata) = game.catalogue_metadata.as_ref() {
-            let mut seen_game_genres = std::collections::HashSet::new();
-            for genre in &metadata.genres {
-                let genre = genre.trim();
-                let normalized_genre = genre.to_lowercase();
-                if !normalized_genre.is_empty() && seen_game_genres.insert(normalized_genre) {
-                    genres.push(genre.to_owned());
-                }
-            }
-        }
     }
 
-    (genres, owned_ids, owned_names)
+    (Vec::new(), owned_ids, owned_names)
 }
 
 /// Default window size (the window itself can be resized freely).
@@ -842,7 +836,7 @@ impl App {
         !self.games.is_empty()
     }
 
-    /// Extracts the local ownership and genre profile without contacting Steam.
+    /// Extracts local ownership signals without contacting Steam.
     fn recommendation_profile(&self) -> (Vec<String>, Vec<u64>, Vec<String>) {
         recommendation_profile_for_games(&self.games)
     }
@@ -2085,7 +2079,7 @@ mod tests {
                 "Another Game"
             ]
         );
-        assert_eq!(genres, vec!["RPG", "Adventure", "Puzzle", "Strategy"]);
+        assert!(genres.is_empty(), "catalogue client owns genre weighting to avoid duplicate local/catalogue signals");
     }
 
     #[test]
