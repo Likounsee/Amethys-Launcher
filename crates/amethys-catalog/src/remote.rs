@@ -433,13 +433,22 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
                     .filter(|genre| {
                         !genre.is_empty()
                             && seen.insert(genre.to_lowercase())
-                            && genre_weights.get(&genre.to_lowercase()).copied().unwrap_or(0) > 0
+                            && genre_weights
+                                .get(&genre.to_lowercase())
+                                .copied()
+                                .unwrap_or(0)
+                                > 0
                     })
                     .map(|genre| (*genre).to_owned())
                     .collect::<Vec<_>>();
                 let score = matched_genres
                     .iter()
-                    .map(|genre| genre_weights.get(&genre.to_lowercase()).copied().unwrap_or(0))
+                    .map(|genre| {
+                        genre_weights
+                            .get(&genre.to_lowercase())
+                            .copied()
+                            .unwrap_or(0)
+                    })
                     .sum::<usize>();
                 (score, matched_genres, entry)
             })
