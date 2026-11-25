@@ -1558,7 +1558,12 @@ mod tests {
 
         // Punctuation-only queries have no normalized form. They must not
         // match every genre through String::contains("").
-        assert!(client.search_cached(&entries, "!!!", 10).unwrap().is_empty());
+        assert!(
+            client
+                .search_cached(&entries, "!!!", 10)
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]
