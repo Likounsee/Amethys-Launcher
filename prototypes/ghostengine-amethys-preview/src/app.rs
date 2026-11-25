@@ -469,6 +469,8 @@ pub struct App {
     store_game_count: Option<u64>,
     store_error: Option<String>,
     store_receiver: Option<std::sync::mpsc::Receiver<StoreTaskResult>>,
+    /// A library change landed while a store request was using the previous profile.
+    store_refresh_pending: bool,
     executable_draft: String,
     editing_executable: bool,
     executable_focused: bool,
@@ -562,6 +564,7 @@ impl App {
             store_game_count: None,
             store_error: None,
             store_receiver: None,
+            store_refresh_pending: false,
             executable_draft: String::new(),
             editing_executable: false,
             executable_focused: false,
@@ -622,6 +625,7 @@ impl App {
         if self.store_loading {
             return;
         }
+        self.store_refresh_pending = false;
         let (sender, receiver) = std::sync::mpsc::channel();
         let query = self.store_query.trim().to_owned();
         let (genres, owned_ids, owned_names) = self.recommendation_profile();
@@ -702,6 +706,14 @@ impl App {
                 self.start_store_task(false);
             }
             StoreTaskResult::Synchronized(Err(error)) => self.store_error = Some(error),
+        }
+        if self.store_refresh_pending
+            && self.page == Page::Store
+            && !self.store_promotions
+            && self.store_query.trim().is_empty()
+        {
+            self.start_store_task(false);
+            return;
         }
         self.render(false);
     }
@@ -878,11 +890,29 @@ impl App {
 
     /// Replaces the library and recomputes every launch status once.
     fn set_games(&mut self, games: Vec<IpcGameEntry>) {
+        let previous_profile = recommendation_profile_for_games(&self.games);
+        let next_profile = recommendation_profile_for_games(&games);
         self.statuses = status::statuses_of(&games);
         self.games = games;
         self.library_limit = self.library_limit.max(PAGE_SIZE);
         if self.selected_game.is_some_and(|index| index >= self.games.len()) {
             self.selected_game = None;
+        }
+
+        // Recommendations are derived from the complete local library. Refresh
+        // them when that ownership profile changes instead of leaving stale cards
+        // visible until the player manually searches again.
+        if previous_profile != next_profile
+            && self.page == Page::Store
+            && !self.store_promotions
+            && self.store_query.trim().is_empty()
+            && self.store_catalog_version.is_some()
+        {
+            if self.store_loading {
+                self.store_refresh_pending = true;
+            } else {
+                self.start_store_task(false);
+            }
         }
     }
 
@@ -1112,8 +1142,15 @@ impl App {
                     self.store_search_focused = false;
                     self.keyboard_focus = None;
                     self.render(true);
-                    if !promotions && self.store_results.is_empty() {
-                        self.start_store_task(false);
+                    if !promotions {
+                        if self.store_loading {
+                            self.store_refresh_pending = true;
+                        } else {
+                            // Rebuild the personalized view from the latest
+                            // library even when older search/recommendation cards
+                            // are still cached in memory.
+                            self.start_store_task(false);
+                        }
                     }
                 }
             }
