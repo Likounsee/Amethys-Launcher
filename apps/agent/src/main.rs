@@ -49,7 +49,7 @@ async fn sync_master_catalog() -> Result<IpcResponsePayload, String> {
     })
 }
 
-fn search_master_catalog(query: &str, limit: usize) -> Result<IpcResponsePayload, String> {
+async fn search_master_catalog(query: &str, limit: usize) -> Result<IpcResponsePayload, String> {
     let data_dir = amethys_config::prepare_data_directory().map_err(|error| error.to_string())?;
     let base_url = std::env::var("AMETHYS_CATALOG_URL")
         .unwrap_or_else(|_| DEFAULT_MASTER_CATALOG_URL.to_owned());
@@ -61,17 +61,36 @@ fn search_master_catalog(query: &str, limit: usize) -> Result<IpcResponsePayload
     let entries = client
         .load_cached_index()
         .map_err(|error| error.to_string())?;
-    let games = client
+    let results = client
         .search_cached(&entries, query, limit)
-        .map_err(|error| error.to_string())?
-        .into_iter()
-        .map(|entry| IpcCatalogSearchEntry {
+        .map_err(|error| error.to_string())?;
+
+    // Cache artwork only for the first visible batch. Remaining results keep
+    // their URL and can be loaded when a later page/search makes them visible.
+    let mut games = Vec::with_capacity(results.len());
+    for (index, entry) in results.into_iter().enumerate() {
+        let cover_cache_path = if index < 24 {
+            match entry.cover_url.as_deref() {
+                Some(url) => client
+                    .cache_cover(entry.amethys_id, url)
+                    .await
+                    .ok()
+                    .flatten()
+                    .map(|path| path.to_string_lossy().into_owned()),
+                None => None,
+            }
+        } else {
+            None
+        };
+        games.push(IpcCatalogSearchEntry {
             amethys_id: entry.amethys_id,
             name: entry.name,
             slug: entry.slug,
             genres: entry.genres,
-        })
-        .collect();
+            cover_url: entry.cover_url,
+            cover_cache_path,
+        });
+    }
     Ok(IpcResponsePayload::CatalogSearchResults { games })
 }
 
@@ -101,6 +120,8 @@ fn recommend_master_catalog(
             name: entry.name,
             slug: entry.slug,
             genres: entry.genres,
+            cover_url: entry.cover_url,
+            cover_cache_path: None,
         })
         .collect();
     Ok(IpcResponsePayload::CatalogSearchResults { games })
@@ -224,7 +245,7 @@ where
             return Ok(());
         }
         IpcCommand::SearchMasterCatalog { query, limit } => {
-            let response = match search_master_catalog(query, *limit) {
+            let response = match search_master_catalog(query, *limit).await {
                 Ok(payload) => IpcResponse::success(request.request_id, payload),
                 Err(message) => IpcResponse::failure(
                     request.request_id,
