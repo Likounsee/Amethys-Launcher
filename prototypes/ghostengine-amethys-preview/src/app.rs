@@ -588,6 +588,12 @@ impl App {
             }
             StoreTaskResult::Search(Err(error)) => self.store_error = Some(error),
             StoreTaskResult::Detail(Ok(detail)) => {
+                if let Some(path) = detail.cover_cache_path.as_deref() {
+                    let game_id = detail.amethys_id.to_string();
+                    if let Err(error) = self.covers.load_library_cover(&game_id, std::path::Path::new(path)) {
+                        self.notify(ToastKind::Info, format!("Jaquette du catalogue indisponible : {error}"));
+                    }
+                }
                 self.store_detail = Some(detail);
                 self.store_error = None;
                 self.page = Page::StoreProduct;
