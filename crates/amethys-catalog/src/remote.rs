@@ -689,9 +689,9 @@ fn validate_detail_shard(
     bucket_size: u64,
     expected_count: u64,
 ) -> RemoteCatalogResult<()> {
-    if records.len() as u64 != expected_count {
+    if bucket_size == 0 || records.len() as u64 != expected_count {
         return Err(RemoteCatalogError::InvalidData(
-            "detail shard record count mismatch".into(),
+            "detail shard bucket size or record count is invalid".into(),
         ));
     }
 
@@ -736,6 +736,16 @@ fn validate_detail_shard(
             return Err(RemoteCatalogError::InvalidData(
                 "detail shard contains invalid game metadata".into(),
             ));
+        }
+
+        if let Some(igdb_id) = record.igdb_id {
+            if record.source_ids.iter().any(|identity| {
+                identity.source == "igdb" && identity.external_id != igdb_id.to_string()
+            }) {
+                return Err(RemoteCatalogError::InvalidData(
+                    "detail shard IGDB identity does not match its source ID".into(),
+                ));
+            }
         }
 
         for identity in &record.source_ids {
@@ -1269,6 +1279,16 @@ mod tests {
         let mut invalid_store_url = valid;
         invalid_store_url.stores[0].url = Some("x".repeat(2049));
         assert!(validate_detail_shard(&[invalid_store_url], 1, 1000, 1).is_err());
+    }
+
+    #[test]
+    fn detail_shard_rejects_mismatched_igdb_source_identity_and_zero_bucket_size() {
+        let mut record: CatalogGameDetail =
+            serde_json::from_str(r#"{"amethys_id":1001,"igdb_id":77,"name":"Valid game",
+                "source_ids":[{"source":"igdb","external_id":"78"}]}"#).unwrap();
+        assert!(validate_detail_shard(&[record.clone()], 1, 1000, 1).is_err());
+        record.source_ids[0].external_id = "77".into();
+        assert!(validate_detail_shard(&[record], 1, 0, 1).is_err());
     }
 
     #[test]
