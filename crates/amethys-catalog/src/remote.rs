@@ -1122,7 +1122,7 @@ mod tests {
         let cover_dir = directory.path().join("covers");
         std::fs::create_dir_all(&cover_dir).unwrap();
         let cached = cover_dir.join("1001.png");
-        std::fs::write(&cached, b"\\x89PNG\\r\\n\\x1a\\nvalid-test-image").unwrap();
+        std::fs::write(&cached, b"\x89PNG\r\n\x1a\nvalid-test-image").unwrap();
 
         let client = RemoteCatalogClient::new(
             StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
