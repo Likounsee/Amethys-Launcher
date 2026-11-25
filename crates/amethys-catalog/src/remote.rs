@@ -1257,6 +1257,42 @@ mod tests {
     }
 
     #[test]
+    fn manifest_rejects_inconsistent_shard_counts_paths_and_sizes() {
+        let json = r#"{
+            "manifest_schema_version":2,"catalog_schema_version":1,
+            "catalog_version":"2026-11-24T13:00:00Z","generated_at":"2026-11-24T13:00:00Z",
+            "source":"Amethys","platform":"windows-pc","game_count":2,"store_identity_count":0,
+            "search_index":{"file":"index/games-index.json.zst","compressed_size":10,
+                "compressed_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+            "shards":{"scheme":"amethys-id-range-v1","bucket_size":1000,
+                "path_template":"shards/{bucket:06d}.json.zst","game_count":2,
+                "files":[{"file":"shards/000001.json.zst","records":2,"compressed_size":10,
+                    "compressed_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    "bucket":1,"game_count":2}]},
+            "metadata":{"genres":{"file":"metadata/genres.json"}}
+        }"#;
+        let manifest: CatalogManifest = serde_json::from_str(json).unwrap();
+        assert!(validate_manifest(&manifest).is_ok());
+
+        let mut wrong_total = manifest.clone();
+        wrong_total.shards.files[0].game_count = 1;
+        assert!(validate_manifest(&wrong_total).is_err());
+
+        let mut wrong_path = manifest.clone();
+        wrong_path.shards.files[0].file = "shards/000002.json.zst".into();
+        assert!(validate_manifest(&wrong_path).is_err());
+
+        let mut oversized_shard = manifest.clone();
+        oversized_shard.shards.files[0].compressed_size =
+            MAX_COMPRESSED_FILE_BYTES as u64 + 1;
+        assert!(validate_manifest(&oversized_shard).is_err());
+
+        let mut duplicate_path = manifest.clone();
+        duplicate_path.metadata.genres.file = "index/games-index.json.zst".into();
+        assert!(validate_manifest(&duplicate_path).is_err());
+    }
+
+    #[test]
     fn search_matches_normalized_titles_slugs_and_genres_with_relevance_order() {
         let client = RemoteCatalogClient::new(
             StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
