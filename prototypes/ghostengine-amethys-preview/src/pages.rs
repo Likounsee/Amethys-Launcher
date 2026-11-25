@@ -1337,7 +1337,9 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
     // Game covers are portrait artwork (3:4), so the storefront uses the
     // same visual rhythm as a real PC game shop instead of stretched banners.
     let art_h = (card_w * 4 / 3).max(150);
-    let card_h = art_h + 96;
+    // Recommendation cards reserve a dedicated line for the matching
+    // catalogue genres, making the personalization signal visible.
+    let card_h = art_h + if view.recommended { 116 } else { 96 };
     let mut displayed = 0usize;
     for (index, game) in view.results.iter().enumerate() {
         if view.query.trim().is_empty() && index == 0 { continue; }
@@ -1353,6 +1355,19 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
         p.round_corners(x + 1, cy + 1, card_w - 2, art_h, 14, PANEL);
         chip(p, x + 12, cy + 12, "PC", card_w - 24);
         p.paragraph(x + 14, cy + art_h + 10, card_w - 28, 21, &game.name, 14.0, W::Semi, TXT, 2);
+        if view.recommended && !game.genres.is_empty() {
+            let reasons = format!("Correspondance : {}", game.genres.join(" · "));
+            p.text_fit(
+                x + 14,
+                cy + art_h + 56,
+                16,
+                &reasons,
+                10.5,
+                W::Med,
+                VIO_HI,
+                card_w - 28,
+            );
+        }
         p.text(x + 14, cy + card_h - 29, 11, "Consulter la fiche produit", 11.5, W::Med, VIO_HI);
         p.icon(Icon::Info, x + card_w - 30, cy + card_h - 28, 14, VIO_HI, PANEL);
         p.hit_with(x, cy, card_w, card_h, 14, Action::SelectCatalogGame(game.amethys_id), false, Hover::Card);
