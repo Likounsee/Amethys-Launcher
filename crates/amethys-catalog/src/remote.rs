@@ -1452,7 +1452,7 @@ mod tests {
             "https://example.com/cover.jpg",
             "http://images.igdb.com/cover.jpg",
             "https://user@images.igdb.com/cover.jpg",
-            "https://images.igdb.com:443/cover.jpg",
+            "https://images.igdb.com:8443/cover.jpg",
             "javascript:alert(1)",
         ] {
             assert!(!is_valid_cover_url(url), "accepted unsafe cover URL: {url}");
