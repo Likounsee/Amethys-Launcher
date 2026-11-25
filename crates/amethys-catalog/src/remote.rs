@@ -459,12 +459,9 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             .map(|extension| directory.join(format!("{amethys_id}.{extension}")))
             .find(|path| path.is_file());
         if let Some(path) = cached {
-            let bytes =
-                fs::read(&path).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
-            if bytes.len() <= MAX_COVER_BYTES && image_extension(&bytes).is_some() {
+            if load_cached_cover(&path, MAX_COVER_BYTES)?.is_some() {
                 return Ok(Some(path));
             }
-            fs::remove_file(&path).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
         }
 
         let mut response = self
@@ -651,6 +648,25 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             }
         }
         Ok(bytes)
+    }
+}
+
+fn load_cached_cover(path: &Path, max_bytes: usize) -> RemoteCatalogResult<Option<Vec<u8>>> {
+    let bytes = match read_bounded_cache(path, max_bytes, "cached cover") {
+        Ok(bytes) => bytes,
+        Err(RemoteCatalogError::InvalidData(_)) => {
+            fs::remove_file(path)
+                .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+            return Ok(None);
+        }
+        Err(error) => return Err(error),
+    };
+
+    if image_extension(&bytes).is_some() {
+        Ok(Some(bytes))
+    } else {
+        fs::remove_file(path).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+        Ok(None)
     }
 }
 
@@ -1211,6 +1227,32 @@ mod tests {
         let mut oversized_metadata = manifest;
         oversized_metadata.metadata.genres.size = Some(MAX_DECOMPRESSED_FILE_BYTES as u64 + 1);
         assert!(validate_manifest(&oversized_metadata).is_err());
+    }
+
+    #[test]
+    fn cached_cover_rejects_oversized_and_invalid_files() {
+        let directory = tempfile::tempdir().unwrap();
+        let oversized = directory.path().join("oversized.jpg");
+        fs::write(&oversized, vec![0u8; 9 * 1024 * 1024]).unwrap();
+
+        assert!(load_cached_cover(&oversized, 8 * 1024 * 1024)
+            .unwrap()
+            .is_none());
+        assert!(!oversized.exists());
+
+        let invalid = directory.path().join("invalid.png");
+        fs::write(&invalid, b"not an image").unwrap();
+        assert!(load_cached_cover(&invalid, 8 * 1024 * 1024)
+            .unwrap()
+            .is_none());
+        assert!(!invalid.exists());
+
+        let valid = directory.path().join("valid.jpg");
+        fs::write(&valid, [0xff, 0xd8, 0xff, 0x00]).unwrap();
+        assert_eq!(
+            load_cached_cover(&valid, 8 * 1024 * 1024).unwrap(),
+            Some(vec![0xff, 0xd8, 0xff, 0x00])
+        );
     }
 
     #[test]
