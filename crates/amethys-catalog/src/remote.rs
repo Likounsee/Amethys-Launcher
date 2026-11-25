@@ -1446,10 +1446,7 @@ mod tests {
             "https://catalog.example/manifest.json",
             "https://catalog.example:443/manifest.json",
         ] {
-            assert!(is_same_https_origin(
-                &origin,
-                &Url::parse(url).unwrap()
-            ));
+            assert!(is_same_https_origin(&origin, &Url::parse(url).unwrap()));
         }
         for url in [
             "http://catalog.example/manifest.json",
@@ -1457,10 +1454,10 @@ mod tests {
             "https://catalog.example:8443/manifest.json",
             "https://user@catalog.example/manifest.json",
         ] {
-            assert!(!is_same_https_origin(
-                &origin,
-                &Url::parse(url).unwrap()
-            ), "accepted cross-origin redirect: {url}");
+            assert!(
+                !is_same_https_origin(&origin, &Url::parse(url).unwrap()),
+                "accepted cross-origin redirect: {url}"
+            );
         }
     }
 
