@@ -1121,6 +1121,58 @@ mod tests {
     }
 
     #[test]
+    fn detail_shard_validation_checks_metadata_and_source_identities() {
+        let valid = CatalogGameDetail {
+            amethys_id: 1001,
+            igdb_id: Some(77),
+            name: "Valid game".into(),
+            slug: Some("valid-game".into()),
+            summary: Some("A short summary".into()),
+            release_date: None,
+            cover_url: None,
+            genres: vec!["Adventure".into()],
+            source_ids: vec![CatalogSourceIdentity {
+                source: "igdb".into(),
+                external_id: "77".into(),
+            }],
+            stores: vec![CatalogStoreIdentity {
+                store: "gog".into(),
+                external_id: Some("12345".into()),
+                name: Some("Valid game".into()),
+                url: None,
+            }],
+        };
+        assert!(validate_detail_shard(&[valid.clone()], 1, 1000, 1).is_ok());
+
+        let mut invalid_name = valid.clone();
+        invalid_name.name = "  ".into();
+        assert!(validate_detail_shard(&[invalid_name], 1, 1000, 1).is_err());
+
+        let mut invalid_genre = valid.clone();
+        invalid_genre.genres = vec!["".into()];
+        assert!(validate_detail_shard(&[invalid_genre], 1, 1000, 1).is_err());
+
+        let mut invalid_source = valid.clone();
+        invalid_source.source_ids.push(invalid_source.source_ids[0].clone());
+        assert!(validate_detail_shard(&[invalid_source], 1, 1000, 1).is_err());
+
+        let mut invalid_store_url = valid;
+        invalid_store_url.stores[0].url = Some("x".repeat(2049));
+        assert!(validate_detail_shard(&[invalid_store_url], 1, 1000, 1).is_err());
+    }
+
+    #[test]
+    fn detail_shard_validation_checks_bucket_and_record_count() {
+        let record: CatalogGameDetail = serde_json::from_str(
+            r#"{"amethys_id":1001,"name":"Valid game"}"#,
+        )
+        .unwrap();
+        assert!(validate_detail_shard(&[record.clone()], 1, 1000, 1).is_ok());
+        assert!(validate_detail_shard(&[record.clone()], 2, 1000, 1).is_err());
+        assert!(validate_detail_shard(&[record], 1, 1000, 2).is_err());
+    }
+
+    #[test]
     fn cached_manifest_is_validated_before_offline_use() {
         let directory = tempfile::tempdir().unwrap();
         let client = RemoteCatalogClient::new(
