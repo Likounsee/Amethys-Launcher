@@ -1278,6 +1278,14 @@ mod tests {
         let manifest: CatalogManifest = serde_json::from_str(json).unwrap();
         assert!(validate_manifest(&manifest).is_ok());
 
+        let mut current_schema = manifest.clone();
+        current_schema.catalog_schema_version = 2;
+        assert!(validate_manifest(&current_schema).is_ok());
+
+        let mut unsupported_schema = manifest.clone();
+        unsupported_schema.catalog_schema_version = 3;
+        assert!(validate_manifest(&unsupported_schema).is_err());
+
         let mut wrong_total = manifest.clone();
         wrong_total.shards.files[0].game_count = 1;
         assert!(validate_manifest(&wrong_total).is_err());
