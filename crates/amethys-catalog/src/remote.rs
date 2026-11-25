@@ -1116,6 +1116,28 @@ mod tests {
         assert!(matches!(error, RemoteCatalogError::InvalidUrl(_)));
     }
 
+    #[tokio::test]
+    async fn cover_cache_reuses_a_valid_cached_png_without_network_access() {
+        let directory = tempfile::tempdir().unwrap();
+        let cover_dir = directory.path().join("covers");
+        std::fs::create_dir_all(&cover_dir).unwrap();
+        let cached = cover_dir.join("1001.png");
+        std::fs::write(&cached, b"\\x89PNG\\r\\n\\x1a\\nvalid-test-image").unwrap();
+
+        let client = RemoteCatalogClient::new(
+            StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
+            directory.path(),
+        )
+        .unwrap();
+
+        let result = client
+            .cache_cover(1001, "https://images.igdb.com/igdb/image/upload/t_cover_big/test.jpg")
+            .await
+            .unwrap();
+
+        assert_eq!(result.as_deref(), Some(cached.as_path()));
+    }
+
     #[test]
     fn rejects_non_sha256_hashes() {
         assert!(!valid_sha256("not-a-hash"));
