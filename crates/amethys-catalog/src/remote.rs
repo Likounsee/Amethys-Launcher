@@ -198,8 +198,7 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
                 let Some(original) = attempt.previous().first() else {
                     return attempt.stop();
                 };
-                if attempt.previous().len() >= 10
-                    || !is_same_https_origin(original, attempt.url())
+                if attempt.previous().len() >= 10 || !is_same_https_origin(original, attempt.url())
                 {
                     attempt.stop()
                 } else {
