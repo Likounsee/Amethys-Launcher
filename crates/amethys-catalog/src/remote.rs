@@ -545,11 +545,10 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
                     MAX_DECOMPRESSED_FILE_BYTES,
                     "cached detail shard",
                 )?;
-                let records: Vec<CatalogGameDetail> = serde_json::from_slice(&bytes).map_err(
-                    |error| {
+                let records: Vec<CatalogGameDetail> =
+                    serde_json::from_slice(&bytes).map_err(|error| {
                         RemoteCatalogError::InvalidData(format!("cached shard JSON: {error}"))
-                    },
-                )?;
+                    })?;
                 (records, false)
             } else {
                 let url = self.file_url(&descriptor.file)?;
@@ -659,8 +658,8 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
 }
 
 fn read_bounded_cache(path: &Path, max_bytes: usize, label: &str) -> RemoteCatalogResult<Vec<u8>> {
-    let file = fs::File::open(path)
-        .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+    let file =
+        fs::File::open(path).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
     let metadata = file
         .metadata()
         .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
@@ -727,9 +726,10 @@ fn validate_detail_shard(
                 .as_ref()
                 .is_some_and(|value| value.len() > 2048 || value.contains('\0'))
             || record.genres.len() > 64
-            || record.genres.iter().any(|value| {
-                value.trim().is_empty() || value.len() > 128 || value.contains('\0')
-            })
+            || record
+                .genres
+                .iter()
+                .any(|value| value.trim().is_empty() || value.len() > 128 || value.contains('\0'))
             || record.source_ids.len() > 64
             || record.stores.len() > 64
         {
@@ -925,9 +925,7 @@ fn image_extension(bytes: &[u8]) -> Option<&'static str> {
 fn validate_manifest(manifest: &CatalogManifest) -> RemoteCatalogResult<()> {
     // Schema 2 adds source identities and other provider-independent fields.
     // Keep schema 1 readable because its optional fields have serde defaults.
-    if manifest.manifest_schema_version != 2
-        || !matches!(manifest.catalog_schema_version, 1 | 2)
-    {
+    if manifest.manifest_schema_version != 2 || !matches!(manifest.catalog_schema_version, 1 | 2) {
         return Err(RemoteCatalogError::InvalidData(
             "unsupported catalogue manifest/schema version".into(),
         ));
