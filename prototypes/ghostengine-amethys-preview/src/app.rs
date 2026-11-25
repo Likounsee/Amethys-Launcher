@@ -702,11 +702,19 @@ impl App {
                 }
                 self.store_detail = Some(*detail);
                 self.store_error = None;
-                self.page = Page::StoreProduct;
-                self.keyboard_focus = None;
-                self.start_page_fade();
+                // The StoreProduct page is selected when the request starts.
+                // Do not navigate here: the user may have returned to Store
+                // while the detail worker was still running.
             }
-            StoreTaskResult::Detail(Err(error)) => self.store_error = Some(error),
+            StoreTaskResult::Detail(Err(error)) => {
+                // A failed detail request should not leave a stale error on the
+                // Store page if the user already navigated back.
+                if self.page == Page::StoreProduct {
+                    self.store_error = Some(error);
+                } else {
+                    self.store_error = None;
+                }
+            }
             StoreTaskResult::Synchronized(Ok((version, count))) => {
                 self.store_catalog_version = Some(version);
                 self.store_game_count = Some(count);
