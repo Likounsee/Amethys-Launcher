@@ -961,18 +961,21 @@ mod tests {
                 name: "A Game".into(),
                 slug: Some("clair-obscur-expedition-33".into()),
                 genres: vec!["RPG".into()],
+                cover_url: None,
             },
             CatalogSearchEntry {
                 amethys_id: 20,
                 name: "Clair Obscur: Expedition 33".into(),
                 slug: Some("expedition-33".into()),
                 genres: vec!["Adventure".into()],
+                cover_url: None,
             },
             CatalogSearchEntry {
                 amethys_id: 10,
                 name: "Another Title".into(),
                 slug: None,
                 genres: vec!["Action RPG".into()],
+                cover_url: None,
             },
         ];
 
@@ -1024,18 +1027,21 @@ mod tests {
                 name: "Owned".into(),
                 slug: None,
                 genres: vec!["Action".into()],
+                cover_url: None,
             },
             CatalogSearchEntry {
                 amethys_id: 2,
                 name: "Puzzle".into(),
                 slug: None,
                 genres: vec!["Puzzle".into()],
+                cover_url: None,
             },
             CatalogSearchEntry {
                 amethys_id: 3,
                 name: "Action Adventure".into(),
                 slug: None,
                 genres: vec!["Action".into(), "Adventure".into()],
+                cover_url: None,
             },
         ];
         let results = client
@@ -1069,18 +1075,21 @@ mod tests {
                 name: "Clair-Obscur Expedition 33".into(),
                 slug: None,
                 genres: vec!["RPG".into(), "Adventure".into()],
+                cover_url: None,
             },
             CatalogSearchEntry {
                 amethys_id: 11,
                 name: "Another RPG".into(),
                 slug: None,
                 genres: vec!["RPG".into()],
+                cover_url: None,
             },
             CatalogSearchEntry {
                 amethys_id: 12,
                 name: "Puzzle World".into(),
                 slug: None,
                 genres: vec!["Puzzle".into()],
+                cover_url: None,
             },
         ];
         let results = client
