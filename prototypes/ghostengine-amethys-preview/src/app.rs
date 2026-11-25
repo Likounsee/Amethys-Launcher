@@ -584,6 +584,15 @@ impl App {
         match result {
             StoreTaskResult::Search(Ok(games)) => {
                 self.store_results = games;
+                for game in &self.store_results {
+                    if let Some(path) = game.cover_cache_path.as_deref() {
+                        let game_id = game.amethys_id.to_string();
+                        let _ = self.covers.load_library_cover(
+                            &game_id,
+                            std::path::Path::new(path),
+                        );
+                    }
+                }
                 self.store_error = None;
             }
             StoreTaskResult::Search(Err(error)) => self.store_error = Some(error),
