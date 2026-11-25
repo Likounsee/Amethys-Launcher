@@ -846,9 +846,10 @@ fn validate_cached_search_entries(entries: &[CatalogSearchEntry]) -> RemoteCatal
                 .as_ref()
                 .is_some_and(|slug| slug.len() > 512 || slug.contains('\0'))
             || entry.genres.len() > 128
-            || entry.genres.iter().any(|genre| {
-                genre.trim().is_empty() || genre.len() > 128 || genre.contains('\0')
-            })
+            || entry
+                .genres
+                .iter()
+                .any(|genre| genre.trim().is_empty() || genre.len() > 128 || genre.contains('\0'))
             || entry
                 .cover_url
                 .as_ref()
