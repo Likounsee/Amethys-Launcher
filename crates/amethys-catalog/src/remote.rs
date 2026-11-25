@@ -489,13 +489,9 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         }
         let url = Url::parse(cover_url)
             .map_err(|error| RemoteCatalogError::InvalidUrl(error.to_string()))?;
-        if url.scheme() != "https"
-            || url.host_str() != Some("images.igdb.com")
-            || !url.username().is_empty()
-            || url.password().is_some()
-        {
+        if !is_valid_cover_url(cover_url) {
             return Err(RemoteCatalogError::InvalidUrl(
-                "cover URL must use the trusted HTTPS IGDB image host".into(),
+                "cover URL must use the trusted HTTPS IGDB image origin".into(),
             ));
         }
 
