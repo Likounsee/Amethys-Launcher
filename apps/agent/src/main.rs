@@ -283,13 +283,14 @@ where
             owned_names,
             limit,
         } => {
-            let response = match recommend_master_catalog(genres, owned_ids, owned_names, *limit).await {
-                Ok(payload) => IpcResponse::success(request.request_id, payload),
-                Err(message) => IpcResponse::failure(
-                    request.request_id,
-                    IpcRemoteError::new("AM-CATALOG-0004", message),
-                ),
-            };
+            let response =
+                match recommend_master_catalog(genres, owned_ids, owned_names, *limit).await {
+                    Ok(payload) => IpcResponse::success(request.request_id, payload),
+                    Err(message) => IpcResponse::failure(
+                        request.request_id,
+                        IpcRemoteError::new("AM-CATALOG-0004", message),
+                    ),
+                };
             write_message(stream, &response).await?;
             return Ok(());
         }
