@@ -259,8 +259,8 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
     /// Loads the offline search index if a previous verified sync exists.
     pub fn load_cached_index(&self) -> RemoteCatalogResult<Vec<CatalogSearchEntry>> {
         let path = self.cache_dir.join("index").join("games-index.json");
-        let metadata = fs::metadata(&path)
-            .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+        let metadata =
+            fs::metadata(&path).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
         if metadata.len() > MAX_DECOMPRESSED_FILE_BYTES as u64 {
             return Err(RemoteCatalogError::InvalidData(
                 "cached search index exceeds size limit".into(),
@@ -673,7 +673,10 @@ fn validate_cached_search_entries(entries: &[CatalogSearchEntry]) -> RemoteCatal
             || entry.name.len() > 512
             || entry.slug.as_ref().is_some_and(|slug| slug.len() > 512)
             || entry.genres.len() > 128
-            || entry.genres.iter().any(|genre| genre.trim().is_empty() || genre.len() > 128)
+            || entry
+                .genres
+                .iter()
+                .any(|genre| genre.trim().is_empty() || genre.len() > 128)
             || entry.cover_url.as_ref().is_some_and(|url| url.len() > 2048)
         {
             return Err(RemoteCatalogError::InvalidData(
@@ -691,13 +694,13 @@ fn parse_search_index_rows(
 ) -> RemoteCatalogResult<Vec<CatalogSearchEntry>> {
     // Keep published legacy indexes readable while validating each optional
     // field instead of silently discarding malformed genres or artwork URLs.
-    let rows: Vec<serde_json::Value> = serde_json::from_slice(bytes).map_err(|error| {
-        RemoteCatalogError::InvalidData(format!("search index JSON: {error}"))
-    })?;
+    let rows: Vec<serde_json::Value> = serde_json::from_slice(bytes)
+        .map_err(|error| RemoteCatalogError::InvalidData(format!("search index JSON: {error}")))?;
     if rows.len() as u64 != expected_count {
         return Err(RemoteCatalogError::InvalidData(format!(
             "search index has {} rows; manifest declares {}",
-            rows.len(), expected_count
+            rows.len(),
+            expected_count
         )));
     }
 
@@ -712,14 +715,12 @@ fn parse_search_index_rows(
                 "search index row has an unsupported field count".into(),
             ));
         }
-        let id = fields[0].as_u64().ok_or_else(|| {
-            RemoteCatalogError::InvalidData("search index ID is invalid".into())
-        })?;
+        let id = fields[0]
+            .as_u64()
+            .ok_or_else(|| RemoteCatalogError::InvalidData("search index ID is invalid".into()))?;
         let name = fields[1]
             .as_str()
-            .ok_or_else(|| {
-                RemoteCatalogError::InvalidData("search index name is invalid".into())
-            })?
+            .ok_or_else(|| RemoteCatalogError::InvalidData("search index name is invalid".into()))?
             .to_owned();
         let slug = if fields[2].is_null() {
             None
