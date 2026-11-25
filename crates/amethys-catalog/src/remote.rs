@@ -1022,7 +1022,9 @@ fn image_extension(bytes: &[u8]) -> Option<&'static str> {
 fn validate_manifest(manifest: &CatalogManifest) -> RemoteCatalogResult<()> {
     // Schema 2 adds source identities and other provider-independent fields.
     // Keep schema 1 readable because its optional fields have serde defaults.
-    if manifest.manifest_schema_version != 2 || !matches!(manifest.catalog_schema_version, 1 | 2) {
+    if !matches!(manifest.manifest_schema_version, 1 | 2)
+        || !matches!(manifest.catalog_schema_version, 1 | 2)
+    {
         return Err(RemoteCatalogError::InvalidData(
             "unsupported catalogue manifest/schema version".into(),
         ));
@@ -1248,6 +1250,12 @@ mod tests {
         }"#).unwrap();
         validate_manifest(&manifest).unwrap();
         assert_eq!(manifest.game_count, 1);
+
+        // Schema 1 remains readable for caches created by earlier launcher
+        // versions; schema 2 only adds optional provider-independent fields.
+        let mut legacy_manifest = manifest;
+        legacy_manifest.manifest_schema_version = 1;
+        validate_manifest(&legacy_manifest).unwrap();
     }
 
     #[test]
