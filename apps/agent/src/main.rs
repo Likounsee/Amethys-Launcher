@@ -421,7 +421,17 @@ where
                         database
                             .get_game_by_platform_id(&platform, platform_id)
                             .and_then(|existing| match existing {
-                                Some(game) => Ok(game),
+                                Some(game) => database.refresh_detected_installation(
+                                    &game.id,
+                                    &name,
+                                    &install_path,
+                                    executable.as_deref(),
+                                ).and_then(|refreshed| {
+                                    refreshed.ok_or_else(|| amethys_errors::AmethysError::new(
+                                        amethys_errors::ErrorCode::StorageQuery,
+                                        "Detected game disappeared while refreshing its installation.",
+                                    ))
+                                }),
                                 None => {
                                     // A previously imported entry may predate stable
                                     // platform IDs. Reuse it only when its identity is
@@ -1273,7 +1283,7 @@ mod tests {
         };
 
         // A second scan may observe renamed or relocated metadata for the same
-        // platform identity. It must reuse the existing library entry.
+        // platform identity. Refresh the existing entry instead of retaining a stale path.
         let second = round_trip(
             &database,
             &state,
@@ -1291,7 +1301,11 @@ mod tests {
             other => panic!("unexpected repeat import response: {other:?}"),
         };
 
-        assert_eq!(second_game, first_game);
+        assert_eq!(second_game.id, first_game.id);
+        assert_eq!(second_game.platform_id.as_deref(), Some("570"));
+        assert_eq!(second_game.name, "Updated name");
+        assert_eq!(second_game.install_path, "/games/moved");
+        assert_eq!(second_game.executable.as_deref(), Some("game.exe"));
         let games = database
             .lock()
             .await
@@ -1299,8 +1313,8 @@ mod tests {
             .expect("list imported games");
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].id, first_game.id);
-        assert_eq!(games[0].name, "Original name");
-        assert_eq!(games[0].install_path, "/games/original");
+        assert_eq!(games[0].name, "Updated name");
+        assert_eq!(games[0].install_path, "/games/moved");
     }
 
     #[tokio::test]
