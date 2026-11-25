@@ -176,6 +176,12 @@ pub struct IpcCatalogSearchEntry {
     pub slug: Option<String>,
     #[serde(default)]
     pub genres: Vec<String>,
+    /// Optional cover URL from the catalogue search index.
+    #[serde(default)]
+    pub cover_url: Option<String>,
+    /// Optional path to a validated local cover cache copy.
+    #[serde(default)]
+    pub cover_cache_path: Option<String>,
 }
 
 /// A provider-independent source identity attached to a master-catalogue game.
