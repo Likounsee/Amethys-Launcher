@@ -669,7 +669,14 @@ impl App {
                     self.start_store_task(false);
                     return;
                 }
-                self.store_error = Some("La requête du catalogue s'est interrompue.".to_owned());
+                if (self.page == Page::Store && !self.store_promotions)
+                    || self.page == Page::StoreProduct
+                {
+                    self.store_error =
+                        Some("La requête du catalogue s'est interrompue.".to_owned());
+                } else {
+                    self.store_error = None;
+                }
                 self.render(false);
                 return;
             }
@@ -692,7 +699,13 @@ impl App {
                 }
                 self.store_error = None;
             }
-            StoreTaskResult::Search(Err(error)) => self.store_error = Some(error),
+            StoreTaskResult::Search(Err(error)) => {
+                if self.page == Page::Store && !self.store_promotions {
+                    self.store_error = Some(error);
+                } else {
+                    self.store_error = None;
+                }
+            }
             StoreTaskResult::Detail(Ok(detail)) => {
                 if let Some(path) = detail.cover_cache_path.as_deref() {
                     let game_id = detail.amethys_id.to_string();
@@ -724,7 +737,13 @@ impl App {
                 self.store_refresh_pending = false;
                 self.start_store_task(false);
             }
-            StoreTaskResult::Synchronized(Err(error)) => self.store_error = Some(error),
+            StoreTaskResult::Synchronized(Err(error)) => {
+                if self.page == Page::Store && !self.store_promotions {
+                    self.store_error = Some(error);
+                } else {
+                    self.store_error = None;
+                }
+            }
         }
         if self.store_refresh_pending
             && self.page == Page::Store
