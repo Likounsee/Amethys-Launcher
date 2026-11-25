@@ -1076,10 +1076,48 @@ mod tests {
     }
 
     #[test]
-    fn search_index_tuple_decodes_with_optional_slug() {
-        let rows: Vec<(u64, String, Option<String>)> =
-            serde_json::from_str(r#"[[1001,"Example", "example"],[1002,"No slug",null]]"#).unwrap();
-        assert_eq!(rows[1].2, None);
+    fn search_index_parser_accepts_legacy_genre_and_artwork_rows() {
+        let entries = parse_search_index_rows(
+            br#"[
+                [1001, "Legacy", "legacy"],
+                [1002, "Genre aware", null, ["Action", "RPG"]],
+                [1003, "Artwork aware", "artwork-aware", ["Adventure"], " https://images.igdb.com/cover.jpg "]
+            ]"#,
+            3,
+        )
+        .unwrap();
+
+        assert_eq!(entries.len(), 3);
+        assert_eq!(entries[0].amethys_id, 1001);
+        assert_eq!(entries[0].slug.as_deref(), Some("legacy"));
+        assert!(entries[0].genres.is_empty());
+        assert_eq!(entries[0].cover_url, None);
+        assert_eq!(entries[1].slug, None);
+        assert_eq!(entries[1].genres, vec!["Action", "RPG"]);
+        assert_eq!(entries[1].cover_url, None);
+        assert_eq!(entries[2].genres, vec!["Adventure"]);
+        assert_eq!(
+            entries[2].cover_url.as_deref(),
+            Some("https://images.igdb.com/cover.jpg")
+        );
+    }
+
+    #[test]
+    fn search_index_parser_rejects_malformed_rows_and_count_mismatches() {
+        let invalid_rows: &[&[u8]] = &[
+            br#"[[1001, "Missing fields"]]"#,
+            br#"[[1001, "Bad genres", "bad-genres", "Action"]]"#,
+            br#"[[1001, "Bad genre value", "bad-genre-value", ["Action", 7]]]"#,
+            br#"[[1001, "Bad cover", "bad-cover", [], 42]]"#,
+            br#"[[1002, "Out of order", null], [1001, "Earlier", null]]"#,
+            br#"[[0, "Zero ID", null]]"#,
+        ];
+        for rows in invalid_rows {
+            assert!(parse_search_index_rows(rows, 1).is_err());
+        }
+
+        assert!(parse_search_index_rows(br#"[[1001, "One", null]]"#, 2).is_err());
+        assert!(parse_search_index_rows(br#"[{"id":1001}]"#, 1).is_err());
     }
 
     #[test]
