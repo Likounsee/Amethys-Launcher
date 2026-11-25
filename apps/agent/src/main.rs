@@ -1336,7 +1336,7 @@ mod tests {
         assert_eq!(second_game.id, first_game.id);
         assert_eq!(second_game.platform_id.as_deref(), Some("570"));
         assert_eq!(second_game.name, "Updated name");
-        assert_eq!(second_game.install_path, "/games/moved");
+        assert_eq!(second_game.install_path, moved_path.to_string_lossy());
         assert_eq!(second_game.executable.as_deref(), Some("game.exe"));
         let games = database
             .lock()
@@ -1346,7 +1346,7 @@ mod tests {
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].id, first_game.id);
         assert_eq!(games[0].name, "Updated name");
-        assert_eq!(games[0].install_path, moved_path.to_string_lossy());
+        assert_eq!(games[0].install_path, moved_path.to_string_lossy().into_owned());
         drop(database);
         std::fs::remove_dir_all(root).expect("remove installation fixture");
     }
@@ -1395,8 +1395,8 @@ mod tests {
         assert_eq!(detected_game.id, legacy_game.id);
         assert_eq!(detected_game.platform_id.as_deref(), Some("12345"));
 
-        // Once upgraded, the stable source ID must find the same library row
-        // even if the launcher later reports a changed installation path.
+        // Once upgraded, the stable source ID must find the same library row.
+        // A non-existent replacement path must not overwrite the valid saved path.
         let moved = round_trip(
             &database,
             &state,
