@@ -660,6 +660,15 @@ impl App {
             Some(Err(std::sync::mpsc::TryRecvError::Disconnected)) => {
                 self.store_receiver = None;
                 self.store_loading = false;
+                // If a newer query/profile arrived while the worker was running,
+                // prefer that latest request over surfacing an obsolete failure.
+                if self.store_refresh_pending
+                    && self.page == Page::Store
+                    && !self.store_promotions
+                {
+                    self.start_store_task(false);
+                    return;
+                }
                 self.store_error = Some("La requête du catalogue s'est interrompue.".to_owned());
                 self.render(false);
                 return;
