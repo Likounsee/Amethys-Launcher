@@ -489,7 +489,36 @@ where
                                 && same_install_path(&game.install_path, &install_path)
                         });
                         match existing {
-                            Some(game) => Ok(game),
+                            Some(game) => {
+                                // Even without a stable provider ID, a repeated
+                                // discovery at the same installation path can refresh
+                                // the display name and executable metadata in place.
+                                // Keep saved values when the scan points at a path
+                                // that is no longer present.
+                                let detected_path_is_valid =
+                                    std::path::Path::new(&install_path).is_dir();
+                                let (refresh_path, refresh_executable) =
+                                    if detected_path_is_valid {
+                                        (install_path.as_str(), executable.as_deref())
+                                    } else {
+                                        (game.install_path.as_str(), None)
+                                    };
+                                database
+                                    .refresh_detected_installation(
+                                        &game.id,
+                                        &name,
+                                        refresh_path,
+                                        refresh_executable,
+                                    )
+                                    .and_then(|refreshed| {
+                                        refreshed.ok_or_else(|| {
+                                            amethys_errors::AmethysError::new(
+                                                amethys_errors::ErrorCode::StorageQuery,
+                                                "Detected game disappeared while refreshing its installation.",
+                                            )
+                                        })
+                                    })
+                            }
                             None => database.add_game_with_platform_id(
                                 &name,
                                 &platform,
@@ -1424,6 +1453,67 @@ mod tests {
         assert_eq!(games[0].platform_id.as_deref(), Some("12345"));
         assert_eq!(games[0].install_path, "/games/legacy");
         assert_eq!(games[0].executable.as_deref(), Some("legacy.exe"));
+    }
+
+    #[tokio::test]
+    async fn repeated_import_without_platform_id_refreshes_metadata_in_place() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-legacy-refresh-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create installation directory");
+        let install_path = root.to_string_lossy().into_owned();
+        let database = Arc::new(Mutex::new(
+            Database::open(":memory:").expect("database opens"),
+        ));
+        let state = Arc::new(AtomicU8::new(super::STATE_RUNNING));
+
+        let first = round_trip(
+            &database,
+            &state,
+            IpcCommand::AddDetectedGame {
+                name: "Old display name".to_owned(),
+                platform: "Legacy".to_owned(),
+                platform_id: None,
+                install_path: install_path.clone(),
+                executable: None,
+            },
+        )
+        .await;
+        let first_game = match first.result.expect("first import succeeds") {
+            amethys_ipc::IpcResponsePayload::GameAdded { game } => game,
+            other => panic!("unexpected first import response: {other:?}"),
+        };
+
+        let second = round_trip(
+            &database,
+            &state,
+            IpcCommand::AddDetectedGame {
+                name: "Updated display name".to_owned(),
+                platform: "legacy".to_owned(),
+                platform_id: None,
+                install_path: install_path.clone(),
+                executable: Some("updated.exe".to_owned()),
+            },
+        )
+        .await;
+        let second_game = match second.result.expect("repeat import succeeds") {
+            amethys_ipc::IpcResponsePayload::GameAdded { game } => game,
+            other => panic!("unexpected repeat import response: {other:?}"),
+        };
+
+        assert_eq!(second_game.id, first_game.id);
+        assert_eq!(second_game.name, "Updated display name");
+        assert_eq!(second_game.install_path, install_path);
+        assert_eq!(second_game.executable.as_deref(), Some("updated.exe"));
+        let games = database.lock().await.list_games().expect("list games");
+        assert_eq!(games.len(), 1);
+        drop(database);
+        std::fs::remove_dir_all(root).expect("remove installation fixture");
     }
 
     #[tokio::test]
