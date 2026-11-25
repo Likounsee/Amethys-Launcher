@@ -793,9 +793,24 @@ impl App {
         let mut genres = Vec::new();
         let mut owned_ids = Vec::new();
         let mut owned_names = Vec::with_capacity(self.games.len());
+        let mut seen_games = std::collections::HashSet::new();
         for game in &self.games {
+            // Multiple local installations of one canonical game must not
+            // amplify its genre weights in the personalized Store profile.
+            let identity = game
+                .catalogue_game_id
+                .as_deref()
+                .map(|id| format!("id:{id}"))
+                .unwrap_or_else(|| format!("name:{}", game.name.trim().to_lowercase()));
+            if !seen_games.insert(identity) {
+                continue;
+            }
             owned_names.push(game.name.clone());
-            if let Some(id) = game.catalogue_game_id.as_deref().and_then(|value| value.parse::<u64>().ok()) {
+            if let Some(id) = game
+                .catalogue_game_id
+                .as_deref()
+                .and_then(|value| value.parse::<u64>().ok())
+            {
                 owned_ids.push(id);
             }
             if let Some(metadata) = game.catalogue_metadata.as_ref() {
