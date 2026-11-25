@@ -64,8 +64,10 @@ async fn cache_visible_covers(
         });
     }
 
-    while let Some(Ok((index, path))) = tasks.join_next().await {
-        paths[index] = path;
+    while let Some(result) = tasks.join_next().await {
+        if let Ok((index, path)) = result {
+            paths[index] = path;
+        }
     }
 
     paths
