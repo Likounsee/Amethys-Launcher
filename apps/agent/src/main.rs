@@ -421,17 +421,37 @@ where
                         database
                             .get_game_by_platform_id(&platform, platform_id)
                             .and_then(|existing| match existing {
-                                Some(game) => database.refresh_detected_installation(
-                                    &game.id,
-                                    &name,
-                                    &install_path,
-                                    executable.as_deref(),
-                                ).and_then(|refreshed| {
-                                    refreshed.ok_or_else(|| amethys_errors::AmethysError::new(
-                                        amethys_errors::ErrorCode::StorageQuery,
-                                        "Detected game disappeared while refreshing its installation.",
-                                    ))
-                                }),
+                                Some(game) => {
+                                    // A stable platform ID identifies the game, not
+                                    // necessarily this particular installation path.
+                                    // Only replace the saved location when discovery
+                                    // points to a directory that currently exists;
+                                    // this prevents stale/secondary scan results from
+                                    // silently overwriting a valid local installation.
+                                    let detected_path_is_valid =
+                                        std::path::Path::new(&install_path).is_dir();
+                                    let (refresh_path, refresh_executable) =
+                                        if detected_path_is_valid {
+                                            (install_path.as_str(), executable.as_deref())
+                                        } else {
+                                            (game.install_path.as_str(), None)
+                                        };
+                                    database
+                                        .refresh_detected_installation(
+                                            &game.id,
+                                            &name,
+                                            refresh_path,
+                                            refresh_executable,
+                                        )
+                                        .and_then(|refreshed| {
+                                            refreshed.ok_or_else(|| {
+                                                amethys_errors::AmethysError::new(
+                                                    amethys_errors::ErrorCode::StorageQuery,
+                                                    "Detected game disappeared while refreshing its installation.",
+                                                )
+                                            })
+                                        })
+                                },
                                 None => {
                                     // A previously imported entry may predate stable
                                     // platform IDs. Reuse it only when its identity is
@@ -1260,6 +1280,17 @@ mod tests {
 
     #[tokio::test]
     async fn importing_the_same_platform_game_twice_is_idempotent_over_ipc() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-platform-move-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let original_path = root.join("original");
+        let moved_path = root.join("moved");
+        std::fs::create_dir_all(&original_path).expect("create original installation");
         let database = Arc::new(Mutex::new(
             Database::open(":memory:").expect("database opens"),
         ));
@@ -1272,7 +1303,7 @@ mod tests {
                 name: "Original name".to_owned(),
                 platform: "Steam".to_owned(),
                 platform_id: Some("570".to_owned()),
-                install_path: "/games/original".to_owned(),
+                install_path: original_path.to_string_lossy().into_owned(),
                 executable: None,
             },
         )
@@ -1282,8 +1313,9 @@ mod tests {
             other => panic!("unexpected first import response: {other:?}"),
         };
 
-        // A second scan may observe renamed or relocated metadata for the same
-        // platform identity. Refresh the existing entry instead of retaining a stale path.
+        // Simulate a real move: the previous directory disappears and the
+        // newly discovered installation exists at its replacement path.
+        std::fs::rename(&original_path, &moved_path).expect("move installation directory");
         let second = round_trip(
             &database,
             &state,
@@ -1291,7 +1323,7 @@ mod tests {
                 name: "Updated name".to_owned(),
                 platform: "steam".to_owned(),
                 platform_id: Some("570".to_owned()),
-                install_path: "/games/moved".to_owned(),
+                install_path: moved_path.to_string_lossy().into_owned(),
                 executable: Some("game.exe".to_owned()),
             },
         )
@@ -1314,7 +1346,9 @@ mod tests {
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].id, first_game.id);
         assert_eq!(games[0].name, "Updated name");
-        assert_eq!(games[0].install_path, "/games/moved");
+        assert_eq!(games[0].install_path, moved_path.to_string_lossy());
+        drop(database);
+        std::fs::remove_dir_all(root).expect("remove installation fixture");
     }
 
     #[tokio::test]
