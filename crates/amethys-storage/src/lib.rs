@@ -1113,6 +1113,42 @@ impl Database {
         self.get_game(id)
     }
 
+    /// Refreshes the installation details from a trusted local discovery adapter.
+    ///
+    /// The stable local library ID and platform identity are preserved. A missing
+    /// newly detected executable does not erase a user-configured executable.
+    pub fn refresh_detected_installation(
+        &self,
+        id: &str,
+        name: &str,
+        install_path: &str,
+        executable: Option<&str>,
+    ) -> Result<Option<GameEntry>, AmethysError> {
+        let id = validate_game_id(id)?;
+        let name = name.trim();
+        let install_path = install_path.trim();
+        let executable = executable.map(str::trim).filter(|value| !value.is_empty());
+
+        if name.is_empty() || install_path.is_empty()
+            || name.len() > MAX_GAME_NAME_BYTES
+            || install_path.len() > MAX_GAME_PATH_BYTES
+            || name.contains('\0') || install_path.contains('\0')
+            || executable.is_some_and(|value| value.len() > MAX_GAME_PATH_BYTES || value.contains('\0'))
+        {
+            return Err(storage_error("Detected installation metadata is invalid."));
+        }
+
+        self.connection
+            .execute(
+                "UPDATE games
+                 SET name = ?1, install_path = ?2, executable = COALESCE(?3, executable)
+                 WHERE id = ?4",
+                params![name, install_path, executable, id],
+            )
+            .map_err(|error| storage_error(format!("Could not refresh detected installation: {error}")))?;
+        self.get_game(id)
+    }
+
     /// Removes a game. Returns false when its identifier was not present.
     pub fn remove_game(&self, id: &str) -> Result<bool, AmethysError> {
         let id = validate_game_id(id)?;
@@ -1561,6 +1597,67 @@ mod tests {
                 .expect("missing game ignored")
         );
     }
+    #[test]
+    fn refreshing_detected_installation_updates_moved_path_without_changing_library_id() {
+        let database = Database::open(":memory:").expect("database opens");
+        let original = database
+            .add_game_with_platform_id(
+                "Old title",
+                "Steam",
+                Some("570"),
+                "/games/old-location",
+                Some("/games/old-location/game.exe"),
+            )
+            .expect("initial installation is added");
+
+        let refreshed = database
+            .refresh_detected_installation(
+                &original.id,
+                "Dota 2",
+                "/games/new-location",
+                Some("/games/new-location/game.exe"),
+            )
+            .expect("detected installation refresh succeeds")
+            .expect("installation remains present");
+
+        assert_eq!(refreshed.id, original.id);
+        assert_eq!(refreshed.platform_id.as_deref(), Some("570"));
+        assert_eq!(refreshed.name, "Dota 2");
+        assert_eq!(refreshed.install_path, "/games/new-location");
+        assert_eq!(
+            refreshed.executable.as_deref(),
+            Some("/games/new-location/game.exe")
+        );
+        assert_eq!(database.list_games().expect("list games").len(), 1);
+    }
+
+    #[test]
+    fn refreshing_detected_installation_preserves_manual_executable_when_discovery_has_none() {
+        let database = Database::open(":memory:").expect("database opens");
+        let original = database
+            .add_game_with_platform_id(
+                "Example",
+                "Steam",
+                Some("123"),
+                "/games/old",
+                Some("custom-launcher.exe"),
+            )
+            .expect("initial installation is added");
+
+        let refreshed = database
+            .refresh_detected_installation(
+                &original.id,
+                "Example renamed",
+                "/games/new",
+                None,
+            )
+            .expect("refresh succeeds")
+            .expect("installation remains present");
+
+        assert_eq!(refreshed.install_path, "/games/new");
+        assert_eq!(refreshed.executable.as_deref(), Some("custom-launcher.exe"));
+    }
+
     #[test]
     fn legacy_game_can_be_upgraded_with_platform_identity_without_changing_library_id() {
         let database = Database::open(":memory:").expect("database opens");
