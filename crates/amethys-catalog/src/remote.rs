@@ -1603,10 +1603,8 @@ mod tests {
         .unwrap();
         assert!(parse_search_index_rows(&too_many_genres, 1).is_err());
 
-        let oversized_cover = format!(
-            r#"[[1001, "Game", null, [], "{}"]]"#,
-            format!("https://images.igdb.com/{}", "c".repeat(2048))
-        );
+        let oversized_cover_url = format!("https://images.igdb.com/{}", "c".repeat(2048));
+        let oversized_cover = format!(r#"[[1001, "Game", null, [], "{oversized_cover_url}"]]"#);
         assert!(parse_search_index_rows(oversized_cover.as_bytes(), 1).is_err());
     }
 
