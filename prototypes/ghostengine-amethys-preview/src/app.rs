@@ -83,10 +83,12 @@ fn recommendation_profile_for_games(
             .as_deref()
             .and_then(|value| value.parse::<u64>().ok())
             .filter(|id| *id != 0);
-        let duplicate_id = catalogue_id.is_some_and(|id| !seen_ids.insert(id));
-        let duplicate_name = !normalized_name.is_empty()
-            && !seen_names.insert(normalized_name);
-        if duplicate_id || duplicate_name {
+        let duplicate = if let Some(id) = catalogue_id {
+            !seen_ids.insert(id)
+        } else {
+            !normalized_name.is_empty() && !seen_names.insert(normalized_name)
+        };
+        if duplicate {
             continue;
         }
 
@@ -2056,12 +2058,20 @@ mod tests {
             make_game("00042", "Clair Obscur Expedition 33", &["RPG", "Adventure"]),
             make_game("77", "Another Game", &["Puzzle"]),
             make_game("not-a-number", "Another-Game", &["Puzzle"]),
+            make_game("88", "Another Game", &["Strategy"]),
         ];
         let (genres, ids, names) = recommendation_profile_for_games(&games);
 
-        assert_eq!(ids, vec![42, 77]);
-        assert_eq!(names, vec!["Clair-Obscur: Expedition 33", "Another Game"]);
-        assert_eq!(genres, vec!["RPG", "Adventure", "Puzzle"]);
+        assert_eq!(ids, vec![42, 77, 88]);
+        assert_eq!(
+            names,
+            vec![
+                "Clair-Obscur: Expedition 33",
+                "Another Game",
+                "Another Game"
+            ]
+        );
+        assert_eq!(genres, vec!["RPG", "Adventure", "Puzzle", "Strategy"]);
     }
 
     #[test]
