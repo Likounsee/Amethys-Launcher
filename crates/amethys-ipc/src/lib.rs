@@ -197,6 +197,9 @@ pub struct IpcCatalogGameDetail {
     pub summary: Option<String>,
     pub release_date: Option<String>,
     pub cover_url: Option<String>,
+    /// Optional path to a validated local cache copy of the cover image.
+    #[serde(default)]
+    pub cover_cache_path: Option<String>,
     pub genres: Vec<String>,
     #[serde(default)]
     pub source_ids: Vec<IpcCatalogSourceIdentity>,
