@@ -350,6 +350,24 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         owned_names: &[String],
         limit: usize,
     ) -> RemoteCatalogResult<Vec<CatalogSearchEntry>> {
+        Ok(self
+            .recommend_cached_with_reasons(entries, owned_genres, owned_ids, owned_names, limit)?
+            .into_iter()
+            .map(|(entry, _)| entry)
+            .collect())
+    }
+
+    /// Returns personalized results together with the genres that contributed
+    /// to each result's score. Reasons are derived from the same canonical
+    /// genre weights used for ranking, so the UI never invents an explanation.
+    pub fn recommend_cached_with_reasons(
+        &self,
+        entries: &[CatalogSearchEntry],
+        owned_genres: &[String],
+        owned_ids: &[u64],
+        owned_names: &[String],
+        limit: usize,
+    ) -> RemoteCatalogResult<Vec<(CatalogSearchEntry, Vec<String>)>> {
         if limit == 0
             || limit > 100
             || owned_genres.len() > 512
@@ -408,14 +426,22 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             })
             .map(|entry| {
                 let mut seen = std::collections::HashSet::new();
-                let score = entry
+                let matched_genres = entry
                     .genres
                     .iter()
-                    .map(|genre| genre.trim().to_lowercase())
-                    .filter(|genre| !genre.is_empty() && seen.insert(genre.clone()))
-                    .map(|genre| genre_weights.get(&genre).copied().unwrap_or(0))
+                    .map(|genre| genre.trim())
+                    .filter(|genre| {
+                        !genre.is_empty()
+                            && seen.insert(genre.to_lowercase())
+                            && genre_weights.get(&genre.to_lowercase()).copied().unwrap_or(0) > 0
+                    })
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>();
+                let score = matched_genres
+                    .iter()
+                    .map(|genre| genre_weights.get(&genre.to_lowercase()).copied().unwrap_or(0))
                     .sum::<usize>();
-                (score, entry)
+                (score, matched_genres, entry)
             })
             .collect::<Vec<_>>();
         // Keep the ranking deterministic when multiple games share the same
@@ -423,18 +449,18 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         // A zero-score catalogue is discovery content, not a personalized
         // recommendation. Do not present arbitrary alphabetical results as
         // recommendations when none of the player's genres match.
-        ranked.retain(|(score, _)| *score > 0);
+        ranked.retain(|(score, _, _)| *score > 0);
         ranked.sort_by(|left, right| {
             right
                 .0
                 .cmp(&left.0)
-                .then_with(|| left.1.name.to_lowercase().cmp(&right.1.name.to_lowercase()))
-                .then_with(|| left.1.amethys_id.cmp(&right.1.amethys_id))
+                .then_with(|| left.2.name.to_lowercase().cmp(&right.2.name.to_lowercase()))
+                .then_with(|| left.2.amethys_id.cmp(&right.2.amethys_id))
         });
         Ok(ranked
             .into_iter()
             .take(limit)
-            .map(|(_, entry)| entry.clone())
+            .map(|(_, reasons, entry)| (entry.clone(), reasons))
             .collect())
     }
 
