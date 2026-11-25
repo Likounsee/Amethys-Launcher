@@ -388,10 +388,15 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             owned_ids.contains(&entry.amethys_id)
                 || owned_names.contains(&normalize_game_title(&entry.name))
         }) {
+            // Metadata providers can repeat a genre with different casing or
+            // whitespace. Count each genre once per owned game, not once per
+            // raw metadata value, so duplicate tags cannot distort ranking.
+            let mut seen_genres = std::collections::HashSet::new();
             for genre in &entry.genres {
-                *genre_weights
-                    .entry(genre.trim().to_lowercase())
-                    .or_default() += 1;
+                let genre = genre.trim().to_lowercase();
+                if !genre.is_empty() && seen_genres.insert(genre.clone()) {
+                    *genre_weights.entry(genre).or_default() += 1;
+                }
             }
         }
 
@@ -1676,6 +1681,56 @@ mod tests {
                 .map(|game| game.amethys_id)
                 .collect::<Vec<_>>(),
             vec![3]
+        );
+    }
+
+    #[test]
+    fn recommendation_counts_each_owned_genre_once_despite_duplicate_metadata() {
+        let client = RemoteCatalogClient::new(
+            StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
+            std::env::temp_dir().join("amethys-deduplicated-owned-genres-test"),
+        )
+        .unwrap();
+        let entries = vec![
+            CatalogSearchEntry {
+                amethys_id: 1,
+                name: "Owned".into(),
+                slug: None,
+                genres: vec![
+                    "RPG".into(),
+                    "rpg".into(),
+                    " RPG ".into(),
+                    "Adventure".into(),
+                ],
+                cover_url: None,
+            },
+            CatalogSearchEntry {
+                amethys_id: 2,
+                name: "Alpha Adventure".into(),
+                slug: None,
+                genres: vec!["Adventure".into()],
+                cover_url: None,
+            },
+            CatalogSearchEntry {
+                amethys_id: 3,
+                name: "Zulu RPG".into(),
+                slug: None,
+                genres: vec!["RPG".into()],
+                cover_url: None,
+            },
+        ];
+
+        let results = client
+            .recommend_cached(&entries, &[], &[1], &[], 10)
+            .unwrap();
+
+        assert_eq!(
+            results
+                .iter()
+                .map(|game| game.amethys_id)
+                .collect::<Vec<_>>(),
+            vec![2, 3],
+            "duplicate genre tags must not make RPG outweigh Adventure"
         );
     }
 
