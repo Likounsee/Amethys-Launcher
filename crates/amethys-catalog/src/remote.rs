@@ -710,12 +710,26 @@ fn validate_detail_shard(
             || record.name.len() > 512
             || record.name.contains('\0')
             || record.igdb_id == Some(0)
-            || record.slug.as_ref().is_some_and(|value| value.len() > 512 || value.contains('\0'))
-            || record.summary.as_ref().is_some_and(|value| value.len() > 16_384 || value.contains('\0'))
-            || record.release_date.as_ref().is_some_and(|value| value.len() > 32 || value.contains('\0'))
-            || record.cover_url.as_ref().is_some_and(|value| value.len() > 2048 || value.contains('\0'))
+            || record
+                .slug
+                .as_ref()
+                .is_some_and(|value| value.len() > 512 || value.contains('\0'))
+            || record
+                .summary
+                .as_ref()
+                .is_some_and(|value| value.len() > 16_384 || value.contains('\0'))
+            || record
+                .release_date
+                .as_ref()
+                .is_some_and(|value| value.len() > 32 || value.contains('\0'))
+            || record
+                .cover_url
+                .as_ref()
+                .is_some_and(|value| value.len() > 2048 || value.contains('\0'))
             || record.genres.len() > 64
-            || record.genres.iter().any(|value| value.trim().is_empty() || value.len() > 128 || value.contains('\0'))
+            || record.genres.iter().any(|value| {
+                value.trim().is_empty() || value.len() > 128 || value.contains('\0')
+            })
             || record.source_ids.len() > 64
             || record.stores.len() > 64
         {
@@ -727,11 +741,14 @@ fn validate_detail_shard(
         for identity in &record.source_ids {
             if identity.source.is_empty()
                 || identity.source.len() > 128
-                || !identity.source.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':'))
+                || !identity.source.bytes().all(|byte| {
+                    byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':')
+                })
                 || identity.external_id.trim().is_empty()
                 || identity.external_id.len() > 512
                 || identity.external_id.contains('\0')
-                || !source_identities.insert((identity.source.as_str(), identity.external_id.as_str()))
+                || !source_identities
+                    .insert((identity.source.as_str(), identity.external_id.as_str()))
             {
                 return Err(RemoteCatalogError::InvalidData(
                     "detail shard contains an invalid or duplicated source identity".into(),
@@ -742,10 +759,19 @@ fn validate_detail_shard(
         for store in &record.stores {
             if store.store.is_empty()
                 || store.store.len() > 128
-                || !store.store.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':'))
-                || store.external_id.as_ref().is_some_and(|value| value.trim().is_empty() || value.len() > 512 || value.contains('\0'))
-                || store.name.as_ref().is_some_and(|value| value.trim().is_empty() || value.len() > 512 || value.contains('\0'))
-                || store.url.as_ref().is_some_and(|value| value.len() > 2048 || value.contains('\0'))
+                || !store.store.bytes().all(|byte| {
+                    byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':')
+                })
+                || store.external_id.as_ref().is_some_and(|value| {
+                    value.trim().is_empty() || value.len() > 512 || value.contains('\0')
+                })
+                || store.name.as_ref().is_some_and(|value| {
+                    value.trim().is_empty() || value.len() > 512 || value.contains('\0')
+                })
+                || store
+                    .url
+                    .as_ref()
+                    .is_some_and(|value| value.len() > 2048 || value.contains('\0'))
             {
                 return Err(RemoteCatalogError::InvalidData(
                     "detail shard contains invalid store identity metadata".into(),
