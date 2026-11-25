@@ -630,26 +630,29 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
                 serde_json::from_slice(&decoded).map_err(|error| {
                     RemoteCatalogError::InvalidData(format!("detail shard JSON: {error}"))
                 })?;
-            if records.len() as u64 != descriptor.game_count {
-                return Err(RemoteCatalogError::InvalidData(
-                    "detail shard record count mismatch".into(),
-                ));
-            }
-            for record in &records {
-                if record.amethys_id / manifest.shards.bucket_size != bucket
-                    || record.amethys_id == 0
-                    || record.name.trim().is_empty()
-                {
-                    return Err(RemoteCatalogError::InvalidData(
-                        "detail shard contains an invalid game identity".into(),
-                    ));
-                }
-            }
             let json = serde_json::to_vec(&records)
                 .map_err(|error| RemoteCatalogError::InvalidData(error.to_string()))?;
             atomic_write(&cache_path, &json)?;
             records
         };
+        if records.len() as u64 != descriptor.game_count {
+            return Err(RemoteCatalogError::InvalidData(
+                "detail shard record count mismatch".into(),
+            ));
+        }
+        let mut previous_id = 0;
+        for record in &records {
+            if record.amethys_id == 0
+                || record.amethys_id / manifest.shards.bucket_size != bucket
+                || record.amethys_id <= previous_id
+                || record.name.trim().is_empty()
+            {
+                return Err(RemoteCatalogError::InvalidData(
+                    "detail shard contains an invalid or unordered game identity".into(),
+                ));
+            }
+            previous_id = record.amethys_id;
+        }
         records
             .into_iter()
             .find(|game| game.amethys_id == amethys_id)
