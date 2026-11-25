@@ -89,11 +89,11 @@ fn recommendation_profile_for_games(
             .filter(|id| *id != 0);
         let duplicate = if let Some(id) = catalogue_id {
             if !normalized_name.is_empty() {
-                seen_names.insert(normalized_name);
+                seen_names.insert(normalized_name.clone());
             }
             !seen_ids.insert(id)
         } else {
-            !normalized_name.is_empty() && !seen_names.insert(normalized_name)
+            !normalized_name.is_empty() && !seen_names.insert(normalized_name.clone())
         };
         if duplicate {
             continue;
