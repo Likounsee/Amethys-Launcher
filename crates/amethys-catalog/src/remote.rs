@@ -655,8 +655,7 @@ fn load_cached_cover(path: &Path, max_bytes: usize) -> RemoteCatalogResult<Optio
     let bytes = match read_bounded_cache(path, max_bytes, "cached cover") {
         Ok(bytes) => bytes,
         Err(RemoteCatalogError::InvalidData(_)) => {
-            fs::remove_file(path)
-                .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+            fs::remove_file(path).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
             return Ok(None);
         }
         Err(error) => return Err(error),
@@ -1235,16 +1234,20 @@ mod tests {
         let oversized = directory.path().join("oversized.jpg");
         fs::write(&oversized, vec![0u8; 9 * 1024 * 1024]).unwrap();
 
-        assert!(load_cached_cover(&oversized, 8 * 1024 * 1024)
-            .unwrap()
-            .is_none());
+        assert!(
+            load_cached_cover(&oversized, 8 * 1024 * 1024)
+                .unwrap()
+                .is_none()
+        );
         assert!(!oversized.exists());
 
         let invalid = directory.path().join("invalid.png");
         fs::write(&invalid, b"not an image").unwrap();
-        assert!(load_cached_cover(&invalid, 8 * 1024 * 1024)
-            .unwrap()
-            .is_none());
+        assert!(
+            load_cached_cover(&invalid, 8 * 1024 * 1024)
+                .unwrap()
+                .is_none()
+        );
         assert!(!invalid.exists());
 
         let valid = directory.path().join("valid.jpg");
