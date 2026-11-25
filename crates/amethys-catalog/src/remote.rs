@@ -1457,7 +1457,9 @@ mod tests {
         ] {
             assert!(!is_valid_cover_url(url), "accepted unsafe cover URL: {url}");
         }
-        assert!(is_valid_cover_url("https://images.igdb.com/igdb/image/upload/t_cover_big/example.jpg"));
+        assert!(is_valid_cover_url(
+            "https://images.igdb.com/igdb/image/upload/t_cover_big/example.jpg"
+        ));
     }
 
     #[test]
