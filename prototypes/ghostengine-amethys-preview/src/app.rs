@@ -75,6 +75,27 @@ fn recommendation_profile_for_games(
     let mut seen_ids = std::collections::HashSet::new();
     let mut seen_names = std::collections::HashSet::new();
 
+    // Resolve all known canonical identities before processing title fallbacks.
+    // Otherwise an unlinked duplicate appearing earlier in the library would
+    // be counted once by title and again when its linked installation appears.
+    let canonical_names = games
+        .iter()
+        .filter(|game| {
+            game.catalogue_game_id
+                .as_deref()
+                .and_then(|value| value.parse::<u64>().ok())
+                .is_some_and(|id| id != 0)
+        })
+        .map(|game| {
+            game.name
+                .chars()
+                .filter(|character| character.is_alphanumeric())
+                .flat_map(char::to_lowercase)
+                .collect::<String>()
+        })
+        .filter(|name| !name.is_empty())
+        .collect::<std::collections::HashSet<_>>();
+
     for game in games {
         let normalized_name = game
             .name
@@ -104,9 +125,12 @@ fn recommendation_profile_for_games(
             // incorrectly mark a different catalogue game with the same
             // display name as owned.
             owned_ids.push(id);
-        } else if !normalized_name.is_empty() {
-            // Empty or punctuation-only titles cannot identify a catalogue
-            // entry and would make the entire recommendation request invalid.
+        } else if !normalized_name.is_empty()
+            && !canonical_names.contains(&normalized_name)
+        {
+            // A canonical installation with this title is authoritative even
+            // if it occurs later in the library. Avoid counting an unlinked
+            // duplicate as a second game.
             owned_names.push(game.name.clone());
         }
     }
@@ -2070,8 +2094,8 @@ mod tests {
                 &["RPG", "Adventure", "rpg", " RPG "],
             ),
             make_game("00042", "Clair Obscur Expedition 33", &["RPG", "Adventure"]),
-            make_game("77", "Another Game", &["Puzzle"]),
             make_game("not-a-number", "Another-Game", &["Puzzle"]),
+            make_game("77", "Another Game", &["Puzzle"]),
             make_game("missing-id", "Legacy Game", &["Puzzle"]),
             make_game("not-a-number", "", &["Puzzle"]),
             make_game("88", "Another Game", &["Strategy"]),
