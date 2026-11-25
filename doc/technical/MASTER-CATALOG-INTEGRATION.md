@@ -41,6 +41,6 @@ Pour tester un autre hébergement statique compatible, définir `AMETHYS_CATALOG
 
 ## Limites actuelles
 
-- La recherche et les fiches détaillées sont disponibles via Core IPC et CLI ; l'écran Store graphique doit encore être raccordé à ces commandes.
+- La recherche et les fiches détaillées sont exposées via Core IPC et CLI, et consommées par l'écran Store du prototype desktop. La validation du parcours graphique complet sur Windows et Linux reste à effectuer.
 - Les métadonnées du catalogue distant ne sont pas fusionnées avec les installations locales.
 - Une entrée du catalogue n'implique ni achat, ni propriété, ni installation, ni autorisation de téléchargement. L'absence d'offre connue ne supprime pas la fiche du catalogue.
