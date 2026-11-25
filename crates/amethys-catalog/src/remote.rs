@@ -808,8 +808,8 @@ fn validate_detail_shard(
                 .is_some_and(|value| value.len() > 32 || value.contains('\0'))
             || record
                 .cover_url
-                .as_ref()
-                .is_some_and(|value| value.len() > 2048 || value.contains('\0'))
+                .as_deref()
+                .is_some_and(|value| !is_valid_cover_url(value))
             || record.genres.len() > 64
             || record
                 .genres
@@ -865,8 +865,8 @@ fn validate_detail_shard(
                 })
                 || store
                     .url
-                    .as_ref()
-                    .is_some_and(|value| value.len() > 2048 || value.contains('\0'))
+                    .as_deref()
+                    .is_some_and(|value| !is_valid_store_url(value))
             {
                 return Err(RemoteCatalogError::InvalidData(
                     "detail shard contains invalid store identity metadata".into(),
@@ -897,8 +897,8 @@ fn validate_cached_search_entries(entries: &[CatalogSearchEntry]) -> RemoteCatal
                 .any(|genre| genre.trim().is_empty() || genre.len() > 128 || genre.contains('\0'))
             || entry
                 .cover_url
-                .as_ref()
-                .is_some_and(|url| url.len() > 2048 || url.contains('\0'))
+                .as_deref()
+                .is_some_and(|url| !is_valid_cover_url(url))
         {
             return Err(RemoteCatalogError::InvalidData(
                 "cached search index contains an invalid game entry".into(),
@@ -1118,6 +1118,35 @@ fn validate_manifest(manifest: &CatalogManifest) -> RemoteCatalogResult<()> {
         ));
     }
     Ok(())
+}
+
+/// Accepts only absolute HTTPS artwork URLs from the image host used by the catalogue.
+fn is_valid_cover_url(value: &str) -> bool {
+    if value.len() > 2048 || value.contains('\0') {
+        return false;
+    }
+    Url::parse(value).is_ok_and(|url| {
+        url.scheme() == "https"
+            && url.host_str() == Some("images.igdb.com")
+            && url.username().is_empty()
+            && url.password().is_none()
+            && url.port().is_none()
+    })
+}
+
+/// Store links are untrusted catalogue data. Never allow executable schemes,
+/// credentials, malformed URLs or non-HTTPS destinations into desktop clients.
+fn is_valid_store_url(value: &str) -> bool {
+    if value.len() > 2048 || value.contains('\0') {
+        return false;
+    }
+    Url::parse(value).is_ok_and(|url| {
+        url.scheme() == "https"
+            && url.host_str().is_some()
+            && url.username().is_empty()
+            && url.password().is_none()
+            && url.port().is_none()
+    })
 }
 
 fn validate_relative_path(value: &str) -> RemoteCatalogResult<()> {
@@ -1403,6 +1432,32 @@ mod tests {
         let mut invalid_store_url = valid;
         invalid_store_url.stores[0].url = Some("x".repeat(2049));
         assert!(validate_detail_shard(&[invalid_store_url], 1, 1000, 1).is_err());
+    }
+
+    #[test]
+    fn catalogue_urls_reject_unsafe_schemes_hosts_and_credentials() {
+        for url in [
+            "javascript:alert(1)",
+            "file:///etc/passwd",
+            "http://store.example/game",
+            "https://user:password@store.example/game",
+            "https://store.example:8443/game",
+            "not a URL",
+        ] {
+            assert!(!is_valid_store_url(url), "accepted unsafe store URL: {url}");
+        }
+        assert!(is_valid_store_url("https://store.example/game"));
+
+        for url in [
+            "https://example.com/cover.jpg",
+            "http://images.igdb.com/cover.jpg",
+            "https://user@images.igdb.com/cover.jpg",
+            "https://images.igdb.com:443/cover.jpg",
+            "javascript:alert(1)",
+        ] {
+            assert!(!is_valid_cover_url(url), "accepted unsafe cover URL: {url}");
+        }
+        assert!(is_valid_cover_url("https://images.igdb.com/igdb/image/upload/t_cover_big/example.jpg"));
     }
 
     #[test]
