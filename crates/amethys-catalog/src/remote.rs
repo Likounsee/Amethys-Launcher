@@ -192,6 +192,20 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         let http = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(10))
             .timeout(Duration::from_secs(45))
+            // A redirect is accepted only when it stays on the original HTTPS
+            // origin. Reject unsafe targets before reqwest sends another request.
+            .redirect(reqwest::redirect::Policy::custom(|attempt| {
+                let Some(original) = attempt.previous().first() else {
+                    return attempt.stop();
+                };
+                if attempt.previous().len() >= 10
+                    || !is_same_https_origin(original, attempt.url())
+                {
+                    attempt.stop()
+                } else {
+                    attempt.follow()
+                }
+            }))
             .user_agent(concat!("Amethys-Launcher/", env!("CARGO_PKG_VERSION")))
             .build()
             .map_err(|error| RemoteCatalogError::Network(error.to_string()))?;
