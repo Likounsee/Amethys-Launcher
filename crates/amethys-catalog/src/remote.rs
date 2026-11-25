@@ -538,35 +538,59 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             bucket,
             &descriptor.compressed_sha256[..12]
         ));
-        let (records, cache_after_validation): (Vec<CatalogGameDetail>, bool) =
-            if cache_path.is_file() {
-                let bytes = read_bounded_cache(
-                    &cache_path,
-                    MAX_DECOMPRESSED_FILE_BYTES,
-                    "cached detail shard",
-                )?;
-                let records: Vec<CatalogGameDetail> =
-                    serde_json::from_slice(&bytes).map_err(|error| {
-                        RemoteCatalogError::InvalidData(format!("cached shard JSON: {error}"))
-                    })?;
-                (records, false)
-            } else {
-                let url = self.file_url(&descriptor.file)?;
-                let compressed = self
-                    .fetch_bytes(
-                        &url,
-                        MAX_COMPRESSED_FILE_BYTES,
-                        Some(&descriptor.compressed_sha256),
+        let cached_records = if cache_path.is_file() {
+            let cached = read_bounded_cache(
+                &cache_path,
+                MAX_DECOMPRESSED_FILE_BYTES,
+                "cached detail shard",
+            )
+            .and_then(|bytes| {
+                serde_json::from_slice::<Vec<CatalogGameDetail>>(&bytes).map_err(|error| {
+                    RemoteCatalogError::InvalidData(format!("cached shard JSON: {error}"))
+                })
+            });
+
+            match cached {
+                Ok(records)
+                    if validate_detail_shard(
+                        &records,
+                        bucket,
+                        manifest.shards.bucket_size,
+                        descriptor.game_count,
                     )
-                    .await?;
-                verify_size(Some(descriptor.compressed_size), compressed.len())?;
-                let decoded = decompress_bounded(&compressed)?;
-                let records: Vec<CatalogGameDetail> =
-                    serde_json::from_slice(&decoded).map_err(|error| {
-                        RemoteCatalogError::InvalidData(format!("detail shard JSON: {error}"))
-                    })?;
-                (records, true)
-            };
+                    .is_ok() =>
+                {
+                    Some(records)
+                }
+                _ => {
+                    fs::remove_file(&cache_path)
+                        .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        let (records, cache_after_validation) = if let Some(records) = cached_records {
+            (records, false)
+        } else {
+            let url = self.file_url(&descriptor.file)?;
+            let compressed = self
+                .fetch_bytes(
+                    &url,
+                    MAX_COMPRESSED_FILE_BYTES,
+                    Some(&descriptor.compressed_sha256),
+                )
+                .await?;
+            verify_size(Some(descriptor.compressed_size), compressed.len())?;
+            let decoded = decompress_bounded(&compressed)?;
+            let records: Vec<CatalogGameDetail> =
+                serde_json::from_slice(&decoded).map_err(|error| {
+                    RemoteCatalogError::InvalidData(format!("detail shard JSON: {error}"))
+                })?;
+            (records, true)
+        };
 
         validate_detail_shard(
             &records,
