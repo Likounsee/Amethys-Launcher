@@ -180,6 +180,7 @@ fn normalize_game_title(value: &str) -> String {
         .collect()
 }
 
+#[derive(Clone)]
 pub struct RemoteCatalogClient<P> {
     provider: P,
     http: reqwest::Client,
