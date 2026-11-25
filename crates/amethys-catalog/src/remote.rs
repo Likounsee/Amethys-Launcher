@@ -298,7 +298,8 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
                 let normalized_slug = normalize_game_title(&slug);
                 let genre_match = entry.genres.iter().any(|genre| {
                     genre.to_lowercase().contains(&needle)
-                        || normalize_game_title(genre).contains(&normalized_needle)
+                        || (!normalized_needle.is_empty()
+                            && normalize_game_title(genre).contains(&normalized_needle))
                 });
 
                 let rank = if name == needle || normalized_name == normalized_needle {
@@ -1554,6 +1555,10 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![10]
         );
+
+        // Punctuation-only queries have no normalized form. They must not
+        // match every genre through String::contains("").
+        assert!(client.search_cached(&entries, "!!!", 10).unwrap().is_empty());
     }
 
     #[test]
