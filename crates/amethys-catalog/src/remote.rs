@@ -259,9 +259,19 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
     /// Loads the offline search index if a previous verified sync exists.
     pub fn load_cached_index(&self) -> RemoteCatalogResult<Vec<CatalogSearchEntry>> {
         let path = self.cache_dir.join("index").join("games-index.json");
+        let metadata = fs::metadata(&path)
+            .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+        if metadata.len() > MAX_DECOMPRESSED_FILE_BYTES as u64 {
+            return Err(RemoteCatalogError::InvalidData(
+                "cached search index exceeds size limit".into(),
+            ));
+        }
         let bytes = fs::read(path).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
-        serde_json::from_slice(&bytes)
-            .map_err(|error| RemoteCatalogError::InvalidData(format!("cached index JSON: {error}")))
+        let entries: Vec<CatalogSearchEntry> = serde_json::from_slice(&bytes).map_err(|error| {
+            RemoteCatalogError::InvalidData(format!("cached index JSON: {error}"))
+        })?;
+        validate_cached_search_entries(&entries)?;
+        Ok(entries)
     }
 
     pub fn search_cached(
@@ -652,6 +662,27 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         }
         Ok(bytes)
     }
+}
+
+fn validate_cached_search_entries(entries: &[CatalogSearchEntry]) -> RemoteCatalogResult<()> {
+    let mut previous_id = 0;
+    for entry in entries {
+        if entry.amethys_id == 0
+            || entry.amethys_id <= previous_id
+            || entry.name.trim().is_empty()
+            || entry.name.len() > 512
+            || entry.slug.as_ref().is_some_and(|slug| slug.len() > 512)
+            || entry.genres.len() > 128
+            || entry.genres.iter().any(|genre| genre.trim().is_empty() || genre.len() > 128)
+            || entry.cover_url.as_ref().is_some_and(|url| url.len() > 2048)
+        {
+            return Err(RemoteCatalogError::InvalidData(
+                "cached search index contains an invalid game entry".into(),
+            ));
+        }
+        previous_id = entry.amethys_id;
+    }
+    Ok(())
 }
 
 fn parse_search_index_rows(
@@ -1073,6 +1104,35 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec![10]
         );
+    }
+
+    #[test]
+    fn cached_index_rejects_corrupt_or_unordered_entries() {
+        let directory = tempfile::tempdir().unwrap();
+        let index_dir = directory.path().join("index");
+        fs::create_dir_all(&index_dir).unwrap();
+        let client = RemoteCatalogClient::new(
+            StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
+            directory.path(),
+        )
+        .unwrap();
+        let cache_path = index_dir.join("games-index.json");
+
+        fs::write(
+            &cache_path,
+            r#"[
+                {"amethys_id":1002,"name":"Second","slug":null,"genres":[],"cover_url":null},
+                {"amethys_id":1001,"name":"First","slug":null,"genres":[],"cover_url":null}
+            ]"#,
+        )
+        .unwrap();
+        assert!(client.load_cached_index().is_err());
+
+        fs::write(&cache_path, r#"[{"amethys_id":0,"name":"Invalid"}]"#).unwrap();
+        assert!(client.load_cached_index().is_err());
+
+        fs::write(&cache_path, b"not json").unwrap();
+        assert!(client.load_cached_index().is_err());
     }
 
     #[test]
