@@ -1269,7 +1269,13 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
 
     if view.query.trim().is_empty() {
         if let Some(featured) = view.results.first() {
-            let hero_h = if lay.compact() { 204 } else { 226 };
+            let hero_h = if view.recommended {
+                if lay.compact() { 238 } else { 250 }
+            } else if lay.compact() {
+                204
+            } else {
+                226
+            };
             panel(p, mx, y, mw, hero_h, 20);
             let art_w = if lay.compact() { 116 } else { 164 };
             let art_x = mx + 14;
@@ -1280,9 +1286,30 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
             let tw = mw - art_w - 58;
             chip(p, tx, y + 22, "À EXPLORER", tw.min(140));
             p.paragraph(tx, y + 58, tw, 28, &featured.name, 23.0, W::Disp, TXT, 2);
-            p.paragraph(tx, y + 116, tw, 19,
+            p.paragraph(
+                tx,
+                y + if view.recommended { 98 } else { 116 },
+                tw,
+                19,
                 "Explorez sa fiche, consultez les informations et retrouvez les boutiques officielles.",
-                12.5, W::Reg, MUT, 3);
+                12.5,
+                W::Reg,
+                MUT,
+                if view.recommended { 2 } else { 3 },
+            );
+            if view.recommended && !featured.genres.is_empty() {
+                let reasons = format!("Pour vous : {}", featured.genres.join(" · "));
+                p.text_fit(
+                    tx,
+                    y + 148,
+                    17,
+                    &reasons,
+                    11.0,
+                    W::Med,
+                    VIO_HI,
+                    tw,
+                );
+            }
             button(p, tx, y + hero_h - 54, None, "Découvrir le jeu", Some(Icon::Search), Btn::Primary, PANEL, Some(Action::SelectCatalogGame(featured.amethys_id)));
             p.hit_with(mx, y, mw, hero_h, 20, Action::SelectCatalogGame(featured.amethys_id), false, Hover::Card);
             y += hero_h + 28;
