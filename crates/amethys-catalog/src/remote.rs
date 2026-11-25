@@ -515,11 +515,11 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             .map_err(|error| RemoteCatalogError::Network(error.to_string()))?
             .error_for_status()
             .map_err(|error| RemoteCatalogError::Network(error.to_string()))?;
-        if response.url().scheme() != "https"
-            || response.url().host_str() != Some("images.igdb.com")
+        if !is_valid_cover_url(response.url().as_str())
+            || !is_same_https_origin(&url, response.url())
         {
             return Err(RemoteCatalogError::InvalidUrl(
-                "cover redirects must remain on the trusted HTTPS image host".into(),
+                "cover redirects must remain on the trusted HTTPS image origin".into(),
             ));
         }
         if response
@@ -656,9 +656,9 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             .map_err(|error| RemoteCatalogError::Network(error.to_string()))?
             .error_for_status()
             .map_err(|error| RemoteCatalogError::Network(error.to_string()))?;
-        if response.url().scheme() != "https" {
+        if !is_same_https_origin(url, response.url()) {
             return Err(RemoteCatalogError::InvalidUrl(
-                "catalogue redirects must remain HTTPS".into(),
+                "catalogue redirects must remain on the configured HTTPS origin".into(),
             ));
         }
         if response
@@ -1120,6 +1120,15 @@ fn validate_manifest(manifest: &CatalogManifest) -> RemoteCatalogResult<()> {
     Ok(())
 }
 
+/// Restricts redirects to the configured HTTPS origin, including its effective port.
+fn is_same_https_origin(expected: &Url, actual: &Url) -> bool {
+    expected.scheme() == "https"
+        && actual.scheme() == "https"
+        && expected.origin() == actual.origin()
+        && actual.username().is_empty()
+        && actual.password().is_none()
+}
+
 /// Accepts only absolute HTTPS artwork URLs from the image host used by the catalogue.
 fn is_valid_cover_url(value: &str) -> bool {
     if value.len() > 2048 || value.contains('\0') {
@@ -1432,6 +1441,31 @@ mod tests {
         let mut invalid_store_url = valid;
         invalid_store_url.stores[0].url = Some("x".repeat(2049));
         assert!(validate_detail_shard(&[invalid_store_url], 1, 1000, 1).is_err());
+    }
+
+    #[test]
+    fn catalogue_redirects_must_stay_on_the_configured_https_origin() {
+        let origin = Url::parse("https://catalog.example/base/").unwrap();
+        for url in [
+            "https://catalog.example/manifest.json",
+            "https://catalog.example:443/manifest.json",
+        ] {
+            assert!(is_same_https_origin(
+                &origin,
+                &Url::parse(url).unwrap()
+            ));
+        }
+        for url in [
+            "http://catalog.example/manifest.json",
+            "https://other.example/manifest.json",
+            "https://catalog.example:8443/manifest.json",
+            "https://user@catalog.example/manifest.json",
+        ] {
+            assert!(!is_same_https_origin(
+                &origin,
+                &Url::parse(url).unwrap()
+            ), "accepted cross-origin redirect: {url}");
+        }
     }
 
     #[test]
