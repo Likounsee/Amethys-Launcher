@@ -171,12 +171,15 @@ async fn get_master_catalog_game(amethys_id: u64) -> Result<IpcResponsePayload, 
         .await
         .map_err(|error| error.to_string())?;
     let cover_cache_path = match game.cover_url.as_deref() {
-        Some(url) => client
-            .cache_cover(game.amethys_id, url)
-            .await
-            .ok()
-            .flatten()
-            .map(|path| path.to_string_lossy().into_owned()),
+        Some(url) => tokio::time::timeout(
+            std::time::Duration::from_secs(3),
+            client.cache_cover(game.amethys_id, url),
+        )
+        .await
+        .ok()
+        .and_then(Result::ok)
+        .flatten()
+        .map(|path| path.to_string_lossy().into_owned()),
         None => None,
     };
     Ok(IpcResponsePayload::CatalogGameDetails {
