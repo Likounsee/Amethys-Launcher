@@ -100,7 +100,14 @@ fn recommendation_profile_for_games(
             owned_ids.push(id);
         }
         if let Some(metadata) = game.catalogue_metadata.as_ref() {
-            genres.extend(metadata.genres.iter().cloned());
+            let mut seen_game_genres = std::collections::HashSet::new();
+            for genre in &metadata.genres {
+                let genre = genre.trim();
+                let normalized_genre = genre.to_lowercase();
+                if !normalized_genre.is_empty() && seen_game_genres.insert(normalized_genre) {
+                    genres.push(genre.to_owned());
+                }
+            }
         }
     }
 
@@ -2057,7 +2064,11 @@ mod tests {
         };
 
         let games = vec![
-            make_game("42", "Clair-Obscur: Expedition 33", &["RPG", "Adventure"]),
+            make_game(
+                "42",
+                "Clair-Obscur: Expedition 33",
+                &["RPG", "Adventure", "rpg", " RPG "],
+            ),
             make_game("00042", "Clair Obscur Expedition 33", &["RPG", "Adventure"]),
             make_game("77", "Another Game", &["Puzzle"]),
             make_game("not-a-number", "Another-Game", &["Puzzle"]),
