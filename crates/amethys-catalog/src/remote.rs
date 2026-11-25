@@ -486,6 +486,75 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             .collect())
     }
 
+    /// Downloads and caches a catalogue cover from the current IGDB image host.
+    /// Only HTTPS images.igdb.com URLs and bounded JPEG/PNG payloads are accepted.
+    pub async fn cache_cover(
+        &self,
+        amethys_id: u64,
+        cover_url: &str,
+    ) -> RemoteCatalogResult<Option<PathBuf>> {
+        const MAX_COVER_BYTES: usize = 8 * 1024 * 1024;
+        if amethys_id == 0 {
+            return Err(RemoteCatalogError::InvalidData("Amethys ID cannot be zero".into()));
+        }
+        let url = Url::parse(cover_url)
+            .map_err(|error| RemoteCatalogError::InvalidUrl(error.to_string()))?;
+        if url.scheme() != "https"
+            || url.host_str() != Some("images.igdb.com")
+            || !url.username().is_empty()
+            || url.password().is_some()
+        {
+            return Err(RemoteCatalogError::InvalidUrl(
+                "cover URL must use the trusted HTTPS IGDB image host".into(),
+            ));
+        }
+
+        let directory = self.cache_dir.join("covers");
+        let cached = ["jpg", "png"]
+            .iter()
+            .map(|extension| directory.join(format!("{amethys_id}.{extension}")))
+            .find(|path| path.is_file());
+        if let Some(path) = cached {
+            let bytes = fs::read(&path)
+                .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+            if bytes.len() <= MAX_COVER_BYTES && image_extension(&bytes).is_some() {
+                return Ok(Some(path));
+            }
+            fs::remove_file(&path)
+                .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+        }
+
+        let mut response = self.http.get(url).send().await
+            .map_err(|error| RemoteCatalogError::Network(error.to_string()))?
+            .error_for_status()
+            .map_err(|error| RemoteCatalogError::Network(error.to_string()))?;
+        if response.url().scheme() != "https"
+            || response.url().host_str() != Some("images.igdb.com")
+        {
+            return Err(RemoteCatalogError::InvalidUrl(
+                "cover redirects must remain on the trusted HTTPS image host".into(),
+            ));
+        }
+        if response.content_length().is_some_and(|length| length > MAX_COVER_BYTES as u64) {
+            return Err(RemoteCatalogError::InvalidData("cover exceeds size limit".into()));
+        }
+        let mut bytes = Vec::new();
+        while let Some(chunk) = response.chunk().await
+            .map_err(|error| RemoteCatalogError::Network(error.to_string()))?
+        {
+            if bytes.len().saturating_add(chunk.len()) > MAX_COVER_BYTES {
+                return Err(RemoteCatalogError::InvalidData("cover exceeds size limit".into()));
+            }
+            bytes.extend_from_slice(&chunk);
+        }
+        let extension = image_extension(&bytes).ok_or_else(|| {
+            RemoteCatalogError::InvalidData("cover is not a supported JPEG or PNG image".into())
+        })?;
+        let path = directory.join(format!("{amethys_id}.{extension}"));
+        atomic_write(&path, &bytes)?;
+        Ok(Some(path))
+    }
+
     /// Downloads a single ID-range shard, verifies its compressed checksum and
     /// caches the decoded details. Other shards are never fetched implicitly.
     pub async fn fetch_game(
@@ -626,6 +695,16 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             }
         }
         Ok(bytes)
+    }
+}
+
+fn image_extension(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(&[0xff, 0xd8, 0xff]) {
+        Some("jpg")
+    } else if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("png")
+    } else {
+        None
     }
 }
 
