@@ -99,9 +99,13 @@ fn recommendation_profile_for_games(
             continue;
         }
 
-        owned_names.push(game.name.clone());
         if let Some(id) = catalogue_id {
+            // Canonical IDs are authoritative. A title fallback here could
+            // incorrectly mark a different catalogue game with the same
+            // display name as owned.
             owned_ids.push(id);
+        } else {
+            owned_names.push(game.name.clone());
         }
     }
 
@@ -2073,11 +2077,7 @@ mod tests {
         assert_eq!(ids, vec![42, 77, 88]);
         assert_eq!(
             names,
-            vec![
-                "Clair-Obscur: Expedition 33",
-                "Another Game",
-                "Another Game"
-            ]
+            vec!["Another-Game"]
         );
         assert!(genres.is_empty(), "catalogue client owns genre weighting to avoid duplicate local/catalogue signals");
     }
