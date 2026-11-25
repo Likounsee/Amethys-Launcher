@@ -623,6 +623,7 @@ impl App {
     /// Runs a master-catalogue request away from the window thread.
     fn start_store_task(&mut self, synchronize: bool) {
         if self.store_loading {
+            self.store_refresh_pending = true;
             return;
         }
         self.store_refresh_pending = false;
@@ -703,6 +704,7 @@ impl App {
                 self.store_error = None;
                 self.notify(ToastKind::Success, format!("Catalogue synchronisé : {count} jeux."));
                 // Re-run the current query, now using the freshly synchronized index.
+                self.store_refresh_pending = false;
                 self.start_store_task(false);
             }
             StoreTaskResult::Synchronized(Err(error)) => self.store_error = Some(error),
@@ -710,7 +712,6 @@ impl App {
         if self.store_refresh_pending
             && self.page == Page::Store
             && !self.store_promotions
-            && self.store_query.trim().is_empty()
         {
             self.start_store_task(false);
             return;
@@ -1134,7 +1135,12 @@ impl App {
             }
             Action::ClearStoreSearch => {
                 self.store_query.clear();
-                self.redraw_store_search_only();
+                if self.store_loading {
+                    self.store_refresh_pending = true;
+                    self.redraw_store_search_only();
+                } else {
+                    self.start_store_task(false);
+                }
             }
             Action::SetStoreMode(promotions) => {
                 if self.store_promotions != promotions {
