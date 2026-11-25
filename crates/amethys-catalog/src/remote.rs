@@ -132,6 +132,9 @@ pub struct CatalogSearchEntry {
     pub slug: Option<String>,
     #[serde(default)]
     pub genres: Vec<String>,
+    /// Optional artwork URL carried by newer public search indexes.
+    #[serde(default)]
+    pub cover_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -263,7 +266,7 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             let fields = row.as_array().ok_or_else(|| {
                 RemoteCatalogError::InvalidData("search index rows must be arrays".into())
             })?;
-            if !(3..=4).contains(&fields.len()) {
+            if !(3..=5).contains(&fields.len()) {
                 return Err(RemoteCatalogError::InvalidData(
                     "search index row has an unsupported field count".into(),
                 ));
@@ -300,6 +303,11 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
                         .collect()
                 })
                 .unwrap_or_default();
+            let cover_url = fields
+                .get(4)
+                .and_then(serde_json::Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .map(str::to_owned);
             if id == 0 || id <= previous_id || name.trim().is_empty() || name.len() > 512 {
                 return Err(RemoteCatalogError::InvalidData(
                     "search index IDs must be unique, ascending and nonzero; names must be valid"
@@ -312,6 +320,7 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
                 name,
                 slug,
                 genres,
+                cover_url,
             });
         }
         let cache_path = self.cache_dir.join("index").join("games-index.json");
