@@ -1413,11 +1413,25 @@ pub fn store_product(p: &mut Painter, lay: &Layout, detail: Option<&IpcCatalogGa
         }
     }
     y += 88 + detail.stores.len().min(10) as i32 * 58;
-    panel(p, mx, y, mw, 92, 16);
-    p.text(mx + 22, y + 16, 20, "Informations du catalogue", 13.0, W::Semi, TXT);
-    let igdb_label = detail.igdb_id.map_or_else(|| "—".to_string(), |id| id.to_string());
-    p.text(mx + 22, y + 44, 18, &format!("Amethys ID · {}     IGDB ID · {}", detail.amethys_id, igdb_label), 11.5, W::Reg, MUT);
-    y + 112
+    let source_rows = detail.source_ids.len().min(6);
+    let source_panel_h = 82 + source_rows as i32 * 24;
+    panel(p, mx, y, mw, source_panel_h, 16);
+    p.text(mx + 22, y + 14, 20, "Identités du catalogue", 13.0, W::Semi, TXT);
+    p.text(mx + 22, y + 40, 18, &format!("Amethys ID · {}", detail.amethys_id), 11.5, W::Semi, VIO_HI);
+    if source_rows == 0 {
+        p.text(mx + 22, y + 60, 18, "Aucun identifiant externe renseigné.", 11.5, W::Reg, MUT);
+    } else {
+        for (index, identity) in detail.source_ids.iter().take(source_rows).enumerate() {
+            let row_y = y + 62 + index as i32 * 24;
+            let source = p.ellipsize(&identity.source, 11.5, W::Semi, (mw / 3).max(80));
+            p.text(mx + 22, row_y, 18, &source, 11.5, W::Semi, SOFT);
+            p.text_fit(mx + 22 + (mw / 3).max(80), row_y, 18, &identity.external_id, 11.5, W::Reg, MUT, mw - (mw / 3).max(80) - 44);
+        }
+        if detail.source_ids.len() > source_rows {
+            p.text(mx + 22, y + source_panel_h - 20, 16, &format!("+ {} autres identités", detail.source_ids.len() - source_rows), 10.5, W::Reg, MUT);
+        }
+    }
+    y + source_panel_h + 20
 }
 
 // ---------------------------------------------------------------- settings
