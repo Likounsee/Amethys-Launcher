@@ -454,12 +454,9 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         }
 
         let directory = self.cache_dir.join("covers");
-        let cached = ["jpg", "png"]
-            .iter()
-            .map(|extension| directory.join(format!("{amethys_id}.{extension}")))
-            .find(|path| path.is_file());
-        if let Some(path) = cached {
-            if load_cached_cover(&path, MAX_COVER_BYTES)?.is_some() {
+        for extension in ["jpg", "png"] {
+            let path = directory.join(format!("{amethys_id}.{extension}"));
+            if path.is_file() && load_cached_cover(&path, MAX_COVER_BYTES)?.is_some() {
                 return Ok(Some(path));
             }
         }
