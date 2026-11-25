@@ -259,14 +259,7 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
     /// Loads the offline search index if a previous verified sync exists.
     pub fn load_cached_index(&self) -> RemoteCatalogResult<Vec<CatalogSearchEntry>> {
         let path = self.cache_dir.join("index").join("games-index.json");
-        let metadata =
-            fs::metadata(&path).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
-        if metadata.len() > MAX_DECOMPRESSED_FILE_BYTES as u64 {
-            return Err(RemoteCatalogError::InvalidData(
-                "cached search index exceeds size limit".into(),
-            ));
-        }
-        let bytes = fs::read(path).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+        let bytes = read_bounded_cache(&path, MAX_DECOMPRESSED_FILE_BYTES, "cached search index")?;
         let entries: Vec<CatalogSearchEntry> = serde_json::from_slice(&bytes).map_err(|error| {
             RemoteCatalogError::InvalidData(format!("cached index JSON: {error}"))
         })?;
@@ -546,8 +539,8 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             &descriptor.compressed_sha256[..12]
         ));
         let records: Vec<CatalogGameDetail> = if cache_path.is_file() {
-            let bytes = fs::read(&cache_path)
-                .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+            let bytes =
+                read_bounded_cache(&cache_path, MAX_DECOMPRESSED_FILE_BYTES, "cached detail shard")?;
             serde_json::from_slice(&bytes).map_err(|error| {
                 RemoteCatalogError::InvalidData(format!("cached shard JSON: {error}"))
             })?
@@ -662,6 +655,31 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         }
         Ok(bytes)
     }
+}
+
+fn read_bounded_cache(path: &Path, max_bytes: usize, label: &str) -> RemoteCatalogResult<Vec<u8>> {
+    let file = fs::File::open(path)
+        .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+    if metadata.len() > max_bytes as u64 {
+        return Err(RemoteCatalogError::InvalidData(format!(
+            "{label} exceeds size limit"
+        )));
+    }
+
+    // Read at most max_bytes + 1 even if the file grows after metadata().
+    let mut bytes = Vec::new();
+    file.take(max_bytes as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+    if bytes.len() > max_bytes {
+        return Err(RemoteCatalogError::InvalidData(format!(
+            "{label} exceeds size limit"
+        )));
+    }
+    Ok(bytes)
 }
 
 fn validate_cached_search_entries(entries: &[CatalogSearchEntry]) -> RemoteCatalogResult<()> {
@@ -970,6 +988,19 @@ mod tests {
         }"#).unwrap();
         validate_manifest(&manifest).unwrap();
         assert_eq!(manifest.game_count, 1);
+    }
+
+    #[test]
+    fn cached_files_are_read_with_a_hard_size_limit() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("oversized-cache.json");
+        fs::write(&path, b"12345").unwrap();
+
+        assert!(read_bounded_cache(&path, 4, "test cache")
+            .unwrap_err()
+            .to_string()
+            .contains("exceeds size limit"));
+        assert_eq!(read_bounded_cache(&path, 5, "test cache").unwrap(), b"12345");
     }
 
     #[tokio::test]
