@@ -67,6 +67,11 @@ enum CoreMutationResult {
 /// the canonical genre record for each owned catalogue ID and can count each
 /// owned game exactly once. Sending local genres as a flat list here would make
 /// the client count the same game's local and catalogue metadata twice.
+fn has_recommendation_profile_for_games(games: &[IpcGameEntry]) -> bool {
+    let (_, owned_ids, owned_names) = recommendation_profile_for_games(games);
+    !owned_ids.is_empty() || !owned_names.is_empty()
+}
+
 fn recommendation_profile_for_games(
     games: &[IpcGameEntry],
 ) -> (Vec<String>, Vec<u64>, Vec<String>) {
@@ -863,7 +868,7 @@ impl App {
 
     /// Whether the current library contains ownership signals for personalization.
     fn has_recommendation_profile(&self) -> bool {
-        !self.games.is_empty()
+        has_recommendation_profile_for_games(&self.games)
     }
 
     /// Extracts local ownership signals without contacting Steam.
@@ -2108,6 +2113,30 @@ mod tests {
             vec!["Legacy Game"]
         );
         assert!(genres.is_empty(), "catalogue client owns genre weighting to avoid duplicate local/catalogue signals");
+    }
+
+    #[test]
+    fn recommendation_profile_requires_a_usable_ownership_signal() {
+        let make_game = |name: &str, catalogue_game_id: Option<&str>| IpcGameEntry {
+            id: format!("local-{name}"),
+            name: name.to_owned(),
+            platform: "manual".to_owned(),
+            platform_id: None,
+            catalogue_game_id: catalogue_game_id.map(str::to_owned),
+            catalogue_metadata: None,
+            install_path: "/games/example".to_owned(),
+            executable: None,
+        };
+
+        let unusable = vec![
+            make_game("!!!", None),
+            make_game("   ", Some("not-a-number")),
+            make_game("", Some("0")),
+        ];
+        assert!(!has_recommendation_profile_for_games(&unusable));
+
+        let usable = vec![make_game("Known game", Some("42"))];
+        assert!(has_recommendation_profile_for_games(&usable));
     }
 
     #[test]
