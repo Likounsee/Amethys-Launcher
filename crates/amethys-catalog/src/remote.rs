@@ -364,11 +364,17 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
 
                 let rank = if name == needle || normalized_name == normalized_needle {
                     0
-                } else if name.starts_with(&needle) || normalized_name.starts_with(&normalized_needle) {
+                } else if name.starts_with(&needle)
+                    || (!normalized_needle.is_empty() && normalized_name.starts_with(&normalized_needle))
+                {
                     1
-                } else if name.contains(&needle) || normalized_name.contains(&normalized_needle) {
+                } else if name.contains(&needle)
+                    || (!normalized_needle.is_empty() && normalized_name.contains(&normalized_needle))
+                {
                     2
-                } else if slug.contains(&needle) || normalized_slug.contains(&normalized_needle) {
+                } else if slug.contains(&needle)
+                    || (!normalized_needle.is_empty() && normalized_slug.contains(&normalized_needle))
+                {
                     3
                 } else if genre_match {
                     4
