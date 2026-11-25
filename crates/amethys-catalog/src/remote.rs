@@ -415,6 +415,10 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             .collect::<Vec<_>>();
         // Keep the ranking deterministic when multiple games share the same
         // genre score. A zero-score catalogue must not look personalized.
+        // A zero-score catalogue is discovery content, not a personalized
+        // recommendation. Do not present arbitrary alphabetical results as
+        // recommendations when none of the player's genres match.
+        ranked.retain(|(score, _)| *score > 0);
         ranked.sort_by(|left, right| {
             right
                 .0
@@ -1671,8 +1675,39 @@ mod tests {
                 .iter()
                 .map(|game| game.amethys_id)
                 .collect::<Vec<_>>(),
-            vec![3, 2]
+            vec![3]
         );
+    }
+
+    #[test]
+    fn recommendation_does_not_return_zero_score_discovery_results() {
+        let client = RemoteCatalogClient::new(
+            StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
+            std::env::temp_dir().join("amethys-zero-score-recommendation-test"),
+        )
+        .unwrap();
+        let entries = vec![
+            CatalogSearchEntry {
+                amethys_id: 1,
+                name: "Owned".into(),
+                slug: None,
+                genres: vec!["Puzzle".into()],
+                cover_url: None,
+            },
+            CatalogSearchEntry {
+                amethys_id: 2,
+                name: "Unrelated RPG".into(),
+                slug: None,
+                genres: vec!["RPG".into()],
+                cover_url: None,
+            },
+        ];
+
+        let results = client
+            .recommend_cached(&entries, &[], &[1], &["Owned".into()], 10)
+            .unwrap();
+
+        assert!(results.is_empty());
     }
 
     #[test]
@@ -1719,7 +1754,7 @@ mod tests {
                 .iter()
                 .map(|game| game.amethys_id)
                 .collect::<Vec<_>>(),
-            vec![11, 12],
+            vec![11],
         );
     }
 
