@@ -937,11 +937,21 @@ fn validate_manifest(manifest: &CatalogManifest) -> RemoteCatalogResult<()> {
         ));
     }
     validate_relative_path(&manifest.search_index.file)?;
-    if manifest.search_index.compressed_size.is_some_and(|size| size == 0 || size > MAX_COMPRESSED_FILE_BYTES as u64)
-        || manifest.search_index.compressed_sha256.as_deref().is_none_or(|hash| !valid_sha256(hash))
+    if manifest.search_index.compressed_size.is_some_and(|size| {
+        size == 0 || size > MAX_COMPRESSED_FILE_BYTES as u64
+    }) || manifest
+        .search_index
+        .compressed_sha256
+        .as_deref()
+        .is_none_or(|hash| !valid_sha256(hash))
+        || manifest
+            .search_index
+            .format
+            .as_deref()
+            .is_some_and(|format| format != "json-array-zstd")
     {
         return Err(RemoteCatalogError::InvalidData(
-            "search-index size or checksum is missing or invalid".into(),
+            "search-index size, format or checksum is invalid".into(),
         ));
     }
     if manifest.shards.files.is_empty() || manifest.shards.files.len() > 100_000 {
@@ -979,9 +989,21 @@ fn validate_manifest(manifest: &CatalogManifest) -> RemoteCatalogResult<()> {
         ));
     }
     validate_relative_path(&manifest.metadata.genres.file)?;
-    if !paths.insert(manifest.metadata.genres.file.as_str()) {
+    if manifest
+        .metadata
+        .genres
+        .size
+        .is_some_and(|size| size == 0 || size > MAX_DECOMPRESSED_FILE_BYTES as u64)
+        || manifest
+            .metadata
+            .genres
+            .sha256
+            .as_deref()
+            .is_some_and(|hash| !valid_sha256(hash))
+        || !paths.insert(manifest.metadata.genres.file.as_str())
+    {
         return Err(RemoteCatalogError::InvalidData(
-            "manifest reuses a catalogue file path".into(),
+            "genre metadata size, checksum or path is invalid".into(),
         ));
     }
     Ok(())
@@ -1117,6 +1139,40 @@ mod tests {
         }"#).unwrap();
         validate_manifest(&manifest).unwrap();
         assert_eq!(manifest.game_count, 1);
+    }
+
+    #[test]
+    fn manifest_rejects_invalid_search_format_and_genre_metadata_descriptors() {
+        let json = r#"{
+            "manifest_schema_version":2,"catalog_schema_version":1,
+            "catalog_version":"2026-11-24T13:00:00Z","generated_at":"2026-11-24T13:00:00Z",
+            "source":"Amethys","platform":"windows-pc","game_count":1,"store_identity_count":0,
+            "search_index":{"file":"index/games-index.json.zst","compressed_size":10,
+                "compressed_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "format":"json-array-zstd"},
+            "shards":{"scheme":"amethys-id-range-v1","bucket_size":1000,
+                "path_template":"shards/{bucket:06d}.json.zst","game_count":1,
+                "files":[{"file":"shards/000001.json.zst","compressed_size":10,
+                    "compressed_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                    "bucket":1,"game_count":1}]},
+            "metadata":{"genres":{"file":"metadata/genres.json","size":10,
+                "sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}
+        }"#;
+        let manifest: CatalogManifest = serde_json::from_str(json).unwrap();
+        assert!(validate_manifest(&manifest).is_ok());
+
+        let mut bad_format = manifest.clone();
+        bad_format.search_index.format = Some("html".into());
+        assert!(validate_manifest(&bad_format).is_err());
+
+        let mut bad_metadata_hash = manifest.clone();
+        bad_metadata_hash.metadata.genres.sha256 = Some("not-a-sha256".into());
+        assert!(validate_manifest(&bad_metadata_hash).is_err());
+
+        let mut oversized_metadata = manifest;
+        oversized_metadata.metadata.genres.size =
+            Some(MAX_DECOMPRESSED_FILE_BYTES as u64 + 1);
+        assert!(validate_manifest(&oversized_metadata).is_err());
     }
 
     #[test]
