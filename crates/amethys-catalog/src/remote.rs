@@ -248,8 +248,8 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             .await?;
         verify_size(descriptor.compressed_size, compressed.len())?;
         let decoded = decompress_bounded(&compressed)?;
-        // Accept both the legacy three-field rows and the genre-aware
-        // four-field format so existing published catalogues remain readable.
+        // Accept legacy three-field rows, genre-aware four-field rows and
+        // artwork-aware five-field rows so published catalogues stay readable.
         let rows: Vec<serde_json::Value> = serde_json::from_slice(&decoded).map_err(|error| {
             RemoteCatalogError::InvalidData(format!("search index JSON: {error}"))
         })?;
