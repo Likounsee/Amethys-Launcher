@@ -127,6 +127,15 @@ async fn get_master_catalog_game(amethys_id: u64) -> Result<IpcResponsePayload, 
         .fetch_game(&manifest, amethys_id)
         .await
         .map_err(|error| error.to_string())?;
+    let cover_cache_path = match game.cover_url.as_deref() {
+        Some(url) => client
+            .cache_cover(game.amethys_id, url)
+            .await
+            .ok()
+            .flatten()
+            .map(|path| path.to_string_lossy().into_owned()),
+        None => None,
+    };
     Ok(IpcResponsePayload::CatalogGameDetails {
         game: IpcCatalogGameDetail {
             amethys_id: game.amethys_id,
@@ -136,6 +145,7 @@ async fn get_master_catalog_game(amethys_id: u64) -> Result<IpcResponsePayload, 
             summary: game.summary,
             release_date: game.release_date,
             cover_url: game.cover_url,
+            cover_cache_path,
             genres: game.genres,
             source_ids: game
                 .source_ids
