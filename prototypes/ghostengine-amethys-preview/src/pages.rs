@@ -1287,8 +1287,16 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
             p.hit_with(mx, y, mw, hero_h, 20, Action::SelectCatalogGame(featured.amethys_id), false, Hover::Card);
             y += hero_h + 28;
         }
-        let heading = if view.recommended { "Recommandés pour vous" } else { "À découvrir" };
-        let subtitle = if view.recommended {
+        let heading = if view.recommended && view.results.is_empty() {
+            "Aucune recommandation pour le moment"
+        } else if view.recommended {
+            "Recommandés pour vous"
+        } else {
+            "À découvrir"
+        };
+        let subtitle = if view.recommended && view.results.is_empty() {
+            "Aucune correspondance fiable avec les genres de votre bibliothèque"
+        } else if view.recommended {
             "Sélection basée sur les jeux de votre bibliothèque"
         } else {
             "Une sélection du catalogue Amethys"
@@ -1304,10 +1312,22 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
 
     if view.results.is_empty() && !view.loading && view.error.is_none() {
         panel(p, mx, y, mw, 116, 18);
-        p.text(mx + 20, y + 18, 26, if view.query.trim().is_empty() { "Le catalogue est prêt à explorer" } else { "Aucun jeu trouvé" }, 17.0, W::Semi, TXT);
-        p.paragraph(mx + 20, y + 52, mw - 40, 20,
-            if view.query.trim().is_empty() { "Synchronisez le catalogue pour charger les jeux disponibles." } else { "Essayez un autre titre ou vérifiez l’orthographe de votre recherche." },
-            12.5, W::Reg, MUT, 3);
+        let empty_title = if view.recommended {
+            "Aucune recommandation personnalisée"
+        } else if view.query.trim().is_empty() {
+            "Le catalogue est prêt à explorer"
+        } else {
+            "Aucun jeu trouvé"
+        };
+        let empty_description = if view.recommended {
+            "Essayez une recherche pour explorer les autres jeux du catalogue."
+        } else if view.query.trim().is_empty() {
+            "Synchronisez le catalogue pour charger les jeux disponibles."
+        } else {
+            "Essayez un autre titre ou vérifiez l’orthographe de votre recherche."
+        };
+        p.text(mx + 20, y + 18, 26, empty_title, 17.0, W::Semi, TXT);
+        p.paragraph(mx + 20, y + 52, mw - 40, 20, empty_description, 12.5, W::Reg, MUT, 3);
         y += 132;
     }
 
