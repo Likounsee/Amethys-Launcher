@@ -603,7 +603,7 @@ impl App {
                         self.notify(ToastKind::Info, format!("Jaquette du catalogue indisponible : {error}"));
                     }
                 }
-                self.store_detail = Some(detail);
+                self.store_detail = Some(*detail);
                 self.store_error = None;
                 self.page = Page::StoreProduct;
                 self.keyboard_focus = None;
