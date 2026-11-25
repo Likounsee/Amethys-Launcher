@@ -26,6 +26,51 @@ const STATE_STOPPED: u8 = 3;
 
 const DEFAULT_MASTER_CATALOG_URL: &str = "https://likounsee.github.io/Amethys-Catalog/";
 
+async fn cache_visible_covers(
+    client: &amethys_catalog::remote::RemoteCatalogClient<
+        amethys_catalog::remote::StaticCatalogProvider,
+    >,
+    covers: &[(u64, Option<String>)],
+) -> Vec<Option<String>> {
+    const MAX_CONCURRENT_COVERS: usize = 4;
+    const MAX_VISIBLE_COVERS: usize = 8;
+
+    let mut paths = vec![None; covers.len()];
+    let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_COVERS));
+    let mut tasks = JoinSet::new();
+
+    for (index, (amethys_id, cover_url)) in covers.iter().take(MAX_VISIBLE_COVERS).enumerate() {
+        let Some(cover_url) = cover_url.clone() else {
+            continue;
+        };
+        let client = client.clone();
+        let semaphore = Arc::clone(&semaphore);
+        let amethys_id = *amethys_id;
+
+        tasks.spawn(async move {
+            let Ok(_permit) = semaphore.acquire_owned().await else {
+                return (index, None);
+            };
+            let path = tokio::time::timeout(
+                std::time::Duration::from_secs(3),
+                client.cache_cover(amethys_id, &cover_url),
+            )
+            .await
+            .ok()
+            .and_then(Result::ok)
+            .flatten()
+            .map(|path| path.to_string_lossy().into_owned());
+            (index, path)
+        });
+    }
+
+    while let Some(Ok((index, path))) = tasks.join_next().await {
+        paths[index] = path;
+    }
+
+    paths
+}
+
 async fn sync_master_catalog() -> Result<IpcResponsePayload, String> {
     let data_dir = amethys_config::prepare_data_directory().map_err(|error| error.to_string())?;
     let base_url = std::env::var("AMETHYS_CATALOG_URL")
@@ -65,28 +110,15 @@ async fn search_master_catalog(query: &str, limit: usize) -> Result<IpcResponseP
         .search_cached(&entries, query, limit)
         .map_err(|error| error.to_string())?;
 
-    // Cache artwork only for the first visible batch. Remaining results keep
-    // their URL and can be loaded when a later page/search makes them visible.
+    // Fetch the first visible batch concurrently with a small fixed limit.
+    let cover_inputs = results
+        .iter()
+        .map(|entry| (entry.amethys_id, entry.cover_url.clone()))
+        .collect::<Vec<_>>();
+    let cover_paths = cache_visible_covers(&client, &cover_inputs).await;
     let mut games = Vec::with_capacity(results.len());
     for (index, entry) in results.into_iter().enumerate() {
-        // Keep search responsive: fetch a small first batch with a strict
-        // per-cover deadline; missing artwork remains a normal placeholder.
-        let cover_cache_path = if index < 8 {
-            match entry.cover_url.as_deref() {
-                Some(url) => tokio::time::timeout(
-                    std::time::Duration::from_secs(3),
-                    client.cache_cover(entry.amethys_id, url),
-                )
-                .await
-                .ok()
-                .and_then(Result::ok)
-                .flatten()
-                .map(|path| path.to_string_lossy().into_owned()),
-                None => None,
-            }
-        } else {
-            None
-        };
+        let cover_cache_path = cover_paths.get(index).cloned().flatten();
         games.push(IpcCatalogSearchEntry {
             amethys_id: entry.amethys_id,
             name: entry.name,
@@ -119,24 +151,14 @@ async fn recommend_master_catalog(
     let recommendations = client
         .recommend_cached(&entries, genres, owned_ids, owned_names, limit)
         .map_err(|error| error.to_string())?;
+    let cover_inputs = recommendations
+        .iter()
+        .map(|entry| (entry.amethys_id, entry.cover_url.clone()))
+        .collect::<Vec<_>>();
+    let cover_paths = cache_visible_covers(&client, &cover_inputs).await;
     let mut games = Vec::with_capacity(recommendations.len());
     for (index, entry) in recommendations.into_iter().enumerate() {
-        let cover_cache_path = if index < 8 {
-            match entry.cover_url.as_deref() {
-                Some(url) => tokio::time::timeout(
-                    std::time::Duration::from_secs(3),
-                    client.cache_cover(entry.amethys_id, url),
-                )
-                .await
-                .ok()
-                .and_then(Result::ok)
-                .flatten()
-                .map(|path| path.to_string_lossy().into_owned()),
-                None => None,
-            }
-        } else {
-            None
-        };
+        let cover_cache_path = cover_paths.get(index).cloned().flatten();
         games.push(IpcCatalogSearchEntry {
             amethys_id: entry.amethys_id,
             name: entry.name,
