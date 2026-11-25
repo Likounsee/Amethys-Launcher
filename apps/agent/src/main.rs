@@ -497,12 +497,11 @@ where
                                 // that is no longer present.
                                 let detected_path_is_valid =
                                     std::path::Path::new(&install_path).is_dir();
-                                let (refresh_path, refresh_executable) =
-                                    if detected_path_is_valid {
-                                        (install_path.as_str(), executable.as_deref())
-                                    } else {
-                                        (game.install_path.as_str(), None)
-                                    };
+                                let (refresh_path, refresh_executable) = if detected_path_is_valid {
+                                    (install_path.as_str(), executable.as_deref())
+                                } else {
+                                    (game.install_path.as_str(), None)
+                                };
                                 database
                                     .refresh_detected_installation(
                                         &game.id,
@@ -1365,7 +1364,10 @@ mod tests {
         assert_eq!(second_game.id, first_game.id);
         assert_eq!(second_game.platform_id.as_deref(), Some("570"));
         assert_eq!(second_game.name, "Updated name");
-        assert_eq!(second_game.install_path, moved_path.to_string_lossy().into_owned());
+        assert_eq!(
+            second_game.install_path,
+            moved_path.to_string_lossy().into_owned()
+        );
         assert_eq!(second_game.executable.as_deref(), Some("game.exe"));
         let games = database
             .lock()
@@ -1375,7 +1377,10 @@ mod tests {
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].id, first_game.id);
         assert_eq!(games[0].name, "Updated name");
-        assert_eq!(games[0].install_path, moved_path.to_string_lossy().into_owned());
+        assert_eq!(
+            games[0].install_path,
+            moved_path.to_string_lossy().into_owned()
+        );
         drop(database);
         std::fs::remove_dir_all(root).expect("remove installation fixture");
     }
