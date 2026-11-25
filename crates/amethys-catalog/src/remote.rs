@@ -919,43 +919,67 @@ fn validate_manifest(manifest: &CatalogManifest) -> RemoteCatalogResult<()> {
         ));
     }
     if manifest.catalog_version.trim().is_empty()
+        || manifest.generated_at.trim().is_empty()
+        || manifest.source.trim().is_empty()
+        || manifest.platform.trim().is_empty()
         || manifest.game_count == 0
         || manifest.shards.bucket_size == 0
         || manifest.shards.game_count != manifest.game_count
+        || manifest.shards.scheme != "amethys-id-range-v1"
+        || manifest.shards.path_template != "shards/{bucket:06d}.json.zst"
     {
         return Err(RemoteCatalogError::InvalidData(
-            "manifest counters or version are invalid".into(),
+            "manifest counters, version or shard layout are invalid".into(),
         ));
     }
     validate_relative_path(&manifest.search_index.file)?;
-    if manifest
-        .search_index
-        .compressed_sha256
-        .as_deref()
-        .is_none_or(|hash| !valid_sha256(hash))
+    if manifest.search_index.compressed_size.is_some_and(|size| size == 0 || size > MAX_COMPRESSED_FILE_BYTES as u64)
+        || manifest.search_index.compressed_sha256.as_deref().is_none_or(|hash| !valid_sha256(hash))
     {
         return Err(RemoteCatalogError::InvalidData(
-            "search-index checksum is missing or invalid".into(),
+            "search-index size or checksum is missing or invalid".into(),
         ));
     }
-    if manifest.shards.files.len() > 100_000 {
+    if manifest.shards.files.is_empty() || manifest.shards.files.len() > 100_000 {
         return Err(RemoteCatalogError::InvalidData(
-            "manifest contains too many shards".into(),
+            "manifest contains an invalid number of shards".into(),
         ));
     }
+
     let mut buckets = std::collections::BTreeSet::new();
+    let mut paths = std::collections::HashSet::new();
+    paths.insert(manifest.search_index.file.as_str());
+    let mut shard_game_count = 0u64;
     for shard in &manifest.shards.files {
         validate_relative_path(&shard.file)?;
+        let expected_path = format!("shards/{:06}.json.zst", shard.bucket);
         if !buckets.insert(shard.bucket)
+            || !paths.insert(shard.file.as_str())
+            || shard.file != expected_path
             || shard.game_count == 0
+            || shard.compressed_size == 0
+            || shard.compressed_size > MAX_COMPRESSED_FILE_BYTES as u64
             || !valid_sha256(&shard.compressed_sha256)
         {
             return Err(RemoteCatalogError::InvalidData(
                 "manifest contains an invalid shard descriptor".into(),
             ));
         }
+        shard_game_count = shard_game_count.checked_add(shard.game_count).ok_or_else(|| {
+            RemoteCatalogError::InvalidData("manifest shard game count overflows".into())
+        })?;
+    }
+    if shard_game_count != manifest.game_count {
+        return Err(RemoteCatalogError::InvalidData(
+            "manifest shard counts do not match the catalogue game count".into(),
+        ));
     }
     validate_relative_path(&manifest.metadata.genres.file)?;
+    if !paths.insert(manifest.metadata.genres.file.as_str()) {
+        return Err(RemoteCatalogError::InvalidData(
+            "manifest reuses a catalogue file path".into(),
+        ));
+    }
     Ok(())
 }
 
