@@ -509,7 +509,7 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
 
         let mut response = self
             .http
-            .get(url)
+            .get(url.clone())
             .send()
             .await
             .map_err(|error| RemoteCatalogError::Network(error.to_string()))?
