@@ -222,7 +222,7 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
     /// Loads the last validated manifest when the catalogue host is unavailable.
     pub fn load_cached_manifest(&self) -> RemoteCatalogResult<CatalogManifest> {
         let path = self.cache_dir.join("manifest.json");
-        let bytes = fs::read(path).map_err(|error| RemoteCatalogError::Cache(error.to_string()))?;
+        let bytes = read_bounded_cache(&path, MAX_MANIFEST_BYTES, "cached manifest")?;
         let manifest: CatalogManifest = serde_json::from_slice(&bytes).map_err(|error| {
             RemoteCatalogError::InvalidData(format!("cached manifest JSON: {error}"))
         })?;
@@ -1343,6 +1343,9 @@ mod tests {
         assert_eq!(cached.game_count, 1);
 
         fs::write(&cache_path, r#"{"catalog_version":"unvalidated"}"#).unwrap();
+        assert!(client.load_cached_manifest().is_err());
+
+        fs::write(&cache_path, vec![b'x'; MAX_MANIFEST_BYTES + 1]).unwrap();
         assert!(client.load_cached_manifest().is_err());
     }
 
