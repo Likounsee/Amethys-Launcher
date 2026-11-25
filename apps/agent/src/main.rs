@@ -115,10 +115,14 @@ async fn get_master_catalog_game(amethys_id: u64) -> Result<IpcResponsePayload, 
     let client =
         amethys_catalog::remote::RemoteCatalogClient::new(provider, data_dir.join("catalog-cache"))
             .map_err(|error| error.to_string())?;
-    let manifest = client
-        .fetch_manifest()
-        .await
-        .map_err(|error| error.to_string())?;
+    let manifest = match client.fetch_manifest().await {
+        Ok(manifest) => manifest,
+        Err(remote_error) => client.load_cached_manifest().map_err(|cache_error| {
+            format!(
+                "Catalogue distant indisponible ({remote_error}) et manifeste local inutilisable ({cache_error})."
+            )
+        })?,
+    };
     let game = client
         .fetch_game(&manifest, amethys_id)
         .await
