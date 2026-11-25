@@ -1366,7 +1366,7 @@ mod tests {
                 platform: "Steam".to_owned(),
                 platform_id: None,
                 install_path: "/games/legacy".to_owned(),
-                executable: None,
+                executable: Some("legacy.exe".to_owned()),
             },
         )
         .await;
@@ -1383,7 +1383,7 @@ mod tests {
                 platform: "steam".to_owned(),
                 platform_id: Some("12345".to_owned()),
                 install_path: "/games/legacy".to_owned(),
-                executable: None,
+                executable: Some("detected.exe".to_owned()),
             },
         )
         .await;
@@ -1405,7 +1405,7 @@ mod tests {
                 platform: "Steam".to_owned(),
                 platform_id: Some("12345".to_owned()),
                 install_path: "/games/moved".to_owned(),
-                executable: None,
+                executable: Some("moved.exe".to_owned()),
             },
         )
         .await;
@@ -1423,6 +1423,7 @@ mod tests {
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].platform_id.as_deref(), Some("12345"));
         assert_eq!(games[0].install_path, "/games/legacy");
+        assert_eq!(games[0].executable.as_deref(), Some("legacy.exe"));
     }
 
     #[tokio::test]
