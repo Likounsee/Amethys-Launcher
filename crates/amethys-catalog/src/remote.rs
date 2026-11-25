@@ -840,13 +840,19 @@ fn validate_cached_search_entries(entries: &[CatalogSearchEntry]) -> RemoteCatal
             || entry.amethys_id <= previous_id
             || entry.name.trim().is_empty()
             || entry.name.len() > 512
-            || entry.slug.as_ref().is_some_and(|slug| slug.len() > 512)
-            || entry.genres.len() > 128
+            || entry.name.contains('\0')
             || entry
-                .genres
-                .iter()
-                .any(|genre| genre.trim().is_empty() || genre.len() > 128)
-            || entry.cover_url.as_ref().is_some_and(|url| url.len() > 2048)
+                .slug
+                .as_ref()
+                .is_some_and(|slug| slug.len() > 512 || slug.contains('\0'))
+            || entry.genres.len() > 128
+            || entry.genres.iter().any(|genre| {
+                genre.trim().is_empty() || genre.len() > 128 || genre.contains('\0')
+            })
+            || entry
+                .cover_url
+                .as_ref()
+                .is_some_and(|url| url.len() > 2048 || url.contains('\0'))
         {
             return Err(RemoteCatalogError::InvalidData(
                 "cached search index contains an invalid game entry".into(),
@@ -1559,6 +1565,21 @@ mod tests {
             entries[2].cover_url.as_deref(),
             Some("https://images.igdb.com/cover.jpg")
         );
+    }
+
+    #[test]
+    fn search_index_parser_rejects_nul_characters_in_text_fields() {
+        for row in [
+            r#"[[1001, "Game\u0000Name", null]]"#,
+            r#"[[1001, "Game", "bad\u0000slug"]]"#,
+            r#"[[1001, "Game", null, ["bad\u0000genre"]]]"#,
+            r#"[[1001, "Game", null, [], "https://images.igdb.com/cover\u0000.jpg"]]"#,
+        ] {
+            assert!(
+                parse_search_index_rows(row.as_bytes(), 1).is_err(),
+                "accepted malformed row: {row}"
+            );
+        }
     }
 
     #[test]
