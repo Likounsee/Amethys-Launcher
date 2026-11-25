@@ -69,14 +69,19 @@ async fn search_master_catalog(query: &str, limit: usize) -> Result<IpcResponseP
     // their URL and can be loaded when a later page/search makes them visible.
     let mut games = Vec::with_capacity(results.len());
     for (index, entry) in results.into_iter().enumerate() {
-        let cover_cache_path = if index < 24 {
+        // Keep search responsive: fetch a small first batch with a strict
+        // per-cover deadline; missing artwork remains a normal placeholder.
+        let cover_cache_path = if index < 8 {
             match entry.cover_url.as_deref() {
-                Some(url) => client
-                    .cache_cover(entry.amethys_id, url)
-                    .await
-                    .ok()
-                    .flatten()
-                    .map(|path| path.to_string_lossy().into_owned()),
+                Some(url) => tokio::time::timeout(
+                    std::time::Duration::from_secs(3),
+                    client.cache_cover(entry.amethys_id, url),
+                )
+                .await
+                .ok()
+                .and_then(Result::ok)
+                .flatten()
+                .map(|path| path.to_string_lossy().into_owned()),
                 None => None,
             }
         } else {
