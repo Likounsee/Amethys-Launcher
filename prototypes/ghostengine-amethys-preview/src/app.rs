@@ -44,7 +44,7 @@ enum CoreMutationTask {
 
 enum StoreTaskResult {
     Search(Result<Vec<IpcCatalogSearchEntry>, String>),
-    Detail(Result<IpcCatalogGameDetail, String>),
+    Detail(Result<Box<IpcCatalogGameDetail>, String>),
     Synchronized(Result<(String, u64), String>),
 }
 
@@ -1064,7 +1064,7 @@ impl App {
                     let (sender, receiver) = std::sync::mpsc::channel();
                     std::thread::spawn(move || {
                         let result = crate::core_client::get_master_catalog_game(amethys_id);
-                        let _ = sender.send(StoreTaskResult::Detail(result));
+                        let _ = sender.send(StoreTaskResult::Detail(result.map(Box::new)));
                     });
                     self.store_receiver = Some(receiver);
                     self.store_loading = true;
