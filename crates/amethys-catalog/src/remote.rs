@@ -538,49 +538,50 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             bucket,
             &descriptor.compressed_sha256[..12]
         ));
-        let records: Vec<CatalogGameDetail> = if cache_path.is_file() {
-            let bytes =
-                read_bounded_cache(&cache_path, MAX_DECOMPRESSED_FILE_BYTES, "cached detail shard")?;
-            serde_json::from_slice(&bytes).map_err(|error| {
-                RemoteCatalogError::InvalidData(format!("cached shard JSON: {error}"))
-            })?
-        } else {
-            let url = self.file_url(&descriptor.file)?;
-            let compressed = self
-                .fetch_bytes(
-                    &url,
-                    MAX_COMPRESSED_FILE_BYTES,
-                    Some(&descriptor.compressed_sha256),
-                )
-                .await?;
-            verify_size(Some(descriptor.compressed_size), compressed.len())?;
-            let decoded = decompress_bounded(&compressed)?;
-            let records: Vec<CatalogGameDetail> =
-                serde_json::from_slice(&decoded).map_err(|error| {
-                    RemoteCatalogError::InvalidData(format!("detail shard JSON: {error}"))
-                })?;
+        let (records, cache_after_validation): (Vec<CatalogGameDetail>, bool) =
+            if cache_path.is_file() {
+                let bytes = read_bounded_cache(
+                    &cache_path,
+                    MAX_DECOMPRESSED_FILE_BYTES,
+                    "cached detail shard",
+                )?;
+                let records: Vec<CatalogGameDetail> = serde_json::from_slice(&bytes).map_err(
+                    |error| {
+                        RemoteCatalogError::InvalidData(format!("cached shard JSON: {error}"))
+                    },
+                )?;
+                (records, false)
+            } else {
+                let url = self.file_url(&descriptor.file)?;
+                let compressed = self
+                    .fetch_bytes(
+                        &url,
+                        MAX_COMPRESSED_FILE_BYTES,
+                        Some(&descriptor.compressed_sha256),
+                    )
+                    .await?;
+                verify_size(Some(descriptor.compressed_size), compressed.len())?;
+                let decoded = decompress_bounded(&compressed)?;
+                let records: Vec<CatalogGameDetail> =
+                    serde_json::from_slice(&decoded).map_err(|error| {
+                        RemoteCatalogError::InvalidData(format!("detail shard JSON: {error}"))
+                    })?;
+                (records, true)
+            };
+
+        validate_detail_shard(
+            &records,
+            bucket,
+            manifest.shards.bucket_size,
+            descriptor.game_count,
+        )?;
+
+        // Never persist downloaded data until the entire shard has passed the
+        // same validation used for offline cache reads.
+        if cache_after_validation {
             let json = serde_json::to_vec(&records)
                 .map_err(|error| RemoteCatalogError::InvalidData(error.to_string()))?;
             atomic_write(&cache_path, &json)?;
-            records
-        };
-        if records.len() as u64 != descriptor.game_count {
-            return Err(RemoteCatalogError::InvalidData(
-                "detail shard record count mismatch".into(),
-            ));
-        }
-        let mut previous_id = 0;
-        for record in &records {
-            if record.amethys_id == 0
-                || record.amethys_id / manifest.shards.bucket_size != bucket
-                || record.amethys_id <= previous_id
-                || record.name.trim().is_empty()
-            {
-                return Err(RemoteCatalogError::InvalidData(
-                    "detail shard contains an invalid or unordered game identity".into(),
-                ));
-            }
-            previous_id = record.amethys_id;
         }
         records
             .into_iter()
@@ -680,6 +681,80 @@ fn read_bounded_cache(path: &Path, max_bytes: usize, label: &str) -> RemoteCatal
         )));
     }
     Ok(bytes)
+}
+
+fn validate_detail_shard(
+    records: &[CatalogGameDetail],
+    bucket: u64,
+    bucket_size: u64,
+    expected_count: u64,
+) -> RemoteCatalogResult<()> {
+    if records.len() as u64 != expected_count {
+        return Err(RemoteCatalogError::InvalidData(
+            "detail shard record count mismatch".into(),
+        ));
+    }
+
+    let mut previous_id = 0;
+    let mut source_identities = std::collections::HashSet::new();
+    for record in records {
+        if record.amethys_id == 0
+            || record.amethys_id / bucket_size != bucket
+            || record.amethys_id <= previous_id
+        {
+            return Err(RemoteCatalogError::InvalidData(
+                "detail shard contains an invalid or unordered game identity".into(),
+            ));
+        }
+        if record.name.trim().is_empty()
+            || record.name.len() > 512
+            || record.name.contains('\0')
+            || record.igdb_id == Some(0)
+            || record.slug.as_ref().is_some_and(|value| value.len() > 512 || value.contains('\0'))
+            || record.summary.as_ref().is_some_and(|value| value.len() > 16_384 || value.contains('\0'))
+            || record.release_date.as_ref().is_some_and(|value| value.len() > 32 || value.contains('\0'))
+            || record.cover_url.as_ref().is_some_and(|value| value.len() > 2048 || value.contains('\0'))
+            || record.genres.len() > 64
+            || record.genres.iter().any(|value| value.trim().is_empty() || value.len() > 128 || value.contains('\0'))
+            || record.source_ids.len() > 64
+            || record.stores.len() > 64
+        {
+            return Err(RemoteCatalogError::InvalidData(
+                "detail shard contains invalid game metadata".into(),
+            ));
+        }
+
+        for identity in &record.source_ids {
+            if identity.source.is_empty()
+                || identity.source.len() > 128
+                || !identity.source.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':'))
+                || identity.external_id.trim().is_empty()
+                || identity.external_id.len() > 512
+                || identity.external_id.contains('\0')
+                || !source_identities.insert((identity.source.as_str(), identity.external_id.as_str()))
+            {
+                return Err(RemoteCatalogError::InvalidData(
+                    "detail shard contains an invalid or duplicated source identity".into(),
+                ));
+            }
+        }
+
+        for store in &record.stores {
+            if store.store.is_empty()
+                || store.store.len() > 128
+                || !store.store.bytes().all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b':'))
+                || store.external_id.as_ref().is_some_and(|value| value.trim().is_empty() || value.len() > 512 || value.contains('\0'))
+                || store.name.as_ref().is_some_and(|value| value.trim().is_empty() || value.len() > 512 || value.contains('\0'))
+                || store.url.as_ref().is_some_and(|value| value.len() > 2048 || value.contains('\0'))
+            {
+                return Err(RemoteCatalogError::InvalidData(
+                    "detail shard contains invalid store identity metadata".into(),
+                ));
+            }
+        }
+        previous_id = record.amethys_id;
+    }
+    Ok(())
 }
 
 fn validate_cached_search_entries(entries: &[CatalogSearchEntry]) -> RemoteCatalogResult<()> {
