@@ -1131,6 +1131,7 @@ pub struct StoreView<'a> {
     pub query: &'a str,
     pub focused: bool,
     pub results: &'a [IpcCatalogSearchEntry],
+    pub result_limit: usize,
     pub recommended: bool,
     pub promotions: bool,
     pub loading: bool,
@@ -1459,10 +1460,43 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
         p.icon(Icon::Info, x + card_w - 30, cy + card_h - 28, 14, VIO_HI, PANEL);
         p.hit_with(x, cy, card_w, card_h, 14, Action::SelectCatalogGame(game.amethys_id), false, Hover::Card);
         displayed += 1;
-        if displayed >= 48 { break; }
+        if displayed >= view.result_limit { break; }
     }
     let rows = (displayed as i32 + cols - 1) / cols;
-    y + rows * (card_h + gap) + 24
+    y += rows * (card_h + gap) + 24;
+    if view.results.len() >= view.result_limit && view.result_limit < 500 {
+        let button_w = 184;
+        let button_x = mx + (mw - button_w) / 2;
+        if view.loading {
+            button_disabled(p, button_x, y, "Chargement…", None);
+        } else {
+            button(
+                p,
+                button_x,
+                y,
+                Some(button_w),
+                "Afficher plus",
+                None,
+                Btn::Secondary,
+                PANEL,
+                Some(Action::ShowMoreStore),
+            );
+        }
+        y += 58;
+    } else if view.results.len() >= 500 {
+        p.text_fit(
+            mx,
+            y,
+            20,
+            "Les 500 premiers résultats sont affichés. Affinez votre recherche pour trouver un jeu précis.",
+            12.0,
+            W::Reg,
+            MUT,
+            mw,
+        );
+        y += 28;
+    }
+    y + 24
 }
 
 /// Dedicated product page for a game in the global store catalogue.
