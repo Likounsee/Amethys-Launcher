@@ -278,10 +278,18 @@ fn search_saved_games<'a>(
         .filter(|game| {
             let metadata = game.catalogue_metadata.as_ref();
             let genres = metadata.map_or_else(String::new, |value| value.genres.join(" "));
-            let developer = metadata.and_then(|value| value.developer.as_deref()).unwrap_or_default();
-            let publisher = metadata.and_then(|value| value.publisher.as_deref()).unwrap_or_default();
-            let release_date = metadata.and_then(|value| value.release_date.as_deref()).unwrap_or_default();
-            let description = metadata.and_then(|value| value.description.as_deref()).unwrap_or_default();
+            let developer = metadata
+                .and_then(|value| value.developer.as_deref())
+                .unwrap_or_default();
+            let publisher = metadata
+                .and_then(|value| value.publisher.as_deref())
+                .unwrap_or_default();
+            let release_date = metadata
+                .and_then(|value| value.release_date.as_deref())
+                .unwrap_or_default();
+            let description = metadata
+                .and_then(|value| value.description.as_deref())
+                .unwrap_or_default();
             let searchable = format!(
                 "{} {} {} {} {} {} {} {} {} {} {}",
                 game.name,
