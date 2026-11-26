@@ -700,6 +700,10 @@ impl App {
                 self.store_error = None;
             }
             StoreTaskResult::Search(Err(error)) => {
+                // Never leave results from an older query on screen as if they
+                // belonged to the failed request. The page now shows the error
+                // explicitly and can be retried without stale catalogue cards.
+                self.store_results.clear();
                 if self.page == Page::Store && !self.store_promotions {
                     self.store_error = Some(error);
                 } else {
