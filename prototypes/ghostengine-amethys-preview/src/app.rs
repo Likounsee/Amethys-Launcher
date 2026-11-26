@@ -1189,9 +1189,10 @@ impl App {
             Action::ClearStoreSearch => {
                 self.store_query.clear();
                 self.store_result_limit = PAGE_SIZE;
+                self.store_results.clear();
                 if self.store_loading {
                     self.store_refresh_pending = true;
-                    self.redraw_store_search_only();
+                    self.render(false);
                 } else {
                     self.start_store_task(false);
                 }
@@ -1217,6 +1218,7 @@ impl App {
             }
             Action::SearchStore => {
                 self.store_result_limit = PAGE_SIZE;
+                self.store_results.clear();
                 self.start_store_task(false);
             }
             Action::ShowMoreStore => {
@@ -1937,6 +1939,7 @@ impl App {
         }
         if changed || submitted {
             if submitted && store_searching {
+                self.store_results.clear();
                 self.start_store_task(false);
             } else if changed && store_searching && self.page == Page::Store {
                 // Typing must not repaint up to 48 game covers on every keypress.
