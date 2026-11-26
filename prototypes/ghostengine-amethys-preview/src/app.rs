@@ -388,17 +388,25 @@ fn normalized_install_path(path: &std::path::Path) -> String {
 
 fn validate_external_url(url: &str) -> Result<&str, String> {
     let url = url.trim();
-    let Some((scheme, remainder)) = url.split_once("://") else {
-        return Err("URL HTTP(S) invalide ou non autorisée.".to_owned());
+    let parsed = url::Url::parse(url)
+        .map_err(|_| "URL HTTPS invalide ou non autorisée.".to_owned())?;
+    let Some(host) = parsed.host_str() else {
+        return Err("URL HTTPS invalide ou non autorisée.".to_owned());
     };
-    if !matches!(scheme, "http" | "https")
+    let normalized_host = host.trim_end_matches('.').to_ascii_lowercase();
+    let is_ip_literal = normalized_host.parse::<std::net::IpAddr>().is_ok();
+    if parsed.scheme() != "https"
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+        || parsed.port().is_some()
+        || is_ip_literal
+        || normalized_host == "localhost"
+        || normalized_host.ends_with(".localhost")
+        || normalized_host.ends_with(".local")
+        || !normalized_host.contains('.')
         || url.chars().any(|character| character.is_control() || character.is_whitespace() || character == '\\')
     {
-        return Err("URL HTTP(S) invalide ou non autorisée.".to_owned());
-    }
-    let host = remainder.split(['/', '?', '#']).next().unwrap_or_default();
-    if host.is_empty() || host.starts_with(':') || host.starts_with('@') {
-        return Err("URL HTTP(S) invalide ou non autorisée.".to_owned());
+        return Err("URL HTTPS invalide ou non autorisée.".to_owned());
     }
     Ok(url)
 }
@@ -2227,17 +2235,26 @@ mod tests {
     }
 
     #[test]
-    fn catalogue_store_urls_only_allow_http_and_https_hosts() {
+    fn catalogue_store_urls_only_allow_public_https_hosts_without_credentials_or_ports() {
         assert_eq!(validate_external_url("https://store.example/game").unwrap(), "https://store.example/game");
-        assert_eq!(validate_external_url("http://store.example").unwrap(), "http://store.example");
+        assert_eq!(validate_external_url("https://store.example:443/game").unwrap(), "https://store.example:443/game");
         for url in [
+            "http://store.example",
             "javascript:alert(1)",
             "file:///etc/passwd",
             "https:///missing-host",
             "https://",
             "https://bad host/path",
-            "https://bad\\host/path",
+            "https://bad\\\\host/path",
             "https://?query=only",
+            "https://store.example:8443/game",
+            "https://user:pass@store.example/game",
+            "https://store.example@attacker.example/game",
+            "https://127.0.0.1/game",
+            "https://[::1]/game",
+            "https://localhost/game",
+            "https://catalog.local/game",
+            "https://store/game",
         ] {
             assert!(validate_external_url(url).is_err(), "unexpectedly accepted {url}");
         }
