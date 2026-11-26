@@ -497,7 +497,7 @@ pub fn search_master_catalog(
     match send_core_command(
         IpcCommand::SearchMasterCatalog {
             query: query.to_owned(),
-            limit: limit.clamp(1, 100),
+            limit: limit.clamp(1, 500),
         },
         std::time::Duration::from_secs(30),
     )? {
