@@ -412,7 +412,7 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         limit: usize,
     ) -> RemoteCatalogResult<Vec<(CatalogSearchEntry, Vec<String>)>> {
         if limit == 0
-            || limit > 100
+            || limit > MAX_SEARCH_RESULTS
             || owned_genres.len() > 512
             || owned_ids.len() > 10_000
             || owned_names.len() > 10_000
