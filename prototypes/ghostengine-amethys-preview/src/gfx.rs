@@ -80,6 +80,7 @@ pub enum Action {
     ClearStoreSearch,
     SetStoreMode(bool),
     SearchStore,
+    ShowMoreStore,
     SyncMasterCatalog,
     SelectCatalogGame(u64),
     BackToStore,
