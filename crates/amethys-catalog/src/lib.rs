@@ -523,7 +523,8 @@ fn validate_https_reference(value: &str, label: &str) -> CatalogResult<()> {
         CatalogError::InvalidDocument(format!("{label} must be a valid absolute HTTPS URL"))
     })?;
     let host = parsed.host_str().unwrap_or_default();
-    let is_non_public_host = host.parse::<std::net::IpAddr>().is_ok()
+    let ip_literal = host.trim_start_matches('[').trim_end_matches(']');
+    let is_non_public_host = ip_literal.parse::<std::net::IpAddr>().is_ok()
         || host.eq_ignore_ascii_case("localhost")
         || host.ends_with(".localhost")
         || host.ends_with(".local");
