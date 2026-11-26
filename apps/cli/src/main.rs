@@ -276,13 +276,25 @@ fn search_saved_games<'a>(
     games
         .iter()
         .filter(|game| {
+            let metadata = game.catalogue_metadata.as_ref();
+            let genres = metadata.map_or_else(String::new, |value| value.genres.join(" "));
+            let developer = metadata.and_then(|value| value.developer.as_deref()).unwrap_or_default();
+            let publisher = metadata.and_then(|value| value.publisher.as_deref()).unwrap_or_default();
+            let release_date = metadata.and_then(|value| value.release_date.as_deref()).unwrap_or_default();
+            let description = metadata.and_then(|value| value.description.as_deref()).unwrap_or_default();
             let searchable = format!(
-                "{} {} {} {} {}",
+                "{} {} {} {} {} {} {} {} {} {} {}",
                 game.name,
                 game.platform,
                 game.platform_id.as_deref().unwrap_or_default(),
+                game.catalogue_game_id.as_deref().unwrap_or_default(),
                 game.install_path,
                 game.executable.as_deref().unwrap_or_default(),
+                genres,
+                developer,
+                publisher,
+                release_date,
+                description,
             )
             .to_lowercase();
             terms.iter().all(|term| searchable.contains(term))
@@ -1558,8 +1570,14 @@ mod tests {
                 name: "Clair Obscur: Expedition 33".to_owned(),
                 platform: "Steam".to_owned(),
                 platform_id: Some("1903340".to_owned()),
-                catalogue_game_id: None,
-                catalogue_metadata: None,
+                catalogue_game_id: Some("amethys-1001".to_owned()),
+                catalogue_metadata: Some(amethys_ipc::IpcGameMetadata {
+                    genres: vec!["RPG".to_owned(), "Adventure".to_owned()],
+                    developer: Some("Sandfall Interactive".to_owned()),
+                    publisher: Some("Kepler Interactive".to_owned()),
+                    release_date: Some("2025-04-24".to_owned()),
+                    description: Some("A journey through a dark fantasy world.".to_owned()),
+                }),
                 install_path: "A:/SteamLibrary/steamapps/common/Expedition 33".to_owned(),
                 executable: Some("Expedition33.exe".to_owned()),
             },
@@ -1578,6 +1596,19 @@ mod tests {
         let by_name = super::search_saved_games(&games, "CLAIR obscur");
         assert_eq!(by_name.len(), 1);
         assert_eq!(by_name[0].id, "steam-1");
+
+        for query in [
+            "rpg adventure",
+            "sandfall interactive",
+            "kepler publisher",
+            "2025-04",
+            "dark fantasy",
+            "amethys-1001",
+        ] {
+            let results = super::search_saved_games(&games, query);
+            assert_eq!(results.len(), 1, "query {query:?}");
+            assert_eq!(results[0].id, "steam-1");
+        }
 
         let by_platform_and_id = super::search_saved_games(&games, "steam 1903340");
         assert_eq!(by_platform_and_id.len(), 1);
