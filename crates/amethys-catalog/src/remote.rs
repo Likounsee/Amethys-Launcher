@@ -294,13 +294,10 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         if manifest_path.exists() {
             let manifest_bytes =
                 read_bounded_cache(&manifest_path, MAX_MANIFEST_BYTES, "cached manifest")?;
-            let manifest: CatalogManifest = serde_json::from_slice(&manifest_bytes).map_err(
-                |error| {
-                    RemoteCatalogError::InvalidData(format!(
-                        "cached manifest JSON: {error}"
-                    ))
-                },
-            )?;
+            let manifest: CatalogManifest =
+                serde_json::from_slice(&manifest_bytes).map_err(|error| {
+                    RemoteCatalogError::InvalidData(format!("cached manifest JSON: {error}"))
+                })?;
             validate_manifest(&manifest)?;
             if entries.len() as u64 != manifest.game_count {
                 return Err(RemoteCatalogError::InvalidData(format!(
