@@ -1379,6 +1379,24 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
         y += 62;
     }
 
+    if let Some(error) = view.error {
+        let error_h = 104;
+        panel(p, mx, y, mw, error_h, 16);
+        p.text(mx + 20, y + 14, 22, "Catalogue indisponible", 16.0, W::Semi, AMBER);
+        p.paragraph(
+            mx + 20,
+            y + 44,
+            mw - 40,
+            19,
+            error,
+            12.5,
+            W::Reg,
+            SOFT,
+            3,
+        );
+        y += error_h + 16;
+    }
+
     if view.results.is_empty() && !view.loading && view.error.is_none() {
         panel(p, mx, y, mw, 116, 18);
         let empty_title = if view.recommended {
