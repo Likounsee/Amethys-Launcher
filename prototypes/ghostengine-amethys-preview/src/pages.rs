@@ -405,39 +405,9 @@ fn sort_width(p: &mut Painter) -> i32 {
 }
 
 // ------------------------------------------------------------- library data
-/// Matches every search term against local and linked catalogue metadata.
+/// Uses the shared Core IPC search semantics for local and catalogue metadata.
 pub fn library_matches_query(game: &IpcGameEntry, query: &str) -> bool {
-    let terms = query.split_whitespace().map(str::to_lowercase).collect::<Vec<_>>();
-    if terms.is_empty() {
-        return true;
-    }
-
-    // Catalogue fields are optional for legacy entries and can be absent while
-    // the local installation remains perfectly usable.
-    let metadata = game.catalogue_metadata.as_ref();
-    let genres = metadata.map_or_else(String::new, |value| value.genres.join(" "));
-    let developer = metadata.and_then(|value| value.developer.as_deref()).unwrap_or_default();
-    let publisher = metadata.and_then(|value| value.publisher.as_deref()).unwrap_or_default();
-    let release_date = metadata.and_then(|value| value.release_date.as_deref()).unwrap_or_default();
-    let description = metadata.and_then(|value| value.description.as_deref()).unwrap_or_default();
-
-    let searchable = format!(
-        "{} {} {} {} {} {} {} {} {} {} {}",
-        game.name,
-        game.platform,
-        game.platform_id.as_deref().unwrap_or_default(),
-        game.catalogue_game_id.as_deref().unwrap_or_default(),
-        game.install_path,
-        game.executable.as_deref().unwrap_or_default(),
-        genres,
-        developer,
-        publisher,
-        release_date,
-        description,
-    )
-    .to_lowercase();
-
-    terms.iter().all(|term| searchable.contains(term))
+    amethys_ipc::game_matches_search_query(game, query)
 }
 
 /// Returns distinct, non-empty platform names in case-insensitive display order.
