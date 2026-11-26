@@ -275,38 +275,7 @@ fn search_saved_games<'a>(
 
     games
         .iter()
-        .filter(|game| {
-            let metadata = game.catalogue_metadata.as_ref();
-            let genres = metadata.map_or_else(String::new, |value| value.genres.join(" "));
-            let developer = metadata
-                .and_then(|value| value.developer.as_deref())
-                .unwrap_or_default();
-            let publisher = metadata
-                .and_then(|value| value.publisher.as_deref())
-                .unwrap_or_default();
-            let release_date = metadata
-                .and_then(|value| value.release_date.as_deref())
-                .unwrap_or_default();
-            let description = metadata
-                .and_then(|value| value.description.as_deref())
-                .unwrap_or_default();
-            let searchable = format!(
-                "{} {} {} {} {} {} {} {} {} {} {}",
-                game.name,
-                game.platform,
-                game.platform_id.as_deref().unwrap_or_default(),
-                game.catalogue_game_id.as_deref().unwrap_or_default(),
-                game.install_path,
-                game.executable.as_deref().unwrap_or_default(),
-                genres,
-                developer,
-                publisher,
-                release_date,
-                description,
-            )
-            .to_lowercase();
-            terms.iter().all(|term| searchable.contains(term))
-        })
+        .filter(|game| amethys_ipc::game_matches_search_query(game, query))
         .collect()
 }
 
