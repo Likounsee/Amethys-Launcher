@@ -192,10 +192,31 @@ async fn get_master_catalog_game(amethys_id: u64) -> Result<IpcResponsePayload, 
             )
         })?,
     };
-    let game = client
-        .fetch_game(&manifest, amethys_id)
-        .await
-        .map_err(|error| error.to_string())?;
+    let game = match client.fetch_game(&manifest, amethys_id).await {
+        Ok(game) => game,
+        Err(amethys_catalog::remote::RemoteCatalogError::Network(remote_error)) => {
+            // A newer manifest may be reachable while its detail shard is not.
+            // Keep the last fully synchronized catalogue usable instead of
+            // failing a detail page that can still be served from the old cache.
+            let cached_manifest = client.load_cached_manifest().map_err(|cache_error| {
+                format!(
+                    "Fiche distante indisponible ({remote_error}) et manifeste local inutilisable ({cache_error})."
+                )
+            })?;
+            if cached_manifest.catalog_version == manifest.catalog_version {
+                return Err(remote_error.to_string());
+            }
+            client
+                .fetch_game(&cached_manifest, amethys_id)
+                .await
+                .map_err(|cache_error| {
+                    format!(
+                        "Fiche indisponible dans le catalogue courant ({remote_error}) et dans le dernier catalogue synchronisé ({cache_error})."
+                    )
+                })?
+        }
+        Err(error) => return Err(error.to_string()),
+    };
     let cover_cache_path = match game.cover_url.as_deref() {
         Some(url) => tokio::time::timeout(
             std::time::Duration::from_secs(3),
