@@ -1608,7 +1608,7 @@ mod tests {
         for query in [
             "rpg adventure",
             "sandfall interactive",
-            "kepler publisher",
+            "kepler interactive",
             "2025-04",
             "dark fantasy",
             "amethys-1001",
