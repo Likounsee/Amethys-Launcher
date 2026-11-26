@@ -2170,6 +2170,30 @@ mod tests {
     }
 
     #[test]
+    fn search_and_recommendation_limits_support_store_pagination() {
+        let directory = tempfile::tempdir().unwrap();
+        let client = RemoteCatalogClient::new(
+            StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
+            directory.path(),
+        )
+        .unwrap();
+        let entries = Vec::new();
+
+        assert!(client.search_cached(&entries, "", MAX_SEARCH_RESULTS).is_ok());
+        assert!(client.search_cached(&entries, "", MAX_SEARCH_RESULTS + 1).is_err());
+        assert!(
+            client
+                .recommend_cached_with_reasons(&entries, &[], &[], &[], MAX_SEARCH_RESULTS)
+                .is_ok()
+        );
+        assert!(
+            client
+                .recommend_cached_with_reasons(&entries, &[], &[], &[], MAX_SEARCH_RESULTS + 1)
+                .is_err()
+        );
+    }
+
+    #[test]
     fn rejects_non_sha256_hashes() {
         assert!(!valid_sha256("not-a-hash"));
         assert!(valid_sha256(&"a".repeat(64)));
