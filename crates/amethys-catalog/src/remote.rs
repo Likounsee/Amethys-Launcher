@@ -286,6 +286,30 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             RemoteCatalogError::InvalidData(format!("cached index JSON: {error}"))
         })?;
         validate_cached_search_entries(&entries)?;
+
+        // The index and manifest are committed as separate atomic files. If a
+        // process or disk error interrupts the second write, never expose an
+        // index whose record count belongs to a different catalogue version.
+        let manifest_path = self.cache_dir.join("manifest.json");
+        if manifest_path.exists() {
+            let manifest_bytes =
+                read_bounded_cache(&manifest_path, MAX_MANIFEST_BYTES, "cached manifest")?;
+            let manifest: CatalogManifest = serde_json::from_slice(&manifest_bytes).map_err(
+                |error| {
+                    RemoteCatalogError::InvalidData(format!(
+                        "cached manifest JSON: {error}"
+                    ))
+                },
+            )?;
+            validate_manifest(&manifest)?;
+            if entries.len() as u64 != manifest.game_count {
+                return Err(RemoteCatalogError::InvalidData(format!(
+                    "cached search index contains {} games but cached manifest declares {}",
+                    entries.len(),
+                    manifest.game_count
+                )));
+            }
+        }
         Ok(entries)
     }
 
@@ -1718,6 +1742,46 @@ mod tests {
 
         fs::write(&cache_path, b"not json").unwrap();
         assert!(client.load_cached_index().is_err());
+    }
+
+    #[test]
+    fn cached_index_rejects_manifest_count_mismatch() {
+        let directory = tempfile::tempdir().unwrap();
+        let index_dir = directory.path().join("index");
+        fs::create_dir_all(&index_dir).unwrap();
+        let client = RemoteCatalogClient::new(
+            StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
+            directory.path(),
+        )
+        .unwrap();
+
+        fs::write(
+            index_dir.join("games-index.json"),
+            r#"[{"amethys_id":1001,"name":"One","slug":null,"genres":[],"cover_url":null}]"#,
+        )
+        .unwrap();
+        fs::write(
+            directory.path().join("manifest.json"),
+            r#"{
+                "manifest_schema_version":2,"catalog_schema_version":1,
+                "catalog_version":"v2","generated_at":"2026-11-24T13:00:00Z",
+                "source":"Amethys","platform":"windows-pc","game_count":2,
+                "store_identity_count":0,
+                "search_index":{"file":"index/games-index.json.zst","compressed_size":10,
+                    "compressed_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+                "shards":{"scheme":"amethys-id-range-v1","bucket_size":1000,
+                    "path_template":"shards/{bucket:06d}.json.zst","game_count":2,
+                    "files":[{"file":"shards/000001.json.zst","compressed_size":10,
+                        "compressed_sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                        "bucket":1,"game_count":2}]},
+                "metadata":{"genres":{"file":"metadata/genres.json","size":10,
+                    "sha256":"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}}
+            }"#,
+        )
+        .unwrap();
+
+        let error = client.load_cached_index().unwrap_err();
+        assert!(error.to_string().contains("manifest declares 2"));
     }
 
     #[test]
