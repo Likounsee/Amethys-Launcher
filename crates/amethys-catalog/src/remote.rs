@@ -229,7 +229,8 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         let manifest: CatalogManifest = serde_json::from_slice(&bytes)
             .map_err(|error| RemoteCatalogError::InvalidData(format!("manifest JSON: {error}")))?;
         validate_manifest(&manifest)?;
-        atomic_write(&self.cache_dir.join("manifest.json"), &bytes)?;
+        // Do not advance the offline manifest until its matching search index
+        // has also been downloaded, verified and committed by synchronize_index.
         Ok(manifest)
     }
 
@@ -267,6 +268,13 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
         let json = serde_json::to_vec(&entries)
             .map_err(|error| RemoteCatalogError::InvalidData(error.to_string()))?;
         atomic_write(&cache_path, &json)?;
+
+        // Commit the manifest only after its index has passed checksum,
+        // decompression, row-count and metadata validation. A failed index
+        // download therefore leaves the previous offline manifest intact.
+        let manifest_json = serde_json::to_vec(manifest)
+            .map_err(|error| RemoteCatalogError::InvalidData(error.to_string()))?;
+        atomic_write(&self.cache_dir.join("manifest.json"), &manifest_json)?;
         Ok(entries)
     }
 
