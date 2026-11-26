@@ -697,6 +697,17 @@ impl App {
         let Some(result) = result else { return };
         self.store_receiver = None;
         self.store_loading = false;
+        // A newer search/profile request supersedes the completed search. Do
+        // not briefly publish cards for an obsolete query while the latest
+        // request is being started.
+        if self.store_refresh_pending
+            && matches!(&result, StoreTaskResult::Search(_))
+            && self.page == Page::Store
+            && !self.store_promotions
+        {
+            self.start_store_task(false);
+            return;
+        }
         match result {
             StoreTaskResult::Search(Ok(games)) => {
                 self.store_results = games;
@@ -1243,27 +1254,32 @@ impl App {
                 self.render(false);
             }
             Action::SelectCatalogGame(amethys_id) => {
-                if !self.store_loading {
-                    let (sender, receiver) = std::sync::mpsc::channel();
-                    std::thread::spawn(move || {
-                        let result = crate::core_client::get_master_catalog_game(amethys_id);
-                        let _ = sender.send(StoreTaskResult::Detail(result.map(Box::new)));
-                    });
-                    self.store_receiver = Some(receiver);
-                    self.store_loading = true;
-                    self.store_error = None;
-                    self.store_detail = None;
-                    self.page = Page::StoreProduct;
-                    self.keyboard_focus = None;
-                    self.start_page_fade();
-                    self.render(true);
-                }
+                // A product selection takes priority over an in-flight search
+                // or pagination request. Replacing the receiver discards its
+                // eventual response without blocking navigation.
+                let (sender, receiver) = std::sync::mpsc::channel();
+                std::thread::spawn(move || {
+                    let result = crate::core_client::get_master_catalog_game(amethys_id);
+                    let _ = sender.send(StoreTaskResult::Detail(result.map(Box::new)));
+                });
+                self.store_receiver = Some(receiver);
+                self.store_loading = true;
+                self.store_error = None;
+                self.store_detail = None;
+                self.page = Page::StoreProduct;
+                self.keyboard_focus = None;
+                self.start_page_fade();
+                self.render(true);
             }
             Action::BackToStore => {
                 self.page = Page::Store;
                 self.keyboard_focus = None;
                 self.start_page_fade();
-                self.render(true);
+                if self.store_refresh_pending && !self.store_promotions {
+                    self.start_store_task(false);
+                } else {
+                    self.render(true);
+                }
             }
             Action::SelectGame(index) => {
                 if let Some(game) = self.games.get(index) {
