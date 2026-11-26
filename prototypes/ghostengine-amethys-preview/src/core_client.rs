@@ -518,7 +518,7 @@ pub fn recommend_master_catalog(
             genres,
             owned_ids,
             owned_names,
-            limit: limit.clamp(1, 100),
+            limit: limit.clamp(1, 500),
         },
         std::time::Duration::from_secs(30),
     )? {
