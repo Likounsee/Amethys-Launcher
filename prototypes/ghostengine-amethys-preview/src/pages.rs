@@ -1333,30 +1333,44 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
         if lay.compact() {
             // Keep the catalogue refresh reachable on narrow windows without
             // squeezing the section heading or overlapping the result grid.
-            button(
-                p,
-                mx,
-                y + 54,
-                Some(132),
-                "Actualiser",
-                Some(Icon::Refresh),
-                Btn::Secondary,
-                PANEL,
-                Some(Action::SyncMasterCatalog),
-            );
+            if view.loading {
+                button_disabled(p, mx, y + 54, "Actualiser", Some(Icon::Refresh));
+            } else {
+                button(
+                    p,
+                    mx,
+                    y + 54,
+                    Some(132),
+                    "Actualiser",
+                    Some(Icon::Refresh),
+                    Btn::Secondary,
+                    PANEL,
+                    Some(Action::SyncMasterCatalog),
+                );
+            }
             y += 108;
         } else {
-            button(
-                p,
-                mx + mw - 140,
-                y + 4,
-                Some(140),
-                "Actualiser",
-                Some(Icon::Refresh),
-                Btn::Secondary,
-                PANEL,
-                Some(Action::SyncMasterCatalog),
-            );
+            if view.loading {
+                button_disabled(
+                    p,
+                    mx + mw - 140,
+                    y + 4,
+                    "Actualiser",
+                    Some(Icon::Refresh),
+                );
+            } else {
+                button(
+                    p,
+                    mx + mw - 140,
+                    y + 4,
+                    Some(140),
+                    "Actualiser",
+                    Some(Icon::Refresh),
+                    Btn::Secondary,
+                    PANEL,
+                    Some(Action::SyncMasterCatalog),
+                );
+            }
             y += 62;
         }
     } else {
