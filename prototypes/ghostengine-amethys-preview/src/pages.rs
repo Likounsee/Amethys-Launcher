@@ -1376,7 +1376,7 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
         }
     } else {
         p.text(mx, y, 28, "Résultats de recherche", 21.0, W::Semi, TXT);
-        p.text(mx, y + 30, 20, &format!("{} jeu(x) trouvé(s)", view.results.len()), 12.5, W::Reg, MUT);
+        p.text(mx, y + 30, 20, &format!("{} jeu(x) affiché(s)", view.results.len()), 12.5, W::Reg, MUT);
         y += 62;
     }
 
@@ -1488,7 +1488,7 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
             mx,
             y,
             20,
-            "Les 500 premiers résultats sont affichés. Affinez votre recherche pour trouver un jeu précis.",
+            "Affichage limité à 500 jeux. Affinez votre recherche pour trouver un jeu précis.",
             12.0,
             W::Reg,
             MUT,
