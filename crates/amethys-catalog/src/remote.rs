@@ -2179,8 +2179,16 @@ mod tests {
         .unwrap();
         let entries = Vec::new();
 
-        assert!(client.search_cached(&entries, "", MAX_SEARCH_RESULTS).is_ok());
-        assert!(client.search_cached(&entries, "", MAX_SEARCH_RESULTS + 1).is_err());
+        assert!(
+            client
+                .search_cached(&entries, "", MAX_SEARCH_RESULTS)
+                .is_ok()
+        );
+        assert!(
+            client
+                .search_cached(&entries, "", MAX_SEARCH_RESULTS + 1)
+                .is_err()
+        );
         assert!(
             client
                 .recommend_cached_with_reasons(&entries, &[], &[], &[], MAX_SEARCH_RESULTS)
