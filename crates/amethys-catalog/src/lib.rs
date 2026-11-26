@@ -522,13 +522,20 @@ fn validate_https_reference(value: &str, label: &str) -> CatalogResult<()> {
     let parsed = url::Url::parse(value).map_err(|_| {
         CatalogError::InvalidDocument(format!("{label} must be a valid absolute HTTPS URL"))
     })?;
+    let host = parsed.host_str().unwrap_or_default();
+    let is_non_public_host = host.parse::<std::net::IpAddr>().is_ok()
+        || host.eq_ignore_ascii_case("localhost")
+        || host.ends_with(".localhost")
+        || host.ends_with(".local");
     if parsed.scheme() != "https"
-        || parsed.host_str().is_none()
+        || host.is_empty()
+        || is_non_public_host
+        || parsed.port().is_some()
         || !parsed.username().is_empty()
         || parsed.password().is_some()
     {
         return Err(CatalogError::InvalidDocument(format!(
-            "{label} must be an absolute HTTPS URL without credentials"
+            "{label} must use a public HTTPS hostname on the default port without credentials"
         )));
     }
     Ok(())
@@ -1328,6 +1335,11 @@ mod tests {
         assert!(validate_https_reference("https://user:secret@store.example/game", "URL").is_err());
         assert!(validate_https_reference("https://bad host/game", "URL").is_err());
         assert!(validate_https_reference("https://store.example:invalid/game", "URL").is_err());
+        assert!(validate_https_reference("https://store.example:8443/game", "URL").is_err());
+        assert!(validate_https_reference("https://127.0.0.1/game", "URL").is_err());
+        assert!(validate_https_reference("https://[::1]/game", "URL").is_err());
+        assert!(validate_https_reference("https://localhost/game", "URL").is_err());
+        assert!(validate_https_reference("https://catalog.local/game", "URL").is_err());
     }
 
     #[test]
