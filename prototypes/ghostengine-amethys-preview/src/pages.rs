@@ -405,21 +405,38 @@ fn sort_width(p: &mut Painter) -> i32 {
 }
 
 // ------------------------------------------------------------- library data
-/// Matches every search term against the actual metadata stored for a game.
+/// Matches every search term against local and linked catalogue metadata.
 pub fn library_matches_query(game: &IpcGameEntry, query: &str) -> bool {
     let terms = query.split_whitespace().map(str::to_lowercase).collect::<Vec<_>>();
     if terms.is_empty() {
         return true;
     }
+
+    // Catalogue fields are optional for legacy entries and can be absent while
+    // the local installation remains perfectly usable.
+    let metadata = game.catalogue_metadata.as_ref();
+    let genres = metadata.map_or_else(String::new, |value| value.genres.join(" "));
+    let developer = metadata.and_then(|value| value.developer.as_deref()).unwrap_or_default();
+    let publisher = metadata.and_then(|value| value.publisher.as_deref()).unwrap_or_default();
+    let release_date = metadata.and_then(|value| value.release_date.as_deref()).unwrap_or_default();
+    let description = metadata.and_then(|value| value.description.as_deref()).unwrap_or_default();
+
     let searchable = format!(
-        "{} {} {} {} {}",
+        "{} {} {} {} {} {} {} {} {} {} {}",
         game.name,
         game.platform,
         game.platform_id.as_deref().unwrap_or_default(),
+        game.catalogue_game_id.as_deref().unwrap_or_default(),
         game.install_path,
         game.executable.as_deref().unwrap_or_default(),
+        genres,
+        developer,
+        publisher,
+        release_date,
+        description,
     )
     .to_lowercase();
+
     terms.iter().all(|term| searchable.contains(term))
 }
 
@@ -1883,14 +1900,37 @@ mod tests {
     }
 
     #[test]
-    fn search_matches_multiple_terms_across_real_metadata() {
+    fn search_matches_multiple_terms_across_local_and_catalogue_metadata() {
         let mut entry = game("Steam");
         entry.name = "Hollow Knight".to_owned();
         entry.install_path = "C:/Games/HollowKnight".to_owned();
+        entry.catalogue_game_id = Some("amethys-3000".to_owned());
+        entry.catalogue_metadata = Some(amethys_ipc::IpcGameMetadata {
+            genres: vec!["Metroidvania".to_owned(), "Action".to_owned()],
+            developer: Some("Team Cherry".to_owned()),
+            publisher: Some("Fictional Publisher".to_owned()),
+            release_date: Some("2017-02-24".to_owned()),
+            description: Some("Explore a forgotten underground kingdom.".to_owned()),
+        });
+
         assert!(library_matches_query(&entry, "hollow steam"));
         assert!(library_matches_query(&entry, "C:/Games knight"));
+        assert!(library_matches_query(&entry, "metroidvania action"));
+        assert!(library_matches_query(&entry, "team cherry"));
+        assert!(library_matches_query(&entry, "fictional publisher"));
+        assert!(library_matches_query(&entry, "2017-02"));
+        assert!(library_matches_query(&entry, "forgotten kingdom"));
+        assert!(library_matches_query(&entry, "amethys-3000"));
         assert!(!library_matches_query(&entry, "hollow epic"));
+        assert!(!library_matches_query(&entry, "publisher unknown"));
         assert!(library_matches_query(&entry, "  "));
+    }
+
+    #[test]
+    fn search_remains_compatible_with_games_without_catalogue_metadata() {
+        let entry = game("Steam");
+        assert!(library_matches_query(&entry, "fixture steam"));
+        assert!(!library_matches_query(&entry, "metroidvania"));
     }
 
     #[test]
