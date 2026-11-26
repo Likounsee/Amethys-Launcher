@@ -471,6 +471,8 @@ pub struct App {
     store_search_focused: bool,
     store_promotions: bool,
     store_results: Vec<IpcCatalogSearchEntry>,
+    /// Number of catalogue entries requested for the current Store view.
+    store_result_limit: usize,
     store_detail: Option<IpcCatalogGameDetail>,
     store_loading: bool,
     store_catalog_version: Option<String>,
@@ -566,6 +568,7 @@ impl App {
             store_search_focused: false,
             store_promotions: false,
             store_results: Vec::new(),
+            store_result_limit: PAGE_SIZE,
             store_detail: None,
             store_loading: false,
             store_catalog_version: None,
@@ -639,6 +642,7 @@ impl App {
         let query = self.store_query.trim().to_owned();
         let (genres, owned_ids, owned_names) = self.recommendation_profile();
         let personalized = query.is_empty() && (!owned_ids.is_empty() || !owned_names.is_empty());
+        let result_limit = self.store_result_limit.clamp(PAGE_SIZE, 500);
         if self.store_promotions {
             return;
         }
@@ -648,11 +652,11 @@ impl App {
                 let _ = sender.send(StoreTaskResult::Synchronized(result));
             } else if personalized {
                 let result = crate::core_client::recommend_master_catalog(
-                    genres, owned_ids, owned_names, 48,
+                    genres, owned_ids, owned_names, result_limit,
                 );
                 let _ = sender.send(StoreTaskResult::Search(result));
             } else {
-                let result = crate::core_client::search_master_catalog(&query, 48);
+                let result = crate::core_client::search_master_catalog(&query, result_limit);
                 let _ = sender.send(StoreTaskResult::Search(result));
             }
         });
@@ -998,6 +1002,7 @@ impl App {
                 query: &self.store_query,
                 focused: self.store_search_focused,
                 results: &self.store_results,
+                result_limit: self.store_result_limit,
                 recommended: self.store_query.trim().is_empty() && self.has_recommendation_profile(),
                 promotions: self.store_promotions,
                 loading: self.store_loading,
@@ -1183,6 +1188,7 @@ impl App {
             }
             Action::ClearStoreSearch => {
                 self.store_query.clear();
+                self.store_result_limit = PAGE_SIZE;
                 if self.store_loading {
                     self.store_refresh_pending = true;
                     self.redraw_store_search_only();
@@ -1193,6 +1199,7 @@ impl App {
             Action::SetStoreMode(promotions) => {
                 if self.store_promotions != promotions {
                     self.store_promotions = promotions;
+                    self.store_result_limit = PAGE_SIZE;
                     self.store_search_focused = false;
                     self.keyboard_focus = None;
                     self.render(true);
@@ -1208,7 +1215,19 @@ impl App {
                     }
                 }
             }
-            Action::SearchStore => self.start_store_task(false),
+            Action::SearchStore => {
+                self.store_result_limit = PAGE_SIZE;
+                self.start_store_task(false);
+            }
+            Action::ShowMoreStore => {
+                if !self.store_loading
+                    && self.store_result_limit < 500
+                    && self.store_results.len() >= self.store_result_limit
+                {
+                    self.store_result_limit = (self.store_result_limit + PAGE_SIZE).min(500);
+                    self.start_store_task(false);
+                }
+            }
             Action::SyncMasterCatalog => self.start_store_task(true),
             Action::OpenCatalogStore(index) => {
                 if let Some(url) = self.store_detail.as_ref()
@@ -1907,6 +1926,9 @@ impl App {
         }
         if searching && changed {
             self.library_limit = PAGE_SIZE;
+        }
+        if store_searching && changed {
+            self.store_result_limit = PAGE_SIZE;
         }
         let submitted = input.enter_pressed && (searching || store_searching);
         if submitted {
