@@ -443,26 +443,22 @@ where
                             .get_game_by_platform_id(&platform, platform_id)
                             .and_then(|existing| match existing {
                                 Some(game) => {
-                                    // A stable platform ID identifies the game, not
-                                    // necessarily this particular installation path.
-                                    // Only replace the saved location when discovery
-                                    // points to a directory that currently exists;
-                                    // this prevents stale/secondary scan results from
-                                    // silently overwriting a valid local installation.
+                                    // A platform identity can have more than one local
+                                    // installation. Keep the existing primary path stable
+                                    // and record additional valid paths as secondary rows.
                                     let detected_path_is_valid =
                                         std::path::Path::new(&install_path).is_dir();
-                                    let (refresh_path, refresh_executable) =
-                                        if detected_path_is_valid {
-                                            (install_path.as_str(), executable.as_deref())
-                                        } else {
-                                            (game.install_path.as_str(), None)
-                                        };
+                                    if detected_path_is_valid
+                                        && !same_install_path(&game.install_path, &install_path)
+                                    {
+                                        database.add_game_location(&game.id, &install_path)?;
+                                    }
                                     database
                                         .refresh_detected_installation(
                                             &game.id,
                                             &name,
-                                            refresh_path,
-                                            refresh_executable,
+                                            &game.install_path,
+                                            None,
                                         )
                                         .and_then(|refreshed| {
                                             refreshed.ok_or_else(|| {
