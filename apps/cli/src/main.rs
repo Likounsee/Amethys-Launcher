@@ -240,8 +240,16 @@ fn format_install_locations(game: &amethys_ipc::IpcGameEntry) -> String {
     if locations.len() <= 1 {
         return game.install_path.clone();
     }
-    locations.iter().enumerate()
-        .map(|(index, path)| format!("{}: {}", if index == 0 { "principal" } else { "copie" }, path))
+    locations
+        .iter()
+        .enumerate()
+        .map(|(index, path)| {
+            format!(
+                "{}: {}",
+                if index == 0 { "principal" } else { "copie" },
+                path
+            )
+        })
         .collect::<Vec<_>>()
         .join(" | ")
 }
@@ -868,7 +876,13 @@ async fn verify_saved_games(json_output: bool) -> Result<(), Box<dyn Error>> {
             let state = entry["installation_state"].as_str().unwrap_or("unknown");
             println!(
                 "[{}] {} ({}) — état : {} — {}/{} installation(s) disponible(s)",
-                if entry["launch_ready"] == true { "PRÊT" } else if entry["healthy"] == true { "À CONFIGURER" } else { "ATTENTION" },
+                if entry["launch_ready"] == true {
+                    "PRÊT"
+                } else if entry["healthy"] == true {
+                    "À CONFIGURER"
+                } else {
+                    "ATTENTION"
+                },
                 name,
                 platform,
                 state,
@@ -879,8 +893,12 @@ async fn verify_saved_games(json_output: bool) -> Result<(), Box<dyn Error>> {
                 println!(
                     "       {} — dossier : {} — exécutable : {} — {}",
                     installation["kind"].as_str().unwrap_or("copie"),
-                    installation["directory_status"].as_str().unwrap_or("unknown"),
-                    installation["executable_status"].as_str().unwrap_or("not_configured"),
+                    installation["directory_status"]
+                        .as_str()
+                        .unwrap_or("unknown"),
+                    installation["executable_status"]
+                        .as_str()
+                        .unwrap_or("not_configured"),
                     installation["install_path"].as_str().unwrap_or("")
                 );
             }
@@ -1227,8 +1245,7 @@ mod tests {
         std::fs::create_dir_all(secondary.join("bin")).expect("secondary directory");
         let executable = primary.join("bin/game.exe");
         std::fs::write(&executable, b"primary").expect("primary executable");
-        std::fs::write(secondary.join("bin/game.exe"), b"secondary")
-            .expect("secondary executable");
+        std::fs::write(secondary.join("bin/game.exe"), b"secondary").expect("secondary executable");
         let game = amethys_ipc::IpcGameEntry {
             id: "multi".to_owned(),
             name: "Multi".to_owned(),
@@ -1282,13 +1299,19 @@ mod tests {
                 secondary.to_string_lossy().into_owned(),
             ],
             executable: Some(
-                missing_primary.join("bin/game.exe").to_string_lossy().into_owned(),
+                missing_primary
+                    .join("bin/game.exe")
+                    .to_string_lossy()
+                    .into_owned(),
             ),
         };
 
         let report = super::build_verify_report(&[game]);
         let entry = &report["games"][0];
-        assert_eq!(entry["installation_state"], "primary_missing_secondary_available");
+        assert_eq!(
+            entry["installation_state"],
+            "primary_missing_secondary_available"
+        );
         assert_eq!(entry["available_installations"], 1);
         assert_eq!(entry["missing_installations"], 1);
         assert_eq!(entry["launch_ready"], true);
