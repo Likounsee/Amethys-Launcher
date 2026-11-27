@@ -156,6 +156,9 @@ pub struct IpcGameEntry {
     #[serde(default)]
     pub catalogue_metadata: Option<IpcGameMetadata>,
     pub install_path: String,
+    /// All known install directories; the primary path remains in install_path.
+    #[serde(default)]
+    pub install_locations: Vec<String>,
     pub executable: Option<String>,
 }
 
@@ -532,6 +535,7 @@ mod tests {
             catalogue_game_id: Some("3000".to_owned()),
             catalogue_metadata: None,
             install_path: "/games/example".to_owned(),
+            install_locations: Vec::new(),
             executable: Some("game.exe".to_owned()),
         }];
         let response =
@@ -549,6 +553,7 @@ mod tests {
             platform: "Steam".to_owned(),
             platform_id: Some("570".to_owned()),
             install_path: "/games/dota2".to_owned(),
+            install_locations: Vec::new(),
             executable: None,
         };
         let encoded = serde_json::to_vec(&command).expect("command serializes");
@@ -738,6 +743,7 @@ mod tests {
                 description: Some("A journey through a dark fantasy world.".to_owned()),
             }),
             install_path: "C:/Games/Expedition33".to_owned(),
+            install_locations: Vec::new(),
             executable: Some("Expedition33.exe".to_owned()),
         };
 
@@ -771,6 +777,7 @@ mod tests {
             catalogue_game_id: None,
             catalogue_metadata: None,
             install_path: "/games/legacy".to_owned(),
+            install_locations: Vec::new(),
             executable: None,
         };
         assert!(super::game_matches_search_query(&game, "legacy gog"));
