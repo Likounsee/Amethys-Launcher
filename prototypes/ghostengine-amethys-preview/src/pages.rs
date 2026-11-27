@@ -1230,6 +1230,116 @@ pub fn redraw_store_search(p: &mut Painter, lay: &Layout, query: &str, focused: 
     }
 }
 
+fn format_promotion_price(minor: u64, currency: &str) -> String {
+    let decimals = match currency {
+        "BIF" | "CLP" | "DJF" | "GNF" | "ISK" | "JPY" | "KMF" | "KRW" | "PYG" | "RWF" | "UGX" | "VND" | "VUV" | "XAF" | "XOF" | "XPF" => 0,
+        "BHD" | "IQD" | "JOD" | "KWD" | "LYD" | "OMR" | "TND" => 3,
+        _ => 2,
+    };
+    let divisor = 10_u64.pow(decimals);
+    let whole = minor / divisor;
+    if decimals == 0 {
+        format!("{whole} {currency}")
+    } else {
+        let fraction = minor % divisor;
+        format!("{whole},{fraction:0width$} {currency}", width = decimals as usize)
+    }
+}
+
+fn render_promotions(p: &mut Painter, lay: &Layout, view: &StoreView<'_>, mut y: i32) -> i32 {
+    let (mx, mw) = (lay.mx, lay.mw);
+    p.text(mx, y, 26, "Offres vérifiées", 21.0, W::Semi, TXT);
+    p.text(mx, y + 28, 20, "Prix issus de pages officielles, avec date de vérification et durée connue", 12.0, W::Reg, MUT);
+    y += 62;
+
+    if view.loading {
+        panel(p, mx, y, mw, 104, 16);
+        p.text(mx + 20, y + 18, 24, "Recherche des promotions…", 16.0, W::Semi, TXT);
+        p.text(mx + 20, y + 52, 18, "Lecture du catalogue local vérifié", 12.0, W::Reg, MUT);
+        return y + 124;
+    }
+    if view.results.is_empty() {
+        panel(p, mx, y, mw, 132, 18);
+        p.text(mx + 20, y + 18, 24, "Aucune promotion vérifiée actuellement", 17.0, W::Semi, TXT);
+        p.paragraph(
+            mx + 20,
+            y + 54,
+            mw - 40,
+            19,
+            "Les offres expirées ou dont la vérification date de plus de 48 heures sont masquées. Aucune réduction n'est estimée ou inventée.",
+            12.5,
+            W::Reg,
+            MUT,
+            3,
+        );
+        return y + 152;
+    }
+
+    let cols = lay.columns().min(if lay.compact() { 1 } else { 3 }).max(1);
+    let gap = 14;
+    let card_w = (mw - gap * (cols - 1)) / cols;
+    let art_h = (card_w * 3 / 4).clamp(132, 210);
+    let card_h = art_h + 126;
+    let mut displayed = 0usize;
+    for game in view.results {
+        for promotion in &game.promotions {
+            let col = displayed as i32 % cols;
+            let row = displayed as i32 / cols;
+            let x = mx + col * (card_w + gap);
+            let cy = y + row * (card_h + gap);
+            panel(p, x, cy, card_w, card_h, 14);
+            p.cover_or_placeholder(
+                &game.amethys_id.to_string(),
+                "",
+                &game.name,
+                x + 1,
+                cy + 1,
+                card_w - 2,
+                art_h,
+            );
+            p.scrim(x + 1, cy + 1, card_w - 2, art_h, 0.48, 180);
+            let discount = promotion
+                .regular_price_minor
+                .saturating_sub(promotion.current_price_minor)
+                .saturating_mul(100)
+                .saturating_add(promotion.regular_price_minor / 2)
+                / promotion.regular_price_minor.max(1);
+            chip(
+                p,
+                x + 12,
+                cy + 12,
+                &format!("-{discount}%"),
+                (card_w - 24).min(88),
+            );
+            p.paragraph(x + 14, cy + art_h + 9, card_w - 28, 21, &game.name, 14.0, W::Semi, TXT, 2);
+            p.text_fit(
+                x + 14,
+                cy + art_h + 54,
+                17,
+                &format!("{} · fin {}", promotion.store, promotion.valid_until.get(..10).unwrap_or(&promotion.valid_until)),
+                11.0,
+                W::Med,
+                MUT,
+                card_w - 28,
+            );
+            let current = format_promotion_price(promotion.current_price_minor, &promotion.currency);
+            let regular = format_promotion_price(promotion.regular_price_minor, &promotion.currency);
+            p.text_fit(x + 14, cy + card_h - 40, 20, &current, 15.0, W::Semi, TXT, card_w - 28);
+            p.text_fit(x + 14, cy + card_h - 20, 16, &format!("Au lieu de {regular}"), 10.5, W::Reg, MUT, card_w - 28);
+            p.hit_with(x, cy, card_w, card_h, 14, Action::SelectCatalogGame(game.amethys_id), false, Hover::Card);
+            displayed += 1;
+            if displayed >= 500 {
+                break;
+            }
+        }
+        if displayed >= 500 {
+            break;
+        }
+    }
+    let rows = (displayed as i32 + cols - 1) / cols;
+    y + rows * (card_h + gap) + 24
+}
+
 pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
     backdrop(p, lay);
     let (mx, mw) = (lay.mx, lay.mw);
@@ -1295,31 +1405,7 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
 
     let mut y = switch_y + switch_h + 28;
     if view.promotions {
-        panel(p, mx, y, mw, 158, 18);
-        p.text(mx + 20, y + 18, 26, "Votre espace promotions", 18.0, W::Semi, TXT);
-        p.paragraph(
-            mx + 20,
-            y + 54,
-            mw - 40,
-            20,
-            "Les promotions seront affichées uniquement lorsque le prix, la devise, la source et la date de vérification seront fiables.",
-            13.0,
-            W::Reg,
-            SOFT,
-            3,
-        );
-        p.paragraph(
-            mx + 20,
-            y + 108,
-            mw - 40,
-            18,
-            "Aucune réduction n'est inventée. Cette section sera enrichie lorsque des sources autorisées seront disponibles.",
-            11.5,
-            W::Reg,
-            MUT,
-            2,
-        );
-        return y + 182;
+        return render_promotions(p, lay, view, y);
     }
 
     if view.query.trim().is_empty() {
