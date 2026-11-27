@@ -1170,6 +1170,44 @@ impl Database {
         self.get_game(id)
     }
 
+    /// Records another installation directory for an existing library game.
+    ///
+    /// The current primary installation is never replaced by this operation.
+    /// Repeated discovery of the same path is idempotent.
+    pub fn add_game_location(&self, game_id: &str, path: &str) -> Result<bool, AmethysError> {
+        let game_id = validate_game_id(game_id)?;
+        let path = path.trim();
+        if path.is_empty() || path.len() > MAX_GAME_PATH_BYTES || path.contains('\0') {
+            return Err(storage_error("Game location path is invalid."));
+        }
+
+        let transaction = self.connection.unchecked_transaction().map_err(|error| {
+            storage_error(format!("Could not begin game location insert: {error}"))
+        })?;
+        let game_exists: bool = transaction
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM games WHERE id = ?1)",
+                [game_id],
+                |row| row.get(0),
+            )
+            .map_err(|error| storage_error(format!("Could not check game for location: {error}")))?;
+        if !game_exists {
+            return Err(storage_error("Cannot add a location to a game that does not exist."));
+        }
+        let changed = transaction
+            .execute(
+                "INSERT INTO local_game_locations (id, game_id, path, is_primary)
+                 VALUES (?1, ?2, ?3, 0)
+                 ON CONFLICT(game_id, path) DO NOTHING",
+                params![uuid::Uuid::new_v4().to_string(), game_id, path],
+            )
+            .map_err(|error| storage_error(format!("Could not add secondary game location: {error}")))?;
+        transaction.commit().map_err(|error| {
+            storage_error(format!("Could not commit secondary game location: {error}"))
+        })?;
+        Ok(changed != 0)
+    }
+
     /// Removes a game. Returns false when its identifier was not present.
     pub fn remove_game(&self, id: &str) -> Result<bool, AmethysError> {
         let id = validate_game_id(id)?;
@@ -1703,6 +1741,40 @@ mod tests {
             locations,
             vec![
                 ("/games/new".to_owned(), 1),
+                ("/games/secondary".to_owned(), 0)
+            ]
+        );
+    }
+
+    #[test]
+    fn adding_secondary_location_is_idempotent_and_keeps_primary() {
+        let database = Database::open(":memory:").expect("database opens");
+        let game = database
+            .add_game("Example", "Steam", "/games/primary", None)
+            .expect("game is added");
+
+        assert!(database
+            .add_game_location(&game.id, "/games/secondary")
+            .expect("secondary location is inserted"));
+        assert!(!database
+            .add_game_location(&game.id, "/games/secondary")
+            .expect("duplicate location is ignored"));
+
+        let locations: Vec<(String, i64)> = database
+            .connection()
+            .prepare(
+                "SELECT path, is_primary FROM local_game_locations
+                 WHERE game_id = ?1 ORDER BY path",
+            )
+            .expect("location query prepares")
+            .query_map([&game.id], |row| Ok((row.get(0)?, row.get(1)?)))
+            .expect("location query runs")
+            .collect::<Result<_, _>>()
+            .expect("locations are readable");
+        assert_eq!(
+            locations,
+            vec![
+                ("/games/primary".to_owned(), 1),
                 ("/games/secondary".to_owned(), 0)
             ]
         );
