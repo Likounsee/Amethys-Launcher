@@ -46,6 +46,11 @@ enum StoreTaskResult {
     Search(Result<Vec<IpcCatalogSearchEntry>, String>),
     Detail(Result<Box<IpcCatalogGameDetail>, String>),
     Synchronized(Result<(String, u64), String>),
+    /// A refresh failed, but the Core may still have a previously verified offline index.
+    SynchronizedFallback {
+        sync_error: String,
+        result: Result<Vec<IpcCatalogSearchEntry>, String>,
+    },
 }
 
 enum CoreMutationResult {
@@ -648,8 +653,28 @@ impl App {
         }
         std::thread::spawn(move || {
             if synchronize {
-                let result = crate::core_client::sync_master_catalog();
-                let _ = sender.send(StoreTaskResult::Synchronized(result));
+                match crate::core_client::sync_master_catalog() {
+                    Ok(result) => {
+                        let _ = sender.send(StoreTaskResult::Synchronized(Ok(result)));
+                    }
+                    Err(sync_error) => {
+                        // A failed network refresh must not make a previously
+                        // synchronized catalogue disappear from the Store.
+                        // Search/recommendation commands read only the verified
+                        // local index and therefore remain usable offline.
+                        let result = if personalized {
+                            crate::core_client::recommend_master_catalog(
+                                genres, owned_ids, owned_names, result_limit,
+                            )
+                        } else {
+                            crate::core_client::search_master_catalog(&query, result_limit)
+                        };
+                        let _ = sender.send(StoreTaskResult::SynchronizedFallback {
+                            sync_error,
+                            result,
+                        });
+                    }
+                }
             } else if personalized {
                 let result = crate::core_client::recommend_master_catalog(
                     genres, owned_ids, owned_names, result_limit,
@@ -701,7 +726,11 @@ impl App {
         // not briefly publish cards for an obsolete query while the latest
         // request is being started.
         if self.store_refresh_pending
-            && matches!(&result, StoreTaskResult::Search(_))
+            && matches!(
+                &result,
+                StoreTaskResult::Search(_)
+                    | StoreTaskResult::SynchronizedFallback { .. }
+            )
             && self.page == Page::Store
             && !self.store_promotions
         {
@@ -769,6 +798,39 @@ impl App {
                     self.store_error = Some(error);
                 } else {
                     self.store_error = None;
+                }
+            }
+            StoreTaskResult::SynchronizedFallback { sync_error, result } => {
+                match result {
+                    Ok(games) => {
+                        self.store_results = games;
+                        for game in &self.store_results {
+                            if let Some(path) = game.cover_cache_path.as_deref() {
+                                let game_id = game.amethys_id.to_string();
+                                let _ = self.covers.load_library_cover(
+                                    &game_id,
+                                    std::path::Path::new(path),
+                                );
+                            }
+                        }
+                        self.store_error = None;
+                        if self.page == Page::Store && !self.store_promotions {
+                            self.notify(
+                                ToastKind::Info,
+                                "Connexion indisponible : catalogue local affiché hors ligne.",
+                            );
+                        }
+                    }
+                    Err(cache_error) => {
+                        self.store_results.clear();
+                        if self.page == Page::Store && !self.store_promotions {
+                            self.store_error = Some(format!(
+                                "Synchronisation impossible ({sync_error}). Aucun catalogue local utilisable : {cache_error}"
+                            ));
+                        } else {
+                            self.store_error = None;
+                        }
+                    }
                 }
             }
         }
