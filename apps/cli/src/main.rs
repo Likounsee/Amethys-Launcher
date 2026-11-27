@@ -675,8 +675,15 @@ fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value
     let entries = games
         .iter()
         .map(|game| {
-            let installations = std::iter::once(&game.install_path)
-                .chain(game.install_locations.iter())
+            let mut unique_locations = Vec::new();
+            for install_path in std::iter::once(&game.install_path).chain(game.install_locations.iter()) {
+                if !unique_locations.iter().any(|known: &String| {
+                    same_install_location(known, std::path::Path::new(install_path))
+                }) {
+                    unique_locations.push(install_path.clone());
+                }
+            }
+            let installations = unique_locations.iter()
                 .enumerate()
                 .map(|(index, install_path)| {
                     let mut candidate = game.clone();
@@ -702,6 +709,7 @@ fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value
                 })
                 .collect::<Vec<_>>();
             let primary = &installations[0];
+            let directory_available = installations.iter().any(|entry| entry["directory_available"] == true);
             let healthy = installations.iter().any(|entry| entry["healthy"] == true);
             let launch_ready = installations.iter().any(|entry| entry["launch_ready"] == true);
             serde_json::json!({
@@ -711,7 +719,8 @@ fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value
                 "platform_id": game.platform_id,
                 "install_path": game.install_path,
                 "installations": installations,
-                "directory_available": primary["directory_available"],
+                "directory_available": directory_available,
+                "primary_directory_available": primary["directory_available"],
                 "directory_status": primary["directory_status"],
                 "executable": game.executable,
                 "executable_status": primary["executable_status"],
@@ -752,7 +761,7 @@ fn json_verify_summary(
     games: Vec<serde_json::Value>,
 ) -> serde_json::Value {
     serde_json::json!({
-        "schema_version": 3,
+        "schema_version": 4,
         "read_only": true,
         "total_games": total,
         "available": available,
@@ -1362,7 +1371,7 @@ mod tests {
             executable: None,
         };
         let report = super::build_verify_report(&[game]);
-        assert_eq!(report["schema_version"], 3);
+        assert_eq!(report["schema_version"], 4);
         assert_eq!(report["read_only"], true);
         assert_eq!(report["total_games"], 1);
         assert_eq!(report["available"], 1);
