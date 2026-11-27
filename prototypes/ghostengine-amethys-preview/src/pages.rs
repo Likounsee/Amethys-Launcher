@@ -1250,6 +1250,21 @@ fn render_promotions(p: &mut Painter, lay: &Layout, view: &StoreView<'_>, mut y:
     let (mx, mw) = (lay.mx, lay.mw);
     p.text(mx, y, 26, "Offres vérifiées", 21.0, W::Semi, TXT);
     p.text(mx, y + 28, 20, "Prix issus de pages officielles, avec date de vérification et durée connue", 12.0, W::Reg, MUT);
+    if view.loading {
+        button_disabled(p, mx + mw - 136, y - 2, "Actualiser", Some(Icon::Refresh));
+    } else {
+        button(
+            p,
+            mx + mw - 136,
+            y - 2,
+            Some(136),
+            "Actualiser",
+            Some(Icon::Refresh),
+            Btn::Secondary,
+            PANEL,
+            Some(Action::SyncMasterCatalog),
+        );
+    }
     y += 62;
 
     if view.loading {
