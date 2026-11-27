@@ -1027,7 +1027,6 @@ fn validate_promotion_records(
             || !ids.insert(&promotion.promotion_id)
             || promotion.external_id.trim().is_empty()
             || promotion.external_id.len() > 512
-            || promotion.current_price_minor == 0
             || promotion.regular_price_minor <= promotion.current_price_minor
             || promotion.currency.len() != 3
             || !promotion.currency.bytes().all(|byte| byte.is_ascii_uppercase())
@@ -1059,15 +1058,33 @@ fn is_utc_timestamp(value: &str) -> bool {
     if value.len() != 20 || !value.ends_with('Z') {
         return false;
     }
-    value.as_bytes().iter().enumerate().all(|(index, byte)| {
-        match index {
-            4 | 7 => *byte == b'-',
-            10 => *byte == b'T',
-            13 | 16 => *byte == b':',
-            19 => *byte == b'Z',
-            _ => byte.is_ascii_digit(),
-        }
-    })
+    let bytes = value.as_bytes();
+    if !bytes.iter().enumerate().all(|(index, byte)| match index {
+        4 | 7 => *byte == b'-',
+        10 => *byte == b'T',
+        13 | 16 => *byte == b':',
+        19 => *byte == b'Z',
+        _ => byte.is_ascii_digit(),
+    }) {
+        return false;
+    }
+    let parse = |range: std::ops::Range<usize>| {
+        value.get(range).and_then(|part| part.parse::<u32>().ok())
+    };
+    let (Some(year), Some(month), Some(day), Some(hour), Some(minute), Some(second)) = (
+        parse(0..4), parse(5..7), parse(8..10), parse(11..13), parse(14..16), parse(17..19),
+    ) else {
+        return false;
+    };
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let days_in_month = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return false,
+    };
+    day >= 1 && day <= days_in_month && hour <= 23 && minute <= 59 && second <= 59
 }
 
 fn is_valid_promotion_url(value: &str, store: &str) -> bool {
