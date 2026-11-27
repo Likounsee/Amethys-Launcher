@@ -553,6 +553,30 @@ fn is_safe_relative_executable(executable: &str) -> bool {
 }
 
 /// Resolves a configured executable and guarantees it stays inside the registered install.
+/// Finds an executable's path relative to any registered installation.
+/// Lexical matching is intentionally attempted before canonicalization so a
+/// missing primary directory can still identify the executable in a surviving copy.
+fn executable_relative_to_known_install(
+    game: &amethys_ipc::IpcGameEntry,
+    executable: &std::path::Path,
+) -> Option<std::path::PathBuf> {
+    let resolved = executable
+        .canonicalize()
+        .unwrap_or_else(|_| executable.to_path_buf());
+    for location in std::iter::once(&game.install_path).chain(game.install_locations.iter()) {
+        let known_root = std::path::Path::new(location);
+        if let Ok(relative) = executable.strip_prefix(known_root) {
+            return Some(relative.to_path_buf());
+        }
+        if let Ok(canonical_root) = known_root.canonicalize() {
+            if let Ok(relative) = resolved.strip_prefix(&canonical_root) {
+                return Some(relative.to_path_buf());
+            }
+        }
+    }
+    None
+}
+
 fn resolve_launch_executable(
     game: &amethys_ipc::IpcGameEntry,
 ) -> Result<std::path::PathBuf, String> {
@@ -569,23 +593,7 @@ fn resolve_launch_executable(
 
     let configured = std::path::Path::new(executable);
     let candidate = if configured.is_absolute() {
-        let resolved_configured = configured
-            .canonicalize()
-            .unwrap_or_else(|_| configured.to_path_buf());
-        let mut relative = None;
-        for known_install in
-            std::iter::once(&game.install_path).chain(game.install_locations.iter())
-        {
-            let known_root = match std::path::Path::new(known_install).canonicalize() {
-                Ok(path) => path,
-                Err(_) => continue,
-            };
-            if let Ok(path) = resolved_configured.strip_prefix(&known_root) {
-                relative = Some(path.to_path_buf());
-                break;
-            }
-        }
-        relative
+        executable_relative_to_known_install(game, configured)
             .map(|path| root.join(path))
             .unwrap_or_else(|| configured.to_path_buf())
     } else {
@@ -618,21 +626,7 @@ fn inspect_game_executable(game: &amethys_ipc::IpcGameEntry) -> Option<PathCheck
     };
     let executable_path = std::path::Path::new(executable);
     let candidate = if executable_path.is_absolute() {
-        let resolved_configured = executable_path
-            .canonicalize()
-            .unwrap_or_else(|_| executable_path.to_path_buf());
-        let mut relative = None;
-        for known_install in std::iter::once(&game.install_path).chain(game.install_locations.iter()) {
-            let known_root = match std::path::Path::new(known_install).canonicalize() {
-                Ok(path) => path,
-                Err(_) => continue,
-            };
-            if let Ok(path) = resolved_configured.strip_prefix(&known_root) {
-                relative = Some(path.to_path_buf());
-                break;
-            }
-        }
-        relative
+        executable_relative_to_known_install(game, executable_path)
             .map(|path| canonical_root.join(path))
             .unwrap_or_else(|| executable_path.to_path_buf())
     } else {
@@ -1244,6 +1238,44 @@ mod tests {
         assert_eq!(installations[1]["kind"], "secondary");
         assert_eq!(installations[1]["launch_ready"], true);
         assert_eq!(report["launch_ready"], 1);
+
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn verification_recovers_when_primary_install_is_missing_but_secondary_survives() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "amethys-verify-recovery-{}-{nonce}",
+            std::process::id()
+        ));
+        let missing_primary = root.join("old-primary");
+        let secondary = root.join("surviving-copy");
+        std::fs::create_dir_all(secondary.join("bin")).expect("secondary directory");
+        std::fs::write(secondary.join("bin/game.exe"), b"secondary").expect("secondary executable");
+        let game = amethys_ipc::IpcGameEntry {
+            id: "recoverable".to_owned(),
+            name: "Recoverable".to_owned(),
+            platform: "Test".to_owned(),
+            platform_id: None,
+            catalogue_game_id: None,
+            catalogue_metadata: None,
+            install_path: missing_primary.to_string_lossy().into_owned(),
+            install_locations: vec![secondary.to_string_lossy().into_owned()],
+            executable: Some(missing_primary.join("bin/game.exe").to_string_lossy().into_owned()),
+        };
+
+        let report = super::build_verify_report(&[game]);
+        let entry = &report["games"][0];
+        assert_eq!(entry["installation_state"], "primary_missing_secondary_available");
+        assert_eq!(entry["available_installations"], 1);
+        assert_eq!(entry["missing_installations"], 1);
+        assert_eq!(entry["launch_ready"], true);
+        assert_eq!(report["available_installations"], 1);
+        assert_eq!(report["missing_installations"], 1);
 
         std::fs::remove_dir_all(root).expect("cleanup");
     }
