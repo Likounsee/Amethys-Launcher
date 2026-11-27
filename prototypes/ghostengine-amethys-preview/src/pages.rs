@@ -1363,7 +1363,28 @@ fn render_promotions(p: &mut Painter, lay: &Layout, view: &StoreView<'_>, mut y:
         }
     }
     let rows = (displayed as i32 + cols - 1) / cols;
-    y + rows * (card_h + gap) + 24
+    let mut bottom = y + rows * (card_h + gap) + 24;
+    if view.results.len() >= view.result_limit && view.result_limit < 500 {
+        let button_w = 184;
+        let button_x = mx + (mw - button_w) / 2;
+        if view.loading {
+            button_disabled(p, button_x, bottom, "Chargement…", None);
+        } else {
+            button(
+                p,
+                button_x,
+                bottom,
+                Some(button_w),
+                "Afficher plus",
+                None,
+                Btn::Secondary,
+                PANEL,
+                Some(Action::ShowMoreStore),
+            );
+        }
+        bottom += 58;
+    }
+    bottom
 }
 
 pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
