@@ -583,7 +583,10 @@ mod tests {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     fn fixture() -> (std::path::PathBuf, IpcGameEntry) {
-        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let root = std::env::temp_dir().join(format!("amethys-launch-check-{}-{nonce}", std::process::id()));
         std::fs::create_dir_all(root.join("bin")).unwrap();
         std::fs::write(root.join("bin/game.exe"), b"test executable").unwrap();
@@ -658,7 +661,10 @@ mod tests {
                 secondary.to_string_lossy().into_owned(),
             ],
             executable: Some(
-                missing_primary.join("bin/game.exe").to_string_lossy().into_owned(),
+                missing_primary
+                    .join("bin/game.exe")
+                    .to_string_lossy()
+                    .into_owned(),
             ),
         };
 
@@ -666,7 +672,10 @@ mod tests {
         selected.install_path = secondary.to_string_lossy().into_owned();
         let (root, executable) = resolve_launch_executable(&selected).unwrap();
         assert_eq!(root, secondary.canonicalize().unwrap());
-        assert_eq!(executable, secondary.join("bin/game.exe").canonicalize().unwrap());
+        assert_eq!(
+            executable,
+            secondary.join("bin/game.exe").canonicalize().unwrap()
+        );
         std::fs::remove_dir_all(base).unwrap();
     }
 
