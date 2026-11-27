@@ -76,6 +76,18 @@ pub fn status_of(game: &IpcGameEntry) -> GameStatus {
     )
 }
 
+/// Evaluates a known secondary installation with the same executable checks
+/// used by the launch path, without changing the saved primary installation.
+pub fn status_for_installation(game: &IpcGameEntry, install_path: &str) -> GameStatus {
+    let mut selected = game.clone();
+    selected.install_path = install_path.to_owned();
+    classify(
+        std::path::Path::new(install_path).is_dir(),
+        selected.executable.is_some(),
+        crate::core_client::launch_block_reason(&selected),
+    )
+}
+
 pub fn statuses_of(games: &[IpcGameEntry]) -> Vec<GameStatus> {
     games.iter().map(status_of).collect()
 }
