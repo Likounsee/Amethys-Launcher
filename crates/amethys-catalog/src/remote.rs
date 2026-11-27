@@ -135,6 +135,23 @@ pub struct CatalogSearchEntry {
     /// Optional artwork URL carried by newer public search indexes.
     #[serde(default)]
     pub cover_url: Option<String>,
+    /// Verified, source-attributed offers currently attached to this game.
+    #[serde(default)]
+    pub promotions: Vec<CatalogPromotion>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct CatalogPromotion {
+    pub promotion_id: String,
+    pub store: String,
+    pub external_id: String,
+    pub current_price_minor: u64,
+    pub regular_price_minor: u64,
+    pub currency: String,
+    pub valid_from: String,
+    pub valid_until: String,
+    pub checked_at: String,
+    pub source_url: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -168,6 +185,8 @@ pub struct CatalogGameDetail {
     pub source_ids: Vec<CatalogSourceIdentity>,
     #[serde(default)]
     pub stores: Vec<CatalogStoreIdentity>,
+    #[serde(default)]
+    pub promotions: Vec<CatalogPromotion>,
 }
 
 /// Normalizes punctuation and casing so minor title-format differences do not
@@ -380,6 +399,69 @@ impl<P: CatalogProvider> RemoteCatalogClient<P> {
             .take(limit)
             .map(|(_, _, _, entry)| entry.clone())
             .collect())
+    }
+
+    /// Returns only promotions whose validity window is active and whose source
+    /// verification is no older than 48 hours.
+    pub fn search_promotions_cached(
+        &self,
+        entries: &[CatalogSearchEntry],
+        limit: usize,
+    ) -> RemoteCatalogResult<Vec<CatalogSearchEntry>> {
+        if limit == 0 || limit > MAX_SEARCH_RESULTS {
+            return Err(RemoteCatalogError::InvalidData(
+                "promotion result limit is outside allowed bounds".into(),
+            ));
+        }
+        let now = utc_timestamp_at(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs(),
+        );
+        let fresh_after = utc_timestamp_at(
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+                .saturating_sub(48 * 60 * 60),
+        );
+        let mut results = entries
+            .iter()
+            .filter_map(|entry| {
+                let mut active = entry
+                    .promotions
+                    .iter()
+                    .filter(|promotion| {
+                        promotion.valid_from <= now
+                            && promotion.valid_until > now
+                            && promotion.checked_at >= fresh_after
+                            && promotion.checked_at <= now
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if active.is_empty() {
+                    return None;
+                }
+                active.sort_by(|left, right| {
+                    left.valid_until
+                        .cmp(&right.valid_until)
+                        .then_with(|| left.store.cmp(&right.store))
+                });
+                let mut result = entry.clone();
+                result.promotions = active;
+                Some(result)
+            })
+            .collect::<Vec<_>>();
+        results.sort_by(|left, right| {
+            left.promotions[0]
+                .valid_until
+                .cmp(&right.promotions[0].valid_until)
+                .then_with(|| left.name.to_lowercase().cmp(&right.name.to_lowercase()))
+                .then_with(|| left.amethys_id.cmp(&right.amethys_id))
+        });
+        results.truncate(limit);
+        Ok(results)
     }
 
     /// Recommends games against the genres and ownership already known locally.
@@ -867,6 +949,7 @@ fn validate_detail_shard(
                 .any(|value| value.trim().is_empty() || value.len() > 128 || value.contains('\0'))
             || record.source_ids.len() > 64
             || record.stores.len() > 64
+            || record.promotions.len() > 64
         {
             return Err(RemoteCatalogError::InvalidData(
                 "detail shard contains invalid game metadata".into(),
@@ -882,6 +965,8 @@ fn validate_detail_shard(
                 ));
             }
         }
+
+        validate_promotion_records(&record.promotions, &record.stores)?;
 
         for identity in &record.source_ids {
             if identity.source.is_empty()
@@ -928,6 +1013,102 @@ fn validate_detail_shard(
     Ok(())
 }
 
+fn validate_promotion_records(
+    promotions: &[CatalogPromotion],
+    stores: &[CatalogStoreIdentity],
+) -> RemoteCatalogResult<()> {
+    if promotions.len() > 64 {
+        return Err(RemoteCatalogError::InvalidData("too many promotions for one game".into()));
+    }
+    let mut ids = std::collections::HashSet::new();
+    for promotion in promotions {
+        if promotion.promotion_id.trim().is_empty()
+            || promotion.promotion_id.len() > 128
+            || !ids.insert(&promotion.promotion_id)
+            || promotion.external_id.trim().is_empty()
+            || promotion.external_id.len() > 512
+            || promotion.current_price_minor == 0
+            || promotion.regular_price_minor <= promotion.current_price_minor
+            || promotion.currency.len() != 3
+            || !promotion.currency.bytes().all(|byte| byte.is_ascii_uppercase())
+            || !matches!(promotion.store.as_str(), "steam" | "gog" | "epic" | "ea" | "ubisoft" | "battle-net" | "amazon-games" | "humble")
+            || !is_valid_promotion_url(&promotion.source_url, &promotion.store)
+            || !is_utc_timestamp(&promotion.valid_from)
+            || !is_utc_timestamp(&promotion.valid_until)
+            || !is_utc_timestamp(&promotion.checked_at)
+            || promotion.valid_until <= promotion.valid_from
+        {
+            return Err(RemoteCatalogError::InvalidData("catalogue contains an invalid promotion record".into()));
+        }
+        if !stores.is_empty()
+            && !stores.iter().any(|store| {
+                store.store == promotion.store
+                    && store.external_id.as_deref() == Some(promotion.external_id.as_str())
+                    && store.url.as_deref() == Some(promotion.source_url.as_str())
+            })
+        {
+            return Err(RemoteCatalogError::InvalidData(
+                "promotion does not match a known official store identity".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn is_utc_timestamp(value: &str) -> bool {
+    if value.len() != 20 || !value.ends_with('Z') {
+        return false;
+    }
+    value.as_bytes().iter().enumerate().all(|(index, byte)| {
+        match index {
+            4 | 7 => *byte == b'-',
+            10 => *byte == b'T',
+            13 | 16 => *byte == b':',
+            19 => *byte == b'Z',
+            _ => byte.is_ascii_digit(),
+        }
+    })
+}
+
+fn is_valid_promotion_url(value: &str, store: &str) -> bool {
+    if !is_valid_store_url(value) {
+        return false;
+    }
+    let Ok(url) = Url::parse(value) else { return false };
+    let host = url.host_str().unwrap_or_default().trim_start_matches("www.");
+    let allowed = match store {
+        "steam" => host == "steampowered.com" || host.ends_with(".steampowered.com"),
+        "gog" => host == "gog.com" || host.ends_with(".gog.com"),
+        "epic" => host == "epicgames.com" || host.ends_with(".epicgames.com"),
+        "ea" => host == "ea.com" || host.ends_with(".ea.com"),
+        "ubisoft" => host == "ubisoft.com" || host.ends_with(".ubisoft.com"),
+        "battle-net" => host == "battle.net" || host.ends_with(".battle.net") || host == "blizzard.com" || host.ends_with(".blizzard.com"),
+        "amazon-games" => host == "amazon.com" || host.ends_with(".amazon.com"),
+        "humble" => host == "humblebundle.com" || host.ends_with(".humblebundle.com"),
+        _ => false,
+    };
+    allowed && url.path() != "/"
+}
+
+fn utc_timestamp_at(seconds: u64) -> String {
+    let days = (seconds / 86_400) as i64;
+    let day_seconds = seconds % 86_400;
+    let z = days + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let day_of_era = z - era * 146_097;
+    let year_of_era = (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let mut year = year_of_era + era * 400;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let month_prime = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * month_prime + 2) / 5 + 1;
+    let month = month_prime + if month_prime < 10 { 3 } else { -9 };
+    year += i64::from(month <= 2);
+    let hour = day_seconds / 3_600;
+    let minute = day_seconds % 3_600 / 60;
+    let second = day_seconds % 60;
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z")
+}
+
 fn validate_cached_search_entries(entries: &[CatalogSearchEntry]) -> RemoteCatalogResult<()> {
     let mut previous_id = 0;
     for entry in entries {
@@ -949,6 +1130,7 @@ fn validate_cached_search_entries(entries: &[CatalogSearchEntry]) -> RemoteCatal
                 .cover_url
                 .as_deref()
                 .is_some_and(|url| !is_valid_cover_url(url))
+            || validate_promotion_records(&entry.promotions, &[]).is_err()
         {
             return Err(RemoteCatalogError::InvalidData(
                 "cached search index contains an invalid game entry".into(),
@@ -981,7 +1163,7 @@ fn parse_search_index_rows(
         let fields = row.as_array().ok_or_else(|| {
             RemoteCatalogError::InvalidData("search index rows must be arrays".into())
         })?;
-        if !(3..=5).contains(&fields.len()) {
+        if !(3..=6).contains(&fields.len()) {
             return Err(RemoteCatalogError::InvalidData(
                 "search index row has an unsupported field count".into(),
             ));
@@ -1036,6 +1218,12 @@ fn parse_search_index_rows(
             )
             .filter(|value| !value.is_empty()),
         };
+        let promotions = match fields.get(5) {
+            None => Vec::new(),
+            Some(value) => serde_json::from_value::<Vec<CatalogPromotion>>(value.clone())
+                .map_err(|error| RemoteCatalogError::InvalidData(format!("search index promotions are invalid: {error}")))?,
+        };
+        validate_promotion_records(&promotions, &[])?;
         if id == 0 || id <= previous_id || name.trim().is_empty() || name.len() > 512 {
             return Err(RemoteCatalogError::InvalidData(
                 "search index IDs must be unique, ascending and nonzero; names must be valid"
@@ -1049,6 +1237,7 @@ fn parse_search_index_rows(
             slug,
             genres,
             cover_url,
+            promotions,
         });
     }
     // Apply the same field limits to freshly downloaded data and offline
