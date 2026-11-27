@@ -1103,7 +1103,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Notify, STATE_STOPPING, mutation_allowed, serve_database_connection};
+    use super::{Notify, STATE_STOPPING, mutation_allowed, same_install_path, serve_database_connection};
     use amethys_ipc::{
         IpcCommand, IpcCoreStatus, IpcEnvelope, IpcRequest, IpcResponse, read_message,
         write_message,
