@@ -1705,6 +1705,37 @@ pub fn store_product(p: &mut Painter, lay: &Layout, detail: Option<&IpcCatalogGa
         p.paragraph(mx + 24, y + 54, mw - 48, 22, summary, 13.5, W::Reg, SOFT, 16);
         y += desc_h + 18;
     }
+    if !detail.promotions.is_empty() {
+        let promotion_rows = detail.promotions.len().min(8);
+        let promotion_h = 72 + promotion_rows as i32 * 58;
+        panel(p, mx, y, mw, promotion_h, 18);
+        p.text(mx + 24, y + 16, 24, "Promotions vérifiées", 17.0, W::Semi, TXT);
+        for (index, promotion) in detail.promotions.iter().take(promotion_rows).enumerate() {
+            let py = y + 54 + index as i32 * 58;
+            if index > 0 {
+                p.fill(mx + 24, py - 8, mw - 48, 1, LINE);
+            }
+            let discount = promotion
+                .regular_price_minor
+                .saturating_sub(promotion.current_price_minor)
+                .saturating_mul(100)
+                .saturating_add(promotion.regular_price_minor / 2)
+                / promotion.regular_price_minor.max(1);
+            let current = format_promotion_price(promotion.current_price_minor, &promotion.currency);
+            let regular = format_promotion_price(promotion.regular_price_minor, &promotion.currency);
+            p.text(mx + 24, py, 20, &format!("{} · -{discount}%", promotion.store), 12.5, W::Semi, GREEN);
+            p.text_fit(mx + 24, py + 23, 18, &format!("{current} au lieu de {regular} · jusqu'au {}", promotion.valid_until.get(..10).unwrap_or(&promotion.valid_until)), 11.5, W::Med, TXT, mw - 48);
+            if let Some(store_index) = detail.stores.iter().position(|store| {
+                store.store == promotion.store
+                    && store.external_id.as_deref() == Some(promotion.external_id.as_str())
+                    && store.url.as_deref() == Some(promotion.source_url.as_str())
+            }) {
+                p.hit_with(mx + 12, py - 4, mw - 24, 52, 8, Action::OpenCatalogStore(store_index), false, Hover::Soft);
+            }
+        }
+        y += promotion_h + 18;
+    }
+
     panel(p, mx, y, mw, 70 + detail.stores.len().min(10) as i32 * 58, 18);
     p.text(mx + 24, y + 18, 24, "Disponible sur", 17.0, W::Semi, TXT);
     if detail.stores.is_empty() {
