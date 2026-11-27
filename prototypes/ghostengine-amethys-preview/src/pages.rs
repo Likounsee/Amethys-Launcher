@@ -1015,6 +1015,40 @@ pub fn game_detail(p: &mut Painter, lay: &Layout, view: &DetailView) -> i32 {
         ly += h + GAP;
     }
 
+    // Additional installation locations are displayed separately from the
+    // primary path so users can verify what discovery found without confusing
+    // a secondary copy with the directory currently used for launch.
+    let secondary_locations = game
+        .install_locations
+        .iter()
+        .filter(|path| !std::path::Path::new(path).eq(std::path::Path::new(&game.install_path)))
+        .collect::<Vec<_>>();
+    if !secondary_locations.is_empty() {
+        let inner = main_w - 48;
+        let rows_h = secondary_locations
+            .iter()
+            .map(|path| measure_rows(p, inner, &[(path.as_str(), false)]))
+            .sum::<i32>();
+        let h = 58 + rows_h + 8;
+        panel(p, lx, ly, main_w, h, 18);
+        p.text(lx + 24, ly + 18, 24, "Autres installations détectées", 16.0, W::Semi, TXT);
+        let mut row_y = ly + 54;
+        for (index, path) in secondary_locations.iter().enumerate() {
+            row_y += info_row(
+                p,
+                lx + 24,
+                row_y,
+                inner,
+                index == 0,
+                &format!("Emplacement secondaire {}", index + 1),
+                path,
+                SOFT,
+                Some(Icon::Folder),
+            );
+        }
+        ly += h + GAP;
+    }
+
     // about
     {
         let inner = main_w - 48;
