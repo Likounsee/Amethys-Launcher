@@ -1180,12 +1180,18 @@ impl App {
                 error: self.store_error.as_deref(),
                 detail: self.store_detail.as_ref(),
             }),
-            Page::Library => pages::library(
+            Page::Library => {
+                let selected_statuses = self.games.iter().map(|game| {
+                    let selected = self.selected_install_locations.get(&game.id)
+                        .map(String::as_str).unwrap_or(&game.install_path);
+                    status::status_for_installation(game, selected)
+                }).collect::<Vec<_>>();
+                pages::library(
                 &mut p,
                 &lay,
                 &LibraryView {
                     games: &self.games,
-                    statuses: &self.statuses,
+                    statuses: &selected_statuses,
                      selected_install_paths: &self.selected_install_locations,
                     detected: &self.detected_games,
                     scanning: self.scan_in_progress,
@@ -1201,7 +1207,8 @@ impl App {
                     core_error: self.core_error.as_deref(),
                     limit: self.library_limit,
                 },
-            ),
+            )
+            },
             Page::Product => {
                 let index = self.selected_game.unwrap_or(usize::MAX);
                 pages::game_detail(
