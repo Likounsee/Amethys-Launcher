@@ -124,7 +124,6 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
                 name: name.clone(),
                 platform: platform.clone(),
                 install_path: install_path.clone(),
-                install_locations: Vec::new(),
                 executable: None,
             })
         }
@@ -135,7 +134,6 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
                 name: name.clone(),
                 platform: platform.clone(),
                 install_path: install_path.clone(),
-                install_locations: Vec::new(),
                 executable: Some(executable.clone()),
             })
         }
@@ -344,7 +342,6 @@ async fn import_one_detected_game(
         platform: game.platform.to_owned(),
         platform_id: game.platform_id.clone(),
         install_path: game.install_path.to_string_lossy().into_owned(),
-        install_locations: Vec::new(),
         executable: inferred_executable(game),
     };
     let response = request_core(command).await.map_err(|error| {
@@ -1156,6 +1153,61 @@ mod tests {
     }
 
     #[test]
+    fn verify_report_checks_primary_and_secondary_installations_independently() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH).expect("clock").as_nanos();
+        let root = std::env::temp_dir().join(format!("amethys-verify-multi-{}-{nonce}", std::process::id()));
+        let primary = root.join("primary");
+        let secondary = root.join("secondary");
+        std::fs::create_dir_all(primary.join("bin")).expect("primary directory");
+        std::fs::create_dir_all(secondary.join("bin")).expect("secondary directory");
+        let executable = primary.join("bin/game.exe");
+        std::fs::write(&executable, b"primary").expect("primary executable");
+        std::fs::write(secondary.join("bin/game.exe"), b"secondary").expect("secondary executable");
+        let game = amethys_ipc::IpcGameEntry {
+            id: "multi".to_owned(),
+            name: "Multi".to_owned(),
+            platform: "Test".to_owned(),
+            platform_id: None,
+            catalogue_game_id: None,
+            catalogue_metadata: None,
+            install_path: primary.to_string_lossy().into_owned(),
+            install_locations: vec![secondary.to_string_lossy().into_owned()],
+            executable: Some(executable.to_string_lossy().into_owned()),
+        };
+
+        let report = super::build_verify_report(&[game]);
+        let installations = report["games"][0]["installations"].as_array().expect("installations");
+        assert_eq!(installations.len(), 2);
+        assert_eq!(installations[0]["kind"], "primary");
+        assert_eq!(installations[0]["launch_ready"], true);
+        assert_eq!(installations[1]["kind"], "secondary");
+        assert_eq!(installations[1]["launch_ready"], true);
+        assert_eq!(report["launch_ready"], 1);
+
+        std::fs::remove_dir_all(root).expect("cleanup");
+    }
+
+    #[test]
+    fn cli_lists_primary_and_secondary_paths_without_duplicates() {
+        let game = amethys_ipc::IpcGameEntry {
+            id: "multi".to_owned(),
+            name: "Multi".to_owned(),
+            platform: "Test".to_owned(),
+            platform_id: None,
+            catalogue_game_id: None,
+            catalogue_metadata: None,
+            install_path: "/games/main".to_owned(),
+            install_locations: vec!["/games/main".to_owned(), "/games/backup".to_owned()],
+            executable: None,
+        };
+        let formatted = super::format_install_locations(&game);
+        assert!(formatted.contains("principal: /games/main"));
+        assert!(formatted.contains("copie: /games/backup"));
+        assert_eq!(formatted.matches("/games/main").count(), 1);
+    }
+
+    #[test]
     fn verifies_installation_paths_without_modifying_them() {
         let root = std::env::temp_dir().join(format!(
             "amethys-verify-{}-{}",
@@ -1703,7 +1755,6 @@ mod tests {
                 name: "Game".to_owned(),
                 platform: "Steam".to_owned(),
                 install_path: "/games/game".to_owned(),
-                install_locations: Vec::new(),
                 executable: Some("game.exe".to_owned()),
             })
         );
@@ -1731,7 +1782,6 @@ mod tests {
                 name: "Game".to_owned(),
                 platform: "Steam".to_owned(),
                 install_path: "/games/game".to_owned(),
-                install_locations: Vec::new(),
                 executable: None,
             })
         );
