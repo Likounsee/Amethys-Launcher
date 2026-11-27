@@ -2059,27 +2059,18 @@ impl App {
                 ScanMessage::Finished(outcome) => {
                     self.finish_scan_state();
                     // Deduplicate against the saved library and within this scan.
-                    let mut known_platform_ids = std::collections::HashSet::new();
                     let mut known_install_paths = std::collections::HashSet::new();
                     for game in &self.games {
-                        let platform = game.platform.to_ascii_lowercase();
-                        if let Some(id) = game.platform_id.as_deref() {
-                            known_platform_ids.insert((platform.clone(), id.to_ascii_lowercase()));
-                        }
                         known_install_paths.insert(normalized_install_path(std::path::Path::new(&game.install_path)));
+                        for path in &game.install_locations {
+                            known_install_paths.insert(normalized_install_path(std::path::Path::new(path)));
+                        }
                     }
                     let mut detected = outcome.games;
                     detected.retain(|candidate| {
-                        let platform = candidate.platform.to_ascii_lowercase();
-                        let platform_id = candidate.platform_id.as_deref().map(str::to_ascii_lowercase);
                         let install_path = normalized_install_path(&candidate.install_path);
-                        let known_id = platform_id.as_ref().is_some_and(|id| known_platform_ids.contains(&(platform.clone(), id.clone())));
-                        let known_path = known_install_paths.contains(&install_path);
-                        if known_id || known_path {
+                        if known_install_paths.contains(&install_path) {
                             return false;
-                        }
-                        if let Some(id) = platform_id {
-                            known_platform_ids.insert((platform, id));
                         }
                         known_install_paths.insert(install_path);
                         true
@@ -2287,6 +2278,7 @@ mod tests {
                 description: None,
             }),
             install_path: format!("/games/{id}/{name}"),
+            install_locations: Vec::new(),
             executable: None,
         };
 
@@ -2323,6 +2315,7 @@ mod tests {
             catalogue_game_id: catalogue_game_id.map(str::to_owned),
             catalogue_metadata: None,
             install_path: "/games/example".to_owned(),
+            install_locations: Vec::new(),
             executable: None,
         };
 
