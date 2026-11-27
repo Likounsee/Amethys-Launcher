@@ -1832,6 +1832,7 @@ mod tests {
             catalogue_game_id: Some("3000".to_owned()),
             catalogue_metadata: None,
             install_path: ".".to_owned(),
+            install_locations: Vec::new(),
             executable: None,
         }
     }
