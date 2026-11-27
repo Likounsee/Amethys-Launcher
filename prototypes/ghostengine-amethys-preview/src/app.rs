@@ -723,11 +723,12 @@ impl App {
         let (genres, owned_ids, owned_names) = self.recommendation_profile();
         let personalized = query.is_empty() && (!owned_ids.is_empty() || !owned_names.is_empty());
         let result_limit = self.store_result_limit.clamp(PAGE_SIZE, 500);
-        if self.store_promotions {
-            return;
-        }
+        let promotions = self.store_promotions;
         std::thread::spawn(move || {
-            if synchronize {
+            if promotions {
+                let result = crate::core_client::search_master_catalog_promotions(result_limit);
+                let _ = sender.send(StoreTaskResult::Search(result));
+            } else if synchronize {
                 match crate::core_client::sync_master_catalog() {
                     Ok(result) => {
                         let _ = sender.send(StoreTaskResult::Synchronized(Ok(result)));
@@ -776,13 +777,11 @@ impl App {
                 // prefer that latest request over surfacing an obsolete failure.
                 if self.store_refresh_pending
                     && self.page == Page::Store
-                    && !self.store_promotions
                 {
                     self.start_store_task(false);
                     return;
                 }
-                if (self.page == Page::Store && !self.store_promotions)
-                    || self.page == Page::StoreProduct
+                if self.page == Page::Store || self.page == Page::StoreProduct
                 {
                     self.store_error =
                         Some("La requête du catalogue s'est interrompue.".to_owned());
@@ -807,7 +806,6 @@ impl App {
                     | StoreTaskResult::SynchronizedFallback { .. }
             )
             && self.page == Page::Store
-            && !self.store_promotions
         {
             self.start_store_task(false);
             return;
@@ -831,7 +829,7 @@ impl App {
                 // belonged to the failed request. The page now shows the error
                 // explicitly and can be retried without stale catalogue cards.
                 self.store_results.clear();
-                if self.page == Page::Store && !self.store_promotions {
+                if self.page == Page::Store {
                     self.store_error = Some(error);
                 } else {
                     self.store_error = None;
@@ -1378,15 +1376,12 @@ impl App {
                     self.store_search_focused = false;
                     self.keyboard_focus = None;
                     self.render(true);
-                    if !promotions {
-                        if self.store_loading {
-                            self.store_refresh_pending = true;
-                        } else {
-                            // Rebuild the personalized view from the latest
-                            // library even when older search/recommendation cards
-                            // are still cached in memory.
-                            self.start_store_task(false);
-                        }
+                    self.store_results.clear();
+                    if self.store_loading {
+                        self.store_refresh_pending = true;
+                    } else {
+                        // Load either current offers or the latest personalized feed.
+                        self.start_store_task(false);
                     }
                 }
             }
