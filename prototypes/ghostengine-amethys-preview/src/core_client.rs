@@ -66,20 +66,45 @@ fn list_games_with_timeouts(
 }
 
 
-/// Resolves a configured executable and guarantees it remains inside the registered game directory.
+/// Resolves a configured executable and guarantees it remains inside the selected game installation.
 fn resolve_launch_executable(game: &IpcGameEntry) -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
+    use std::path::Path;
+
     let executable = game.executable.as_deref()
         .ok_or_else(|| "Aucun exécutable n'est configuré pour ce jeu.".to_owned())?;
-    let root = std::path::Path::new(&game.install_path)
+    let root = Path::new(&game.install_path)
         .canonicalize()
         .map_err(|error| format!("Dossier du jeu indisponible : {error}"))?;
     if !root.is_dir() {
         return Err("Le chemin d'installation n'est pas un dossier.".to_owned());
     }
 
-    let candidate = std::path::Path::new(executable);
-    let candidate = if candidate.is_absolute() {
-        candidate.to_path_buf()
+    let configured = Path::new(executable);
+    let candidate = if configured.is_absolute() {
+        // Older library entries may store an absolute executable path rooted
+        // in the primary installation. When another known copy is selected,
+        // preserve the executable's relative location inside that copy.
+        if configured.starts_with(&root) {
+            configured.to_path_buf()
+        } else {
+            let configured_resolved = configured.canonicalize()
+                .map_err(|error| format!("Exécutable introuvable ou inaccessible : {error}"))?;
+            let mut relative = None;
+            for location in std::iter::once(&game.install_path).chain(game.install_locations.iter()) {
+                let known_root = match Path::new(location).canonicalize() {
+                    Ok(path) => path,
+                    Err(_) => continue,
+                };
+                if let Ok(path) = configured_resolved.strip_prefix(&known_root) {
+                    relative = Some(path.to_path_buf());
+                    break;
+                }
+            }
+            match relative {
+                Some(path) => root.join(path),
+                None => configured.to_path_buf(),
+            }
+        }
     } else {
         let trimmed = executable.trim();
         let mut components = trimmed.split(['/', '\\']);
@@ -564,6 +589,38 @@ mod tests {
             executable: Some("bin/game.exe".to_owned()),
         };
         (root, game)
+    }
+
+    #[test]
+    fn absolute_executable_from_primary_install_resolves_in_selected_secondary_install() {
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let base = std::env::temp_dir().join(format!("amethys-multi-install-{}-{nonce}", std::process::id()));
+        let primary = base.join("primary");
+        let secondary = base.join("secondary");
+        std::fs::create_dir_all(primary.join("bin")).unwrap();
+        std::fs::create_dir_all(secondary.join("bin")).unwrap();
+        std::fs::write(primary.join("bin/game.exe"), b"primary").unwrap();
+        std::fs::write(secondary.join("bin/game.exe"), b"secondary").unwrap();
+
+        let game = IpcGameEntry {
+            id: "multi-install".to_owned(),
+            name: "Multi Install".to_owned(),
+            platform: "Tests".to_owned(),
+            platform_id: Some("42".to_owned()),
+            catalogue_game_id: None,
+            catalogue_metadata: None,
+            install_path: secondary.to_string_lossy().into_owned(),
+            install_locations: vec![
+                primary.to_string_lossy().into_owned(),
+                secondary.to_string_lossy().into_owned(),
+            ],
+            executable: Some(primary.join("bin/game.exe").to_string_lossy().into_owned()),
+        };
+
+        let (resolved_root, resolved_executable) = resolve_launch_executable(&game).unwrap();
+        assert_eq!(resolved_root, secondary.canonicalize().unwrap());
+        assert_eq!(resolved_executable, secondary.join("bin/game.exe").canonicalize().unwrap());
+        std::fs::remove_dir_all(base).unwrap();
     }
 
     #[test]
