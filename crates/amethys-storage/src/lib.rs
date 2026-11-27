@@ -1190,7 +1190,9 @@ impl Database {
                 [game_id],
                 |row| row.get(0),
             )
-            .map_err(|error| storage_error(format!("Could not check game for location: {error}")))?;
+            .map_err(|error| {
+                storage_error(format!("Could not check game for location: {error}"))
+            })?;
         if !game_exists {
             return Err(storage_error("Cannot add a location to a game that does not exist."));
         }
@@ -1201,7 +1203,9 @@ impl Database {
                  ON CONFLICT(game_id, path) DO NOTHING",
                 params![uuid::Uuid::new_v4().to_string(), game_id, path],
             )
-            .map_err(|error| storage_error(format!("Could not add secondary game location: {error}")))?;
+            .map_err(|error| {
+                storage_error(format!("Could not add secondary game location: {error}"))
+            })?;
         transaction.commit().map_err(|error| {
             storage_error(format!("Could not commit secondary game location: {error}"))
         })?;
