@@ -704,6 +704,20 @@ fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value
                 .map(|(index, install_path)| {
                     let mut candidate = game.clone();
                     candidate.install_path = install_path.clone();
+                    // Resolve an absolute executable against the original set of
+                    // known installations before replacing the primary path. This
+                    // lets each secondary copy reuse the same safe relative path.
+                    if let Some(executable) = game.executable.as_deref() {
+                        let executable_path = std::path::Path::new(executable);
+                        if executable_path.is_absolute() {
+                            if let Some(relative) =
+                                executable_relative_to_known_install(game, executable_path)
+                            {
+                                candidate.executable =
+                                    Some(relative.to_string_lossy().into_owned());
+                            }
+                        }
+                    }
                     let directory_status = inspect_path(std::path::Path::new(install_path), true);
                     let executable_status = inspect_game_executable(&candidate);
                     let executable_label = executable_status
