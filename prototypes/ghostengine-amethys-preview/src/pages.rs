@@ -1022,7 +1022,7 @@ pub fn game_detail(p: &mut Painter, lay: &Layout, view: &DetailView) -> i32 {
     let secondary_locations = game
         .install_locations
         .iter()
-        .filter(|path| !std::path::Path::new(path).eq(std::path::Path::new(&game.install_path)))
+        .filter(|path| !crate::status::same_install_path(path, &game.install_path))
         .collect::<Vec<_>>();
     if !secondary_locations.is_empty() {
         let inner = main_w - 48;
@@ -1079,11 +1079,18 @@ pub fn game_detail(p: &mut Painter, lay: &Layout, view: &DetailView) -> i32 {
     // Let the user choose which physical copy this launcher entry starts.
     // The primary install remains the default; secondary copies are selectable
     // without changing or moving any game files.
-    let mut install_locations = game.install_locations.clone();
-    if install_locations.is_empty() {
-        install_locations.push(game.install_path.clone());
+    // Always keep the primary installation first, then append distinct copies.
+    // Path comparison follows Windows case-insensitivity and resolves existing
+    // aliases, so the same directory is never offered twice.
+    let mut install_locations = vec![game.install_path.clone()];
+    for path in &game.install_locations {
+        if !install_locations
+            .iter()
+            .any(|known| crate::status::same_install_path(known, path))
+        {
+            install_locations.push(path.clone());
+        }
     }
-    install_locations.dedup();
     if install_locations.len() > 1 {
         let row_h = 58;
         let h = 58 + install_locations.len() as i32 * row_h + 8;
