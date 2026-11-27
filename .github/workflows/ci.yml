@@ -17,6 +17,7 @@ permissions:
 jobs:
   quality:
     name: Quality checks
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
