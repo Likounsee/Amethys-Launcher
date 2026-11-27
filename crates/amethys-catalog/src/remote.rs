@@ -1018,7 +1018,9 @@ fn validate_promotion_records(
     stores: &[CatalogStoreIdentity],
 ) -> RemoteCatalogResult<()> {
     if promotions.len() > 64 {
-        return Err(RemoteCatalogError::InvalidData("too many promotions for one game".into()));
+        return Err(RemoteCatalogError::InvalidData(
+            "too many promotions for one game".into(),
+        ));
     }
     let mut ids = std::collections::HashSet::new();
     for promotion in promotions {
@@ -1029,15 +1031,30 @@ fn validate_promotion_records(
             || promotion.external_id.len() > 512
             || promotion.regular_price_minor <= promotion.current_price_minor
             || promotion.currency.len() != 3
-            || !promotion.currency.bytes().all(|byte| byte.is_ascii_uppercase())
-            || !matches!(promotion.store.as_str(), "steam" | "gog" | "epic" | "ea" | "ubisoft" | "battle-net" | "amazon-games" | "humble")
+            || !promotion
+                .currency
+                .bytes()
+                .all(|byte| byte.is_ascii_uppercase())
+            || !matches!(
+                promotion.store.as_str(),
+                "steam"
+                    | "gog"
+                    | "epic"
+                    | "ea"
+                    | "ubisoft"
+                    | "battle-net"
+                    | "amazon-games"
+                    | "humble"
+            )
             || !is_valid_promotion_url(&promotion.source_url, &promotion.store)
             || !is_utc_timestamp(&promotion.valid_from)
             || !is_utc_timestamp(&promotion.valid_until)
             || !is_utc_timestamp(&promotion.checked_at)
             || promotion.valid_until <= promotion.valid_from
         {
-            return Err(RemoteCatalogError::InvalidData("catalogue contains an invalid promotion record".into()));
+            return Err(RemoteCatalogError::InvalidData(
+                "catalogue contains an invalid promotion record".into(),
+            ));
         }
         if !stores.is_empty()
             && !stores.iter().any(|store| {
@@ -1068,11 +1085,15 @@ fn is_utc_timestamp(value: &str) -> bool {
     }) {
         return false;
     }
-    let parse = |range: std::ops::Range<usize>| {
-        value.get(range).and_then(|part| part.parse::<u32>().ok())
-    };
+    let parse =
+        |range: std::ops::Range<usize>| value.get(range).and_then(|part| part.parse::<u32>().ok());
     let (Some(year), Some(month), Some(day), Some(hour), Some(minute), Some(second)) = (
-        parse(0..4), parse(5..7), parse(8..10), parse(11..13), parse(14..16), parse(17..19),
+        parse(0..4),
+        parse(5..7),
+        parse(8..10),
+        parse(11..13),
+        parse(14..16),
+        parse(17..19),
     ) else {
         return false;
     };
@@ -1091,15 +1112,25 @@ fn is_valid_promotion_url(value: &str, store: &str) -> bool {
     if !is_valid_store_url(value) {
         return false;
     }
-    let Ok(url) = Url::parse(value) else { return false };
-    let host = url.host_str().unwrap_or_default().trim_start_matches("www.");
+    let Ok(url) = Url::parse(value) else {
+        return false;
+    };
+    let host = url
+        .host_str()
+        .unwrap_or_default()
+        .trim_start_matches("www.");
     let allowed = match store {
         "steam" => host == "steampowered.com" || host.ends_with(".steampowered.com"),
         "gog" => host == "gog.com" || host.ends_with(".gog.com"),
         "epic" => host == "epicgames.com" || host.ends_with(".epicgames.com"),
         "ea" => host == "ea.com" || host.ends_with(".ea.com"),
         "ubisoft" => host == "ubisoft.com" || host.ends_with(".ubisoft.com"),
-        "battle-net" => host == "battle.net" || host.ends_with(".battle.net") || host == "blizzard.com" || host.ends_with(".blizzard.com"),
+        "battle-net" => {
+            host == "battle.net"
+                || host.ends_with(".battle.net")
+                || host == "blizzard.com"
+                || host.ends_with(".blizzard.com")
+        }
         "amazon-games" => host == "amazon.com" || host.ends_with(".amazon.com"),
         "humble" => host == "humblebundle.com" || host.ends_with(".humblebundle.com"),
         _ => false,
@@ -1113,7 +1144,8 @@ fn utc_timestamp_at(seconds: u64) -> String {
     let z = days + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
     let day_of_era = z - era * 146_097;
-    let year_of_era = (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let year_of_era =
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
     let mut year = year_of_era + era * 400;
     let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
     let month_prime = (5 * day_of_year + 2) / 153;
@@ -1237,8 +1269,13 @@ fn parse_search_index_rows(
         };
         let promotions = match fields.get(5) {
             None => Vec::new(),
-            Some(value) => serde_json::from_value::<Vec<CatalogPromotion>>(value.clone())
-                .map_err(|error| RemoteCatalogError::InvalidData(format!("search index promotions are invalid: {error}")))?,
+            Some(value) => {
+                serde_json::from_value::<Vec<CatalogPromotion>>(value.clone()).map_err(|error| {
+                    RemoteCatalogError::InvalidData(format!(
+                        "search index promotions are invalid: {error}"
+                    ))
+                })?
+            }
         };
         validate_promotion_records(&promotions, &[])?;
         if id == 0 || id <= previous_id || name.trim().is_empty() || name.len() > 512 {
