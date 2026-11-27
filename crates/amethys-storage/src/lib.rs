@@ -1170,6 +1170,24 @@ impl Database {
         self.get_game(id)
     }
 
+    /// Lists all known installation directories, with the primary location first.
+    pub fn list_game_locations(&self, game_id: &str) -> Result<Vec<String>, AmethysError> {
+        let game_id = validate_game_id(game_id)?;
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT path FROM local_game_locations
+                 WHERE game_id = ?1
+                 ORDER BY is_primary DESC, path COLLATE NOCASE, path",
+            )
+            .map_err(|error| storage_error(format!("Could not prepare game locations: {error}")))?;
+        let rows = statement
+            .query_map([game_id], |row| row.get(0))
+            .map_err(|error| storage_error(format!("Could not query game locations: {error}")))?;
+        rows.collect::<Result<Vec<_>, _>>()
+            .map_err(|error| storage_error(format!("Could not read game locations: {error}")))
+    }
+
     /// Records another installation directory for an existing library game.
     ///
     /// The current primary installation is never replaced by this operation.
