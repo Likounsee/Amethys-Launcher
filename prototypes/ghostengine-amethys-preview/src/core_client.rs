@@ -300,7 +300,6 @@ pub fn add_detected_game(
                     platform: detected.platform.to_owned(),
                     platform_id: detected.platform_id.clone(),
                     install_path: detected.install_path.to_string_lossy().into_owned(),
-                    install_locations: Vec::new(),
                     executable: amethys_discovery::resolve_game_executable(detected)
                         .map(|path| path.to_string_lossy().into_owned()),
                 }),
