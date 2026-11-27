@@ -20,7 +20,7 @@ use ghostengine::{
     UiInteraction,
 };
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -369,6 +369,55 @@ fn save_library_sort(path: &std::path::Path, sort: usize) -> std::io::Result<()>
     Ok(())
 }
 
+
+/// Returns the per-game preference file using a filesystem-safe hexadecimal ID.
+fn install_choice_file(root: &std::path::Path, game_id: &str) -> std::path::PathBuf {
+    let encoded = game_id.as_bytes().iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+    root.join(format!("launch-install-{encoded}.choice"))
+}
+
+fn load_install_choice(root: &std::path::Path, game: &IpcGameEntry) -> String {
+    let Ok(bytes) = std::fs::read(install_choice_file(root, &game.id)) else {
+        return game.install_path.clone();
+    };
+    let Ok(path) = String::from_utf8(bytes) else {
+        return game.install_path.clone();
+    };
+    let known = if game.install_locations.is_empty() {
+        std::slice::from_ref(&game.install_path)
+    } else {
+        game.install_locations.as_slice()
+    };
+    if known.iter().any(|candidate| candidate == &path) {
+        path
+    } else {
+        game.install_path.clone()
+    }
+}
+
+fn save_install_choice(root: &std::path::Path, game_id: &str, install_path: &str) -> std::io::Result<()> {
+    use std::io::Write as _;
+    std::fs::create_dir_all(root)?;
+    let target = install_choice_file(root, game_id);
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let temporary = target.with_extension(format!("{}-{nonce}.tmp", std::process::id()));
+    let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&temporary)?;
+    if let Err(error) = file.write_all(install_path.as_bytes()).and_then(|()| file.sync_all()) {
+        drop(file);
+        let _ = std::fs::remove_file(&temporary);
+        return Err(error);
+    }
+    drop(file);
+    if let Err(error) = std::fs::rename(&temporary, &target) {
+        let _ = std::fs::remove_file(&temporary);
+        return Err(error);
+    }
+    Ok(())
+}
+
 /// Produces a stable path key for comparing discovered and registered installs.
 fn normalized_install_path(path: &std::path::Path) -> String {
     let normalized = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
@@ -469,6 +518,7 @@ pub struct App {
     pub core_error: Option<String>,
     toast: Option<Toast>,
     pub selected_game: Option<usize>,
+    selected_install_locations: HashMap<String, String>,
     pending_remove: Option<usize>,
     search_query: String,
     search_focused: bool,
@@ -539,6 +589,12 @@ impl App {
         let library_sort = media_store
             .map(|store| load_library_sort(&store.root().join(DESKTOP_PREFERENCES_FILE)))
             .unwrap_or(0);
+        let selected_install_locations = games.iter().map(|game| {
+            let selected = media_store
+                .map(|store| load_install_choice(store.root(), game))
+                .unwrap_or_else(|| game.install_path.clone());
+            (game.id.clone(), selected)
+        }).collect();
         let mut app = Self {
             fonts,
             covers,
@@ -566,6 +622,7 @@ impl App {
             core_error,
             toast: None,
             selected_game: None,
+            selected_install_locations,
             pending_remove: None,
             search_query: String::new(),
             search_focused: false,
@@ -1113,7 +1170,17 @@ impl App {
                     &DetailView {
                         game: self.games.get(index),
                         index,
-                        status: self.statuses.get(index),
+                        status: self.games.get(index).map(|game| {
+                            let mut launch_entry = game.clone();
+                            if let Some(path) = self.selected_install_locations.get(&game.id) {
+                                launch_entry.install_path = path.clone();
+                            }
+                            status::status_of(&launch_entry)
+                        }).as_ref().or_else(|| self.statuses.get(index)),
+                        selected_install_path: self.games.get(index).and_then(|game| {
+                            self.selected_install_locations.get(&game.id).map(String::as_str)
+                                .or(Some(game.install_path.as_str()))
+                        }),
                         executable_draft: &self.executable_draft,
                         editing_executable: self.editing_executable,
                     },
@@ -1515,10 +1582,50 @@ impl App {
             Action::RefreshLibrary => {
                 self.start_library_refresh();
             }
+            Action::SelectInstallLocation(location_index) => {
+                let Some(game_index) = self.selected_game else {
+                    self.notify(ToastKind::Error, "Aucun jeu n'est sélectionné.");
+                    self.render(false);
+                    return;
+                };
+                let Some(game) = self.games.get(game_index) else {
+                    self.notify(ToastKind::Error, "Ce jeu n'existe plus dans la bibliothèque chargée.");
+                    self.render(false);
+                    return;
+                };
+                let mut locations = game.install_locations.clone();
+                if locations.is_empty() {
+                    locations.push(game.install_path.clone());
+                }
+                locations.dedup();
+                let Some(path) = locations.get(location_index).cloned() else {
+                    self.notify(ToastKind::Error, "Cette installation n'est plus disponible.");
+                    self.render(false);
+                    return;
+                };
+                let saved = self.media_store.map(|store| {
+                    save_install_choice(store.root(), &game.id, &path)
+                });
+                match saved {
+                    Some(Ok(())) => {
+                        self.selected_install_locations.insert(game.id.clone(), path.clone());
+                        self.notify(ToastKind::Success, format!("Installation sélectionnée pour {}.", game.name));
+                    }
+                    Some(Err(error)) => self.notify(ToastKind::Error, format!("Impossible d'enregistrer ce choix : {error}")),
+                    None => self.notify(ToastKind::Error, "Le stockage des préférences est indisponible : sélection non enregistrée."),
+                }
+                self.render(false);
+            }
             Action::LaunchGame(index) => {
                 let result = match self.games.get(index) {
-                    Some(game) => crate::core_client::launch_game(game)
-                        .map(|pid| format!("Démarrage demandé : {} (processus {pid}).", game.name)),
+                    Some(game) => {
+                        let mut selected = game.clone();
+                        if let Some(path) = self.selected_install_locations.get(&game.id) {
+                            selected.install_path = path.clone();
+                        }
+                        crate::core_client::launch_game(&selected)
+                            .map(|pid| format!("Démarrage demandé : {} (processus {pid}).", game.name))
+                    },
                     None => Err("Ce jeu n'existe plus dans la bibliothèque chargée.".to_owned()),
                 };
                 match result {
