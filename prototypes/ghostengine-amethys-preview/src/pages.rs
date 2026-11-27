@@ -1272,26 +1272,39 @@ pub fn store(p: &mut Painter, lay: &Layout, view: &StoreView<'_>) -> i32 {
             p.scrim(art_x, art_y, art_w, hero_h - 28, 0.35, 170);
             let tx = art_x + art_w + 20;
             let tw = mw - art_w - 58;
-            chip(p, tx, y + 22, "À EXPLORER", tw.min(140));
+            chip(
+                p,
+                tx,
+                y + 22,
+                if view.recommended { "RECOMMANDÉ" } else { "À EXPLORER" },
+                tw.min(140),
+            );
             p.paragraph(tx, y + 58, tw, 28, &featured.name, 23.0, W::Disp, TXT, 2);
             p.paragraph(
                 tx,
                 y + if view.recommended { 98 } else { 116 },
                 tw,
                 19,
-                "Explorez sa fiche, consultez les informations et retrouvez les boutiques officielles.",
+                if view.recommended {
+                    "Une suggestion issue des genres présents dans votre bibliothèque."
+                } else {
+                    "Explorez sa fiche, consultez les informations et retrouvez les boutiques officielles."
+                },
                 12.5,
                 W::Reg,
                 MUT,
                 if view.recommended { 2 } else { 3 },
             );
             if view.recommended && !featured.genres.is_empty() {
-                let reasons = format!("Pour vous : {}", featured.genres.join(" · "));
+                // These are the game's catalogue genres, not the exact scoring
+                // reasons. Keep the label factual until the IPC response exposes
+                // matched recommendation reasons.
+                let genres = format!("Genres : {}", featured.genres.join(" · "));
                 p.text_fit(
                     tx,
                     y + 148,
                     17,
-                    &reasons,
+                    &genres,
                     11.0,
                     W::Med,
                     VIO_HI,
