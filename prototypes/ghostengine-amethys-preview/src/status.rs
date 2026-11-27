@@ -79,14 +79,43 @@ pub fn status_of(game: &IpcGameEntry) -> GameStatus {
 /// Evaluates a known secondary installation with the same executable checks
 /// used by the launch path, without changing the saved primary installation.
 /// Compares installation paths using platform-appropriate path semantics.
+fn normalized_path(path: &str) -> std::path::PathBuf {
+    use std::path::Component;
+
+    let path = std::fs::canonicalize(path)
+        .unwrap_or_else(|_| std::path::PathBuf::from(path));
+    let mut normalized = std::path::PathBuf::new();
+
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                // Do not let lexical cleanup climb above an absolute root.
+                if !matches!(normalized.components().next_back(), Some(Component::RootDir | Component::Prefix(_))) {
+                    normalized.pop();
+                }
+            }
+            other => normalized.push(other.as_os_str()),
+        }
+    }
+
+    normalized
+}
+
+/// Compares paths consistently, including aliases whose target is temporarily
+/// unavailable (for example, while an external drive is disconnected).
 pub fn same_install_path(left: &str, right: &str) -> bool {
-    let left = std::fs::canonicalize(left).unwrap_or_else(|_| std::path::PathBuf::from(left));
-    let right = std::fs::canonicalize(right).unwrap_or_else(|_| std::path::PathBuf::from(right));
+    let left = normalized_path(left);
+    let right = normalized_path(right);
 
     #[cfg(windows)]
     {
         left.to_string_lossy()
-            .eq_ignore_ascii_case(&right.to_string_lossy())
+            .replace('\\\\', "/")
+            .trim_end_matches('/')
+            .eq_ignore_ascii_case(
+                &right.to_string_lossy().replace('\\\\', "/").trim_end_matches('/')
+            )
     }
     #[cfg(not(windows))]
     {
