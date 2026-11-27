@@ -1176,7 +1176,7 @@ impl App {
                                 launch_entry.install_path = path.clone();
                             }
                             status::status_of(&launch_entry)
-                        }).as_ref().or_else(|| self.statuses.get(index)),
+                        }),
                         selected_install_path: self.games.get(index).and_then(|game| {
                             self.selected_install_locations.get(&game.id).map(String::as_str)
                                 .or(Some(game.install_path.as_str()))
