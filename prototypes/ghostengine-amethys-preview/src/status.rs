@@ -122,4 +122,45 @@ mod tests {
         assert_eq!(kinds[0], StatusKind::Ready);
         assert_eq!(kinds[3], StatusKind::FolderMissing);
     }
+
+    #[test]
+    fn secondary_installation_status_uses_selected_path_without_mutating_primary() {
+        let root = std::env::temp_dir().join(format!(
+            "amethys-secondary-status-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        let primary = root.join("primary");
+        let secondary = root.join("secondary");
+        std::fs::create_dir_all(&secondary).expect("create secondary installation");
+        std::fs::write(secondary.join("game.exe"), b"fixture").expect("create executable");
+
+        let game = IpcGameEntry {
+            id: "game".to_owned(),
+            name: "Game".to_owned(),
+            platform: "Steam".to_owned(),
+            platform_id: Some("123".to_owned()),
+            catalogue_game_id: None,
+            catalogue_metadata: None,
+            install_path: primary.to_string_lossy().into_owned(),
+            install_locations: vec![
+                primary.to_string_lossy().into_owned(),
+                secondary.to_string_lossy().into_owned(),
+            ],
+            executable: Some("game.exe".to_owned()),
+        };
+
+        let ready = status_for_installation(&game, &secondary.to_string_lossy());
+        assert_eq!(ready.kind, StatusKind::Ready);
+        assert!(ready.is_ready());
+        assert_eq!(game.install_path, primary.to_string_lossy());
+
+        let missing = status_for_installation(&game, &root.join("missing").to_string_lossy());
+        assert_eq!(missing.kind, StatusKind::FolderMissing);
+
+        std::fs::remove_dir_all(root).expect("remove installation fixture");
+    }
 }
