@@ -1316,7 +1316,7 @@ fn validate_manifest(manifest: &CatalogManifest) -> RemoteCatalogResult<()> {
     // Schema 2 added source identities; schema 3 adds optional verified
     // store promotions. Older additive catalogue formats remain readable.
     if !matches!(manifest.manifest_schema_version, 1 | 2)
-        || !matches!(manifest.catalog_schema_version, 1 | 2 | 3)
+        || !matches!(manifest.catalog_schema_version, 1..=3)
     {
         return Err(RemoteCatalogError::InvalidData(
             "unsupported catalogue manifest/schema version".into(),
@@ -2550,7 +2550,7 @@ mod tests {
             name: Some("Example".into()),
             url: Some(promotion.source_url.clone()),
         };
-        assert!(validate_promotion_records(&[promotion.clone()], &[store]).is_ok());
+        assert!(validate_promotion_records(std::slice::from_ref(&promotion), &[store]).is_ok());
         let mismatched = CatalogStoreIdentity {
             store: "steam".into(),
             external_id: Some("999".into()),
