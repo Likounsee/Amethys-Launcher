@@ -72,6 +72,7 @@ pub enum Action {
     SaveExecutable,
     CancelExecutableEdit,
     LaunchGame(usize),
+    SelectInstallLocation(usize),
     RemoveGame(usize),
     ConfirmRemoveGame,
     CancelRemoveGame,
