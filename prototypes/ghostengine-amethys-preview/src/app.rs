@@ -2434,6 +2434,42 @@ mod tests {
     }
 
     #[test]
+    fn install_choice_matches_canonical_path_aliases_and_deduplicates_them() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "amethys-install-alias-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&root).expect("create installation root");
+        let primary = root.to_string_lossy().into_owned();
+        let alias = root.join(".").to_string_lossy().into_owned();
+        let game = IpcGameEntry {
+            id: "path-alias".to_owned(),
+            name: "Example".to_owned(),
+            platform: "Manual".to_owned(),
+            platform_id: None,
+            catalogue_game_id: None,
+            catalogue_metadata: None,
+            install_path: primary.clone(),
+            install_locations: vec![alias.clone()],
+            executable: Some("game.exe".to_owned()),
+        };
+
+        let locations = known_install_locations(&game);
+        assert_eq!(locations.len(), 1, "canonical aliases must not create duplicate choices");
+        save_install_choice(&root, &game.id, &alias).expect("save alias selection");
+        assert_eq!(
+            load_install_choice(&root, &game),
+            primary,
+            "a saved alias must resolve to the known primary path",
+        );
+        std::fs::remove_dir_all(root).expect("remove installation fixture");
+    }
+
+    #[test]
     fn recommendation_profile_deduplicates_installations_by_canonical_id_and_title() {
         let make_game = |id: &str, name: &str, genres: &[&str]| IpcGameEntry {
             id: format!("local-{id}-{name}"),
