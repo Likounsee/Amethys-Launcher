@@ -653,7 +653,10 @@ mod tests {
             catalogue_game_id: None,
             catalogue_metadata: None,
             install_path: missing_primary.to_string_lossy().into_owned(),
-            install_locations: vec![secondary.to_string_lossy().into_owned()],
+            install_locations: vec![
+                missing_primary.to_string_lossy().into_owned(),
+                secondary.to_string_lossy().into_owned(),
+            ],
             executable: Some(
                 missing_primary.join("bin/game.exe").to_string_lossy().into_owned(),
             ),
