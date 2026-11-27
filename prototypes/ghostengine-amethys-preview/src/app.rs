@@ -2404,6 +2404,38 @@ mod tests {
     use super::*;
 
     #[test]
+    fn selected_installation_is_saved_reloaded_and_rejected_when_no_longer_known() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("amethys-install-choice-{}-{nonce}", std::process::id()));
+        let game = IpcGameEntry {
+            id: "game/with:unsafe-id".to_owned(),
+            name: "Example".to_owned(),
+            platform: "Manual".to_owned(),
+            platform_id: None,
+            catalogue_game_id: None,
+            catalogue_metadata: None,
+            install_path: "/games/primary".to_owned(),
+            install_locations: vec!["/games/primary".to_owned(), "/games/secondary".to_owned()],
+            executable: Some("bin/game.exe".to_owned()),
+        };
+
+        assert_eq!(load_install_choice(&root, &game), "/games/primary");
+        save_install_choice(&root, &game.id, "/games/secondary").expect("choice saved");
+        assert_eq!(load_install_choice(&root, &game), "/games/secondary");
+
+        let mut refreshed = game.clone();
+        refreshed.install_locations = vec!["/games/primary".to_owned()];
+        assert_eq!(load_install_choice(&root, &refreshed), "/games/primary");
+
+        save_install_choice(&root, &game.id, "/games/primary").expect("existing choice replaced");
+        assert_eq!(load_install_choice(&root, &game), "/games/primary");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn recommendation_profile_deduplicates_installations_by_canonical_id_and_title() {
         let make_game = |id: &str, name: &str, genres: &[&str]| IpcGameEntry {
             id: format!("local-{id}-{name}"),
