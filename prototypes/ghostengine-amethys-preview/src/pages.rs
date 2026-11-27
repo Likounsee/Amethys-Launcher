@@ -1273,6 +1273,12 @@ fn render_promotions(p: &mut Painter, lay: &Layout, view: &StoreView<'_>, mut y:
         p.text(mx + 20, y + 52, 18, "Lecture du catalogue local vérifié", 12.0, W::Reg, MUT);
         return y + 124;
     }
+    if let Some(error) = view.error {
+        panel(p, mx, y, mw, 112, 16);
+        p.text(mx + 20, y + 16, 22, "Promotions indisponibles", 16.0, W::Semi, AMBER);
+        p.paragraph(mx + 20, y + 46, mw - 40, 19, error, 12.0, W::Reg, MUT, 3);
+        return y + 132;
+    }
     if view.results.is_empty() {
         panel(p, mx, y, mw, 132, 18);
         p.text(mx + 20, y + 18, 24, "Aucune promotion vérifiée actuellement", 17.0, W::Semi, TXT);
