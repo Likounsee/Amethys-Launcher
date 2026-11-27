@@ -1,6 +1,7 @@
 use amethys_events::EventBus;
 use amethys_ipc::{
-    IpcCatalogGameDetail, IpcCatalogSearchEntry, IpcCatalogSourceIdentity, IpcCatalogStoreIdentity,
+    IpcCatalogGameDetail, IpcCatalogPromotion, IpcCatalogSearchEntry, IpcCatalogSourceIdentity,
+    IpcCatalogStoreIdentity,
     IpcCommand, IpcCoreStatus, IpcEnvelope, IpcGameEntry, IpcOwnedGameEntry, IpcRemoteError,
     IpcRequest, IpcResponse, IpcResponsePayload, read_envelope, transport::IpcListener,
     write_message,
