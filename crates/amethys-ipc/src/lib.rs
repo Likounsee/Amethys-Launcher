@@ -53,6 +53,10 @@ pub enum IpcCommand {
         query: String,
         limit: usize,
     },
+    /// Lists only current, recently verified official store promotions.
+    SearchPromotionsCatalog {
+        limit: usize,
+    },
     /// Recommends catalogue games using genres and titles from the local library.
     SearchRecommendedCatalog {
         genres: Vec<String>,
@@ -185,6 +189,24 @@ pub struct IpcCatalogSearchEntry {
     /// Optional path to a validated local cover cache copy.
     #[serde(default)]
     pub cover_cache_path: Option<String>,
+    /// Current, source-verified official price promotions.
+    #[serde(default)]
+    pub promotions: Vec<IpcCatalogPromotion>,
+}
+
+/// A promotion record from an official store product page.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct IpcCatalogPromotion {
+    pub promotion_id: String,
+    pub store: String,
+    pub external_id: String,
+    pub current_price_minor: u64,
+    pub regular_price_minor: u64,
+    pub currency: String,
+    pub valid_from: String,
+    pub valid_until: String,
+    pub checked_at: String,
+    pub source_url: String,
 }
 
 /// A provider-independent source identity attached to a master-catalogue game.
@@ -213,6 +235,8 @@ pub struct IpcCatalogGameDetail {
     #[serde(default)]
     pub source_ids: Vec<IpcCatalogSourceIdentity>,
     pub stores: Vec<IpcCatalogStoreIdentity>,
+    #[serde(default)]
+    pub promotions: Vec<IpcCatalogPromotion>,
 }
 
 /// External store identity attached to a master-catalogue game.
@@ -328,6 +352,7 @@ pub fn dispatch_request_with_games(
         | IpcCommand::RemoveOwnedGame { .. }
         | IpcCommand::SyncMasterCatalog
         | IpcCommand::SearchMasterCatalog { .. }
+        | IpcCommand::SearchPromotionsCatalog { .. }
         | IpcCommand::SearchRecommendedCatalog { .. }
         | IpcCommand::GetMasterCatalogGame { .. } => {
             return IpcResponse::failure(
