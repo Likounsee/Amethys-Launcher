@@ -424,6 +424,7 @@ pub fn library_platforms(games: &[IpcGameEntry]) -> Vec<String> {
 
 pub struct LibraryView<'a> {
     pub games: &'a [IpcGameEntry],
+    pub statuses: &'a [GameStatus],
     /// Per-game launch location selected by the user; absent entries use the primary path.
     pub selected_install_paths: &'a std::collections::HashMap<String, String>,
     pub detected: &'a [amethys_discovery::DetectedGame],
@@ -466,14 +467,8 @@ fn visible_games_with_statuses(view: &LibraryView, statuses: &[GameStatus]) -> V
 }
 
 pub fn visible_games(view: &LibraryView) -> Vec<usize> {
-    let statuses = view.games.iter().map(|game| {
-        let selected = view.selected_install_paths.get(&game.id).map(String::as_str).unwrap_or(&game.install_path);
-        crate::status::status_for_installation(game, selected)
-    }).collect::<Vec<_>>();
-    visible_games_with_statuses(view, &statuses)
+    visible_games_with_statuses(view, view.statuses)
 }
-
-
 
 // -------------------------------------------------------------- game card
 #[allow(clippy::too_many_arguments)] // Page layout helpers receive explicit geometry and content.
