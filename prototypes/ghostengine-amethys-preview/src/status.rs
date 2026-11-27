@@ -78,6 +78,22 @@ pub fn status_of(game: &IpcGameEntry) -> GameStatus {
 
 /// Evaluates a known secondary installation with the same executable checks
 /// used by the launch path, without changing the saved primary installation.
+/// Compares installation paths using platform-appropriate path semantics.
+pub fn same_install_path(left: &str, right: &str) -> bool {
+    let left = std::fs::canonicalize(left).unwrap_or_else(|_| std::path::PathBuf::from(left));
+    let right = std::fs::canonicalize(right).unwrap_or_else(|_| std::path::PathBuf::from(right));
+
+    #[cfg(windows)]
+    {
+        left.to_string_lossy()
+            .eq_ignore_ascii_case(&right.to_string_lossy())
+    }
+    #[cfg(not(windows))]
+    {
+        left == right
+    }
+}
+
 pub fn status_for_installation(game: &IpcGameEntry, install_path: &str) -> GameStatus {
     let mut selected = game.clone();
     selected.install_path = install_path.to_owned();
