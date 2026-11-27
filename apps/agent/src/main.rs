@@ -1484,8 +1484,8 @@ mod tests {
             other => panic!("unexpected first import response: {other:?}"),
         };
 
-        // Simulate a real move: the previous directory disappears and the
-        // newly discovered installation exists at its replacement path.
+        // Simulate a second discovered installation for the same platform
+        // identity. Keep the primary path stable and retain the new copy.
         std::fs::rename(&original_path, &moved_path).expect("move installation directory");
         let second = round_trip(
             &database,
@@ -1509,9 +1509,17 @@ mod tests {
         assert_eq!(second_game.name, "Updated name");
         assert_eq!(
             second_game.install_path,
-            moved_path.to_string_lossy().into_owned()
+            original_path.to_string_lossy().into_owned(),
+            "a newly discovered copy must not silently replace the primary installation",
         );
-        assert_eq!(second_game.executable.as_deref(), Some("game.exe"));
+        assert!(
+            second_game
+                .install_locations
+                .iter()
+                .any(|path| same_install_path(path, &moved_path.to_string_lossy())),
+            "the additional installation must be retained",
+        );
+        assert_eq!(second_game.executable, None);
         let games = database
             .lock()
             .await
@@ -1522,7 +1530,18 @@ mod tests {
         assert_eq!(games[0].name, "Updated name");
         assert_eq!(
             games[0].install_path,
-            moved_path.to_string_lossy().into_owned()
+            original_path.to_string_lossy().into_owned()
+        );
+        let locations = database
+            .lock()
+            .await
+            .list_game_locations(&games[0].id)
+            .expect("list all installations");
+        assert!(
+            locations
+                .iter()
+                .any(|path| same_install_path(path, &moved_path.to_string_lossy())),
+            "the secondary installation must survive persistence",
         );
         drop(database);
         std::fs::remove_dir_all(root).expect("remove installation fixture");
