@@ -3,100 +3,226 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#111114">
-<meta name="description" content="Amethys Launcher is an independent PC game launcher. Bring your local library, games and the platforms they belong to together in one app.">
-<title>Amethys Launcher — Your PC game library, in one place</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#f5f3ed">
+<meta name="description" content="Amethys is a PC game launcher in development. Manage your local game library and launch configured games from one desktop app.">
+<title>Amethys Launcher</title>
+<link rel="icon" href="doc/asset/logo.png">
 <style>
-:root{color-scheme:dark;--bg:#111114;--panel:#19191e;--panel2:#202027;--line:#ffffff16;--text:#f4f2ee;--muted:#a5a2a0;--soft:#777477;--accent:#b9a2ff;--green:#a6d7b4;--max:1180px}
-*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:86px}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.65 "DM Sans",sans-serif}a{color:inherit;text-decoration:none}img{max-width:100%;display:block}.wrap{width:min(var(--max),calc(100% - 56px));margin:auto}
-header{height:74px;border-bottom:1px solid var(--line);background:#111114ed;position:sticky;top:0;z-index:10;backdrop-filter:blur(16px)}nav{height:100%;display:flex;align-items:center;justify-content:space-between;gap:28px}.brand{display:flex;align-items:center;gap:12px;font:800 19px Manrope,sans-serif;letter-spacing:-.7px}.brand img{width:34px;height:34px;object-fit:contain}.links{display:flex;align-items:center;gap:28px;color:#c0bdba;font-size:13px}.links a:hover,.textlink:hover{color:var(--accent)}.navright{display:flex;align-items:center;gap:12px}.github{font-size:12px;color:#d4d0cc;border:1px solid var(--line);padding:9px 14px;border-radius:6px}.github:hover{border-color:#b9a2ff88}
-.hero{padding:82px 0 70px;border-bottom:1px solid var(--line)}.hero-grid{display:grid;grid-template-columns:.86fr 1.14fr;gap:55px;align-items:center}.overline{font-size:11px;text-transform:uppercase;letter-spacing:.16em;color:var(--accent);font-weight:700}.hero h1{font:800 clamp(42px,5.6vw,68px)/1.07 Manrope,sans-serif;letter-spacing:-3.8px;margin:18px 0 22px;max-width:590px}.hero h1 span{color:var(--accent)}.intro{max-width:500px;color:#c1bdb9;font-size:17px;line-height:1.8}.hero-actions{display:flex;gap:12px;flex-wrap:wrap;margin:30px 0 22px}.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;padding:12px 17px;border-radius:6px;font-size:13px;font-weight:700;transition:.18s}.btn.main{background:var(--accent);color:#17131f}.btn.main:hover{background:#d0c0ff;transform:translateY(-2px)}.btn.outline{border:1px solid #ffffff30;color:#f2efeb}.btn.outline:hover{border-color:var(--accent)}.hero-note{font-size:11px;color:var(--soft)}.hero-shot{position:relative}.hero-shot img{width:100%;border:1px solid #ffffff20;border-radius:9px;box-shadow:0 28px 75px #0008}.shot-label{display:flex;justify-content:space-between;gap:15px;margin-top:12px;color:#858184;font-size:10px;letter-spacing:.04em}
-.facts{border-bottom:1px solid var(--line)}.facts-grid{display:grid;grid-template-columns:repeat(4,1fr)}.fact{padding:23px 20px;border-right:1px solid var(--line)}.fact:first-child{padding-left:0}.fact:last-child{border:0}.fact strong{display:block;font:700 15px Manrope,sans-serif}.fact span{font-size:11px;color:var(--soft)}
-section{padding:94px 0}.section-top{display:flex;justify-content:space-between;align-items:end;gap:35px;margin-bottom:38px}.section-top h2,.split-copy h2{font:800 clamp(30px,4vw,43px)/1.14 Manrope,sans-serif;letter-spacing:-2px;margin:9px 0 0}.section-top p{max-width:420px;color:var(--muted);font-size:14px;margin:0}.eyebrow{font-size:10px;color:var(--accent);text-transform:uppercase;letter-spacing:.16em;font-weight:700}
-.gallery{display:grid;grid-template-columns:1.3fr .7fr;gap:18px}.shot-card{background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}.shot-card img{width:100%;height:auto;background:#202027}.shot-caption{padding:17px 19px 19px}.shot-caption strong{display:block;font:700 15px Manrope,sans-serif;margin-bottom:4px}.shot-caption p{font-size:12px;color:var(--muted);margin:0}.side-shots{display:grid;gap:18px}.side-shots .shot-card{display:grid;grid-template-columns:1fr;align-content:start}
-.release{background:#19191e;border-block:1px solid var(--line)}.release-grid{display:grid;grid-template-columns:.8fr 1.2fr;gap:60px}.release h2{font:800 38px/1.15 Manrope,sans-serif;letter-spacing:-1.8px;margin:12px 0}.release-copy{color:var(--muted);font-size:14px}.version{display:inline-flex;align-items:center;gap:8px;border:1px solid #a6d7b455;color:var(--green);padding:6px 10px;border-radius:4px;font-size:11px;font-weight:700}.download-list{border-top:1px solid var(--line)}.download-row{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:17px 0;border-bottom:1px solid var(--line)}.download-row strong{display:block;font-size:13px}.download-row span{display:block;color:var(--soft);font-size:11px}.download-row a{color:var(--accent);font-size:12px;font-weight:700;white-space:nowrap}.download-row a:hover{text-decoration:underline}.release-small{font-size:11px;color:var(--soft);margin-top:16px}
-.scope-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.scope{padding:26px;border:1px solid var(--line);background:var(--panel);border-radius:7px}.scope-head{display:flex;align-items:center;justify-content:space-between;gap:15px;padding-bottom:15px;border-bottom:1px solid var(--line)}.scope-head h3{font:700 18px Manrope,sans-serif;margin:0}.state{font-size:10px;text-transform:uppercase;letter-spacing:.08em;padding:5px 8px;border-radius:3px}.state.now{color:var(--green);background:#a6d7b414}.state.next{color:var(--accent);background:#b9a2ff15}.scope ul{list-style:none;padding:0;margin:16px 0 0;display:grid;gap:11px}.scope li{font-size:13px;color:#c5c1bd;padding-left:18px;position:relative}.scope li:before{content:"";position:absolute;left:0;top:9px;width:5px;height:5px;border-radius:50%;background:#a6d7b4}.scope.next-scope li:before{background:var(--accent)}.scope-note{font-size:11px;color:var(--soft);margin-top:20px}
-.split{display:grid;grid-template-columns:1fr 1fr;gap:70px;align-items:start}.split-copy p{color:var(--muted);font-size:14px;line-height:1.85}.principles{border-top:1px solid var(--line)}.principle{display:grid;grid-template-columns:36px 1fr;gap:15px;padding:17px 0;border-bottom:1px solid var(--line)}.principle b{font:700 12px Manrope;color:var(--accent)}.principle strong{display:block;font:700 14px Manrope;margin-bottom:3px}.principle p{margin:0;color:var(--muted);font-size:12px}
-.roadmap{border-top:1px solid var(--line);padding-top:25px}.road-row{display:grid;grid-template-columns:95px 1fr;gap:18px;padding:15px 0;border-bottom:1px solid var(--line)}.road-row b{font:700 13px Manrope;color:var(--accent)}.road-row strong{display:block;font-size:13px}.road-row p{margin:3px 0 0;color:var(--muted);font-size:12px}
-.end{padding:70px 0 90px}.endbox{border:1px solid #b9a2ff4a;background:#19191e;border-radius:8px;padding:38px 42px;display:flex;align-items:center;justify-content:space-between;gap:30px}.endbox h2{font:800 30px Manrope;letter-spacing:-1.3px;margin:0 0 6px}.endbox p{margin:0;color:var(--muted);font-size:13px}.end-actions{display:flex;gap:10px;flex-wrap:wrap}
-footer{border-top:1px solid var(--line);padding:25px 0;color:var(--soft);font-size:11px}.foot{display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap}.foot-brand{display:flex;align-items:center;gap:9px;color:#e5e1dc;font:700 14px Manrope}.foot-brand img{width:24px;height:24px;object-fit:contain}.foot-links{display:flex;gap:20px}.foot-links a:hover{color:var(--text)}
-@media(max-width:850px){.hero-grid,.release-grid,.split{grid-template-columns:1fr;gap:35px}.hero{padding:62px 0}.hero-copy{max-width:700px}.section-top{display:block}.section-top p{margin-top:14px}.gallery{grid-template-columns:1fr}.side-shots{grid-template-columns:1fr 1fr}.release-grid{gap:25px}.facts-grid{grid-template-columns:repeat(2,1fr)}.fact:nth-child(2){border-right:0}.fact:nth-child(-n+2){border-bottom:1px solid var(--line)}.fact:nth-child(3){padding-left:0}}
-@media(max-width:600px){.wrap{width:calc(100% - 34px)}header{height:64px}.links{display:none}.brand{font-size:17px}.hero h1{font-size:45px;letter-spacing:-2.7px}.intro{font-size:15px}.hero{padding:48px 0}.facts-grid{grid-template-columns:1fr 1fr}.fact{padding:17px 10px}.fact strong{font-size:13px}.fact span{font-size:10px}section{padding:68px 0}.section-top h2,.split-copy h2{font-size:33px}.side-shots{grid-template-columns:1fr}.scope-grid{grid-template-columns:1fr}.scope{padding:20px}.endbox{display:block;padding:27px 22px}.endbox h2{font-size:26px}.end-actions{margin-top:22px}.road-row{grid-template-columns:70px 1fr}.foot{justify-content:center;text-align:center}.foot-links{justify-content:center;width:100%}.shot-label{font-size:9px}}
+:root{color-scheme:light;--paper:#f5f3ed;--ink:#20251f;--muted:#656b63;--line:#d8d8cf;--green:#315d48;--green-dark:#244735;--white:#fffefa;--width:1160px}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:80px}
+body{margin:0;background:var(--paper);color:var(--ink);font:16px/1.65 Arial,Helvetica,sans-serif}
+a{color:inherit;text-decoration:none}
+img{display:block;max-width:100%}
+.wrap{width:min(var(--width),calc(100% - 64px));margin:auto}
+header{border-bottom:1px solid var(--line);background:var(--paper)}
+nav{height:76px;display:flex;align-items:center;justify-content:space-between;gap:28px}
+.brand{display:flex;align-items:center;gap:11px;font-size:17px;font-weight:700;letter-spacing:-.4px}
+.brand img{width:32px;height:32px;object-fit:contain}
+.navlinks{display:flex;gap:27px;color:var(--muted);font-size:13px}
+.navlinks a:hover,.plain-link:hover{color:var(--green);text-decoration:underline;text-underline-offset:4px}
+.nav-github{font-size:12px;border:1px solid #aeb2a7;padding:9px 13px}
+.hero{padding:76px 0 66px;border-bottom:1px solid var(--line)}
+.hero-grid{display:grid;grid-template-columns:.82fr 1.18fr;gap:58px;align-items:center}
+.kicker,.section-label{font:700 11px/1.4 Arial,sans-serif;text-transform:uppercase;letter-spacing:.13em;color:var(--green)}
+h1,h2,h3,p{margin-top:0}
+h1,h2{font-family:Georgia,"Times New Roman",serif;font-weight:400;letter-spacing:-1.7px}
+h1{font-size:clamp(43px,5.2vw,66px);line-height:1.04;margin:17px 0 22px;max-width:530px}
+.lead{max-width:480px;color:#50574f;font-size:17px;line-height:1.75}
+.actions{display:flex;align-items:center;gap:18px;flex-wrap:wrap;margin:29px 0 17px}
+.button{display:inline-block;background:var(--green);color:white;padding:12px 17px;font-size:13px;font-weight:700}
+.button:hover{background:var(--green-dark)}
+.plain-link{font-size:13px;color:var(--ink);text-decoration:underline;text-underline-offset:4px}
+.build-note{font-size:11px;color:var(--muted)}
+.hero-image img{width:100%;border:1px solid #bfc2b8;background:#e6e5de}
+.image-note{display:flex;justify-content:space-between;gap:12px;margin-top:9px;color:#73796f;font-size:10px;letter-spacing:.04em}
+.facts{border-bottom:1px solid var(--line)}
+.facts-inner{display:flex;gap:0;justify-content:space-between;flex-wrap:wrap}
+.fact{padding:18px 24px 18px 0;font-size:12px;color:var(--muted)}
+.fact strong{color:var(--ink);font-weight:700;margin-right:6px}
+section{padding:82px 0}
+.section-heading{display:flex;justify-content:space-between;align-items:end;gap:40px;margin-bottom:30px}
+.section-heading h2,.copy h2{font-size:clamp(31px,3.8vw,43px);line-height:1.12;margin:9px 0 0}
+.section-heading p{max-width:430px;color:var(--muted);font-size:14px;margin:0}
+.screens{display:grid;grid-template-columns:1.25fr .75fr;gap:20px;align-items:start}
+.screen{min-width:0}
+.screen img{width:100%;border:1px solid #c8c9c0;background:#e7e6df}
+.screen figcaption{padding:12px 0 0}
+.screen figcaption strong{display:block;font-size:14px}
+.screen figcaption span{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+.screen-stack{display:grid;gap:23px}
+#download{background:#eae9e1;border-block:1px solid var(--line)}
+.download-grid{display:grid;grid-template-columns:.8fr 1.2fr;gap:75px}
+.download-copy h2{font-size:42px;line-height:1.1;margin:10px 0 16px}
+.download-copy p{font-size:14px;color:var(--muted);max-width:410px}
+.release-link{display:inline-block;margin-top:9px;color:var(--green);font-size:13px;text-decoration:underline;text-underline-offset:4px}
+.files{border-top:1px solid #c9cbc1}
+.file-row{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:17px 0;border-bottom:1px solid #c9cbc1}
+.file-row strong{display:block;font-size:14px}
+.file-row small{display:block;color:var(--muted);font-size:11px;margin-top:3px}
+.file-row a{font-size:12px;font-weight:700;color:var(--green);white-space:nowrap;text-decoration:underline;text-underline-offset:4px}
+.file-note{font-size:11px;color:var(--muted);margin:14px 0 0}
+.status-grid{display:grid;grid-template-columns:1fr 1fr;gap:55px}
+.status-column h3{font:700 15px Arial,sans-serif;border-bottom:1px solid var(--line);padding-bottom:13px;margin:0 0 15px}
+.status-column ul{list-style:none;padding:0;margin:0}
+.status-column li{padding:9px 0 9px 19px;border-bottom:1px solid #e1e0d8;font-size:13px;color:#444b43;position:relative}
+.status-column li:before{content:"";position:absolute;left:1px;top:17px;width:5px;height:5px;background:var(--green);border-radius:50%}
+.status-column p{font-size:12px;color:var(--muted);margin:17px 0 0}
+.about{border-top:1px solid var(--line)}
+.about-grid{display:grid;grid-template-columns:.8fr 1.2fr;gap:75px}
+.copy p{font-size:14px;color:var(--muted);line-height:1.85;max-width:470px}
+.principles{border-top:1px solid var(--line)}
+.principle{display:grid;grid-template-columns:32px 1fr;gap:14px;padding:15px 0;border-bottom:1px solid var(--line)}
+.principle span{font:12px Georgia,serif;color:var(--green)}
+.principle strong{display:block;font-size:13px;margin-bottom:3px}
+.principle p{margin:0;color:var(--muted);font-size:12px}
+.closing{padding:54px 0 70px}
+.closing-inner{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:26px 0;display:flex;align-items:center;justify-content:space-between;gap:25px}
+.closing h2{font-size:30px;margin:0 0 5px}
+.closing p{font-size:13px;color:var(--muted);margin:0}
+footer{border-top:1px solid var(--line);padding:22px 0;color:var(--muted);font-size:11px}
+.footer-inner{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.footer-links{display:flex;gap:20px}
+.footer-links a:hover{color:var(--green)}
+@media(max-width:820px){.hero-grid,.download-grid,.about-grid{grid-template-columns:1fr;gap:34px}.hero{padding:55px 0}.section-heading{display:block}.section-heading p{margin-top:13px}.download-grid,.about-grid{gap:28px}.status-grid{gap:30px}}
+@media(max-width:600px){.wrap{width:calc(100% - 36px)}nav{height:66px}.navlinks{display:none}.brand{font-size:15px}.nav-github{padding:8px 10px}.hero{padding:43px 0}.hero-grid{gap:30px}h1{font-size:46px}.lead{font-size:15px}.facts-inner{display:grid;grid-template-columns:1fr 1fr}.fact{padding:13px 8px 13px 0}section{padding:61px 0}.screens{grid-template-columns:1fr}.screen-stack{gap:20px}.download-copy h2{font-size:36px}.status-grid{grid-template-columns:1fr;gap:28px}.closing-inner{display:block}.closing h2{font-size:27px}.closing .button{margin-top:17px}.footer-inner{justify-content:center;text-align:center}.footer-links{width:100%;justify-content:center}}
 </style>
 </head>
 <body>
-<header><nav class="wrap">
-<a class="brand" href="#top"><img src="doc/asset/logo.png" alt="">Amethys Launcher</a>
-<div class="links"><a href="#application">The app</a><a href="#release">Downloads</a><a href="#roadmap">What’s next</a><a href="#principles">About</a></div>
-<div class="navright"><a class="github" href="https://github.com/Likounsee/Amethys-Launcher" target="_blank" rel="noopener">View source ↗</a></div>
-</nav></header>
+<header>
+  <nav class="wrap">
+    <a class="brand" href="#top"><img src="doc/asset/logo.png" alt="">Amethys Launcher</a>
+    <div class="navlinks"><a href="#screenshots">Screenshots</a><a href="#download">Download</a><a href="#status">Development</a><a href="#about">About</a></div>
+    <a class="nav-github" href="https://github.com/Likounsee/Amethys-Launcher" target="_blank" rel="noopener">GitHub ↗</a>
+  </nav>
+</header>
 <main id="top">
-<div class="hero"><div class="wrap hero-grid">
-<div class="hero-copy">
-<div class="overline">An independent PC game launcher · Windows & Linux</div>
-<h1>Your game collection.<br><span>All in one place.</span></h1>
-<p class="intro">Steam, other launchers, games installed directly on your PC… Amethys aims to bring them all together in a library you control.</p>
-<div class="hero-actions"><a class="btn main" href="#release">Download version 0.2.0 <span>↓</span></a><a class="btn outline" href="#application">Explore the app</a></div>
-<p class="hero-note">Version 0.2.0 available · Development preview · Work in progress</p>
-</div>
-<div class="hero-shot"><img src="doc/asset/desktop-previews/01-bibliotheque.png" alt="Actual screenshot of the Amethys Launcher 0.2.0 library"><div class="shot-label"><span>APERÇU DE L'APPLICATION</span><span>VERSION 0.2.0 SCREENSHOT</span></div></div>
-</div></div>
-<div class="facts"><div class="wrap facts-grid">
-<div class="fact"><strong>0.2.0</strong><span>First desktop preview released</span></div>
-<div class="fact"><strong>Windows · Linux</strong><span>x64 builds available</span></div>
-<div class="fact"><strong>Rust 2024</strong><span>Launcher core and services</span></div>
-<div class="fact"><strong>Local-first</strong><span>Library stored on your PC</span></div>
-</div></div>
-<section id="application"><div class="wrap">
-<div class="section-top"><div><div class="eyebrow">The app aujourd'hui</div><h2>Not a mock-up.<br>The software already exists.</h2></div><p>These screenshots are taken directly from desktop version 0.2.0. They show what is actually included in this preview — not concept screens made for a promo.</p></div>
-<div class="gallery">
-<article class="shot-card"><img src="doc/asset/desktop-previews/01-bibliotheque.png" alt="Amethys game library"><div class="shot-caption"><strong>Your local library</strong><p>Browse your games, search, filter by platform and open detailed game pages.</p></div></article>
-<div class="side-shots">
-<article class="shot-card"><img src="doc/asset/desktop-previews/12-fiche.png" alt="Fiche détaillée d'un jeu"><div class="shot-caption"><strong>Game details</strong><p>See game information and the actions available for each title.</p></div></article>
-<article class="shot-card"><img src="doc/asset/desktop-previews/19-boutique.png" alt="Store section in development"><div class="shot-caption"><strong>L'espace découverte</strong><p>A look at the ongoing work on the catalogue and game discovery.</p></div></article>
-</div>
-</div>
-</div></section>
-<section class="release" id="release"><div class="wrap release-grid">
-<div><span class="version">● VERSION 0.2.0 AVAILABLE</span><h2>Try the first desktop release.</h2><p class="release-copy">La 0.2.0 est la première preview publiée avec une interface graphique. Elle permet de gérer une bibliothèque locale, de découvrir certaines installations et de lancer les jeux configurés. Ce n'est pas encore un launcher complet : certaines intégrations et fonctions sont encore en développement.</p><a class="textlink" href="https://github.com/Likounsee/Amethys-Launcher/releases/tag/v0.2.0">Read the release notes ↗</a></div>
-<div><div class="download-list">
-<div class="download-row"><div><strong>Windows x64</strong><span>Portable ZIP archive · Windows 10/11 x64</span></div><a href="https://github.com/Likounsee/Amethys-Launcher/releases/download/v0.2.0/amethys-v0.2.0-x86_64-pc-windows-msvc.zip">Download ↗</a></div>
-<div class="download-row"><div><strong>Linux x86_64</strong><span>TAR.GZ archive · GNU</span></div><a href="https://github.com/Likounsee/Amethys-Launcher/releases/download/v0.2.0/amethys-v0.2.0-x86_64-unknown-linux-gnu.tar.gz">Download ↗</a></div>
-<div class="download-row"><div><strong>File verification</strong><span>SHA-256 checksums</span></div><a href="https://github.com/Likounsee/Amethys-Launcher/releases/download/v0.2.0/SHA256SUMS">SHA256SUMS ↗</a></div>
-</div><p class="release-small">Les archives sont portables : ce ne sont pas des installateurs. Linux a passé la validation automatisée, mais n'a pas encore été testé manuellement sur une machine Linux physique. macOS n'est pas pris en charge à ce stade.</p></div>
-</div></section>
-<section id="roadmap"><div class="wrap">
-<div class="section-top"><div><div class="eyebrow">DEVELOPMENT</div><h2>What works.<br>What comes next.</h2></div><p>On préfère expliquer clairement l'état du projet plutôt que de présenter chaque idée comme une fonctionnalité déjà disponible.</p></div>
-<div class="scope-grid">
-<article class="scope"><div class="scope-head"><h3>In version 0.2.0</h3><span class="state now">Available in preview</span></div><ul><li>Desktop application connected to the Core through IPC.</li><li>Local library with search, filters, sorting and game details.</li><li>Configuration and launching of local games.</li><li>Detection of selected launchers and explicit import of installed games.</li><li>Pochettes personnalisées, navigation clavier et retours d'opérations.</li></ul></article>
-<article class="scope next-scope"><div class="scope-head"><h3>Version 0.3 goals</h3><span class="state next">In development</span></div><ul><li>Master game catalogue and improved search.</li><li>Store section and game discovery.</li><li>A more unified local library across Windows and Linux.</li><li>Recommendations based on the games in your library.</li><li>Sales and discounts shown only when prices and discounts can be verified.</li></ul></article>
-</div>
-<p class="scope-note">Game downloads, installation, updates and repair are not functional deliverables for 0.3. They will depend on capabilities officially permitted by each platform. Amethys accounts and cloud sync are planned for a later stage.</p>
-</div></section>
-<section id="principles"><div class="wrap split">
-<div class="split-copy"><div class="eyebrow">WHY AMETHYS?</div><h2>A launcher to manage your games. Not to sell you games.</h2><p>Le problème est simple : chaque plateforme a sa bibliothèque, son application et ses habitudes. Quand on joue sur plusieurs services, on finit par passer plus de temps à chercher où se trouve un jeu qu'à le lancer.</p><p>Amethys aims to provide a common layer across those libraries. It is not a competing store, it does not take ownership of your licences, and it will not bypass publishers’ rules.</p></div>
-<div class="principles">
-<div class="principle"><b>01</b><div><strong>Your purchases stay where you made them.</strong><p>Payments, licences and refunds remain with the official stores.</p></div></div>
-<div class="principle"><b>02</b><div><strong>No DRM or security circumvention.</strong><p>Integrations must use APIs and mechanisms approved by each platform.</p></div></div>
-<div class="principle"><b>03</b><div><strong>Your PC stays under your control.</strong><p>Your local library is managed on your machine. The goal is also to avoid keeping several launchers running when they are not needed.</p></div></div>
-<div class="principle"><b>04</b><div><strong>Partnerships are built the right way.</strong><p>Les intégrations profondes viendront avec les accords nécessaires, pas en prétendant disposer d'un accès qui n'existe pas.</p></div></div>
-</div>
-</div></section>
-<section><div class="wrap split">
-<div class="split-copy"><div class="eyebrow">WHERE THE PROJECT IS HEADED</div><h2>A technical foundation built to grow.</h2><p>Amethys est développé en Rust. The app desktop est séparée du Core : les données de bibliothèque et les opérations restent côté services, tandis que l'interface communique avec eux au moyen d'un protocole IPC versionné.</p><p>Cette séparation doit permettre de faire évoluer l'interface, le catalogue et les intégrations sans transformer le launcher en un bloc impossible à maintenir.</p></div>
-<div class="roadmap">
-<div class="road-row"><b>CORE</b><div><strong>Local services and storage</strong><p>Agent, configuration, events, SQLite database and IPC protocol.</p></div></div>
-<div class="road-row"><b>DESKTOP</b><div><strong>Desktop application</strong><p>User interface, library and local interactions.</p></div></div>
-<div class="road-row"><b>CATALOGUE</b><div><strong>Separate game data</strong><p>Public catalogue kept separate from private data stored on each PC.</p></div></div>
-<div class="road-row"><b>INTÉGRATIONS</b><div><strong>Gradual platform support</strong><p>Support for each platform depends on its available interfaces, permissions and agreements.</p></div></div>
-</div>
-</div></section>
-<div class="end"><div class="wrap endbox"><div><div class="eyebrow">Amethys Launcher · Independent project</div><h2>About avance sur GitHub.</h2><p>Browse releases, changes and known issues, or try the 0.2.0 preview.</p></div><div class="end-actions"><a class="btn main" href="https://github.com/Likounsee/Amethys-Launcher/releases">Releases ↗</a><a class="btn outline" href="https://github.com/Likounsee/Amethys-Launcher">GitHub repository ↗</a></div></div></div>
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <div class="kicker">A PC game launcher in development</div>
+        <h1>Your PC games, in one library.</h1>
+        <p class="lead">Amethys is a desktop app for keeping track of games installed through different launchers, as well as games installed directly on your PC.</p>
+        <div class="actions"><a class="button" href="#download">Get version 0.2.0</a><a class="plain-link" href="#screenshots">See the screenshots</a></div>
+        <p class="build-note">Version 0.2.0 · Development preview · Windows and Linux builds</p>
+      </div>
+      <div class="hero-image">
+        <img src="doc/asset/desktop-previews/01-bibliotheque.png" alt="Amethys Launcher 0.2.0 showing the local game library">
+        <div class="image-note"><span>AMETHYS LAUNCHER 0.2.0</span><span>DESKTOP SCREENSHOT</span></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="facts"><div class="wrap facts-inner">
+    <div class="fact"><strong>0.2.0</strong> first public desktop preview</div>
+    <div class="fact"><strong>Windows / Linux</strong> x64 archives</div>
+    <div class="fact"><strong>Rust</strong> application core</div>
+    <div class="fact"><strong>Local library</strong> stored on your PC</div>
+  </div></div>
+
+  <section id="screenshots">
+    <div class="wrap">
+      <div class="section-heading">
+        <div><div class="section-label">The application</div><h2>What the current build looks like.</h2></div>
+        <p>These are screenshots from the actual 0.2.0 desktop build. The catalogue and store view are still being worked on.</p>
+      </div>
+      <div class="screens">
+        <figure class="screen">
+          <img src="doc/asset/desktop-previews/01-bibliotheque.png" alt="Amethys local game library">
+          <figcaption><strong>Library</strong><span>Browse, search and filter the games in your local collection.</span></figcaption>
+        </figure>
+        <div class="screen-stack">
+          <figure class="screen">
+            <img src="doc/asset/desktop-previews/12-fiche.png" alt="Game details in Amethys Launcher">
+            <figcaption><strong>Game details</strong><span>View information and available actions for a game.</span></figcaption>
+          </figure>
+          <figure class="screen">
+            <img src="doc/asset/desktop-previews/19-boutique.png" alt="Amethys game discovery view, in development">
+            <figcaption><strong>Discovery</strong><span>The catalogue and discovery area is still under development.</span></figcaption>
+          </figure>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="download">
+    <div class="wrap download-grid">
+      <div class="download-copy">
+        <div class="section-label">Current release</div>
+        <h2>Version 0.2.0</h2>
+        <p>This is the first published preview with a desktop interface. It can manage a local library, detect some existing game installations and launch games that have been configured.</p>
+        <p>It is an early build. Some features shown in the interface are not connected yet, and platform integrations are limited.</p>
+        <a class="release-link" href="https://github.com/Likounsee/Amethys-Launcher/releases/tag/v0.2.0">Release notes on GitHub ↗</a>
+      </div>
+      <div>
+        <div class="files">
+          <div class="file-row"><div><strong>Windows x64</strong><small>Portable ZIP · Windows 10 or 11</small></div><a href="https://github.com/Likounsee/Amethys-Launcher/releases/download/v0.2.0/amethys-v0.2.0-x86_64-pc-windows-msvc.zip">Download ↗</a></div>
+          <div class="file-row"><div><strong>Linux x86_64</strong><small>Portable TAR.GZ · GNU</small></div><a href="https://github.com/Likounsee/Amethys-Launcher/releases/download/v0.2.0/amethys-v0.2.0-x86_64-unknown-linux-gnu.tar.gz">Download ↗</a></div>
+          <div class="file-row"><div><strong>Checksums</strong><small>SHA-256 file verification</small></div><a href="https://github.com/Likounsee/Amethys-Launcher/releases/download/v0.2.0/SHA256SUMS">SHA256SUMS ↗</a></div>
+        </div>
+        <p class="file-note">These are portable archives, not installers. The Linux build passed automated validation but has not yet been manually tested on physical Linux hardware. macOS is not currently supported.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="status">
+    <div class="wrap">
+      <div class="section-heading">
+        <div><div class="section-label">Development status</div><h2>Available now, and still to come.</h2></div>
+        <p>The distinction matters: this page describes the current release separately from work that has not shipped yet.</p>
+      </div>
+      <div class="status-grid">
+        <div class="status-column">
+          <h3>In version 0.2.0</h3>
+          <ul>
+            <li>Desktop interface connected to the application core.</li>
+            <li>Local library with search, filters, sorting and game details.</li>
+            <li>Configuration and launching of local games.</li>
+            <li>Detection of selected launchers and manual import of installed games.</li>
+            <li>Custom covers, keyboard navigation and operation feedback.</li>
+          </ul>
+        </div>
+        <div class="status-column">
+          <h3>Planned for version 0.3</h3>
+          <ul>
+            <li>A central game catalogue and better search.</li>
+            <li>A discovery section for browsing games.</li>
+            <li>A more consistent local library on Windows and Linux.</li>
+            <li>Recommendations based on games already in the library.</li>
+            <li>Price and discount information only when it can be verified.</li>
+          </ul>
+          <p>Downloading, installing, updating and repairing games are not part of the 0.3 feature set. Those functions depend on what each platform officially allows. Accounts and cloud sync are later work.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="about" id="about">
+    <div class="wrap about-grid">
+      <div class="copy">
+        <div class="section-label">About the project</div>
+        <h2>One library. Your existing stores stay yours.</h2>
+        <p>Amethys is not intended to replace Steam or other stores. Purchases, licences and refunds remain with the platform where they were made.</p>
+        <p>The aim is to make it easier to find and start games without having to keep every launcher open all the time. Deeper integrations will require the appropriate official access and agreements. Amethys will not bypass DRM or platform security.</p>
+        <p>The application is written in Rust. Its desktop interface communicates with the local core, which handles library data and operations.</p>
+      </div>
+      <div class="principles">
+        <div class="principle"><span>01</span><div><strong>Your games remain with their platforms.</strong><p>Amethys does not sell games or take ownership of your licences.</p></div></div>
+        <div class="principle"><span>02</span><div><strong>Platform rules still apply.</strong><p>Integrations must use supported interfaces and permissions.</p></div></div>
+        <div class="principle"><span>03</span><div><strong>The local library stays on your PC.</strong><p>The current release focuses on managing games installed on your own machine.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="closing"><div class="wrap closing-inner">
+    <div><h2>Follow the work on GitHub.</h2><p>Source code, releases, changes and open issues are available in the repository.</p></div>
+    <a class="button" href="https://github.com/Likounsee/Amethys-Launcher">Open the repository ↗</a>
+  </div></div>
 </main>
-<footer><div class="wrap foot"><a class="foot-brand" href="#top"><img src="doc/asset/logo.png" alt="">Amethys Launcher</a><span>© <span id="year"></span> Amethys Launcher · Independent project.</span><div class="foot-links"><a href="#application">The app</a><a href="#release">Downloads</a><a href="https://github.com/Likounsee/Amethys-Launcher">GitHub ↗</a></div></div></footer>
+<footer><div class="wrap footer-inner">
+  <span>© <span id="year"></span> Amethys Launcher</span>
+  <div class="footer-links"><a href="#screenshots">Screenshots</a><a href="#download">Download</a><a href="https://github.com/Likounsee/Amethys-Launcher">GitHub</a></div>
+</div></footer>
 <script>document.getElementById("year").textContent=new Date().getFullYear();</script>
 </body>
 </html>
