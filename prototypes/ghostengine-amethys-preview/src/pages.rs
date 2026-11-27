@@ -1026,15 +1026,25 @@ pub fn game_detail(p: &mut Painter, lay: &Layout, view: &DetailView) -> i32 {
         .collect::<Vec<_>>();
     if !secondary_locations.is_empty() {
         let inner = main_w - 48;
+        let secondary_statuses = secondary_locations
+            .iter()
+            .map(|path| crate::status::status_for_installation(game, path))
+            .collect::<Vec<_>>();
         let rows_h = secondary_locations
             .iter()
-            .map(|path| measure_rows(p, inner, &[(path.as_str(), false)]))
+            .zip(&secondary_statuses)
+            .map(|(path, install_status)| {
+                measure_rows(p, inner, &[(path.as_str(), false)])
+                    + measure_rows(p, inner, &[(install_status.kind.label(), true)])
+            })
             .sum::<i32>();
         let h = 58 + rows_h + 8;
         panel(p, lx, ly, main_w, h, 18);
         p.text(lx + 24, ly + 18, 24, "Autres installations détectées", 16.0, W::Semi, TXT);
         let mut row_y = ly + 54;
-        for (index, path) in secondary_locations.iter().enumerate() {
+        for (index, (path, install_status)) in
+            secondary_locations.iter().zip(&secondary_statuses).enumerate()
+        {
             row_y += info_row(
                 p,
                 lx + 24,
@@ -1045,6 +1055,22 @@ pub fn game_detail(p: &mut Painter, lay: &Layout, view: &DetailView) -> i32 {
                 path,
                 SOFT,
                 Some(Icon::Folder),
+            );
+            let (color, icon) = match install_status.kind {
+                crate::status::StatusKind::Ready => (GREEN, Icon::Check),
+                crate::status::StatusKind::FolderMissing => (RED, Icon::Alert),
+                _ => (AMBER, Icon::Alert),
+            };
+            row_y += info_row(
+                p,
+                lx + 24,
+                row_y,
+                inner,
+                false,
+                "État de cette copie",
+                install_status.kind.label(),
+                color,
+                Some(icon),
             );
         }
         ly += h + GAP;
