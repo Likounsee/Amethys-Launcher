@@ -456,17 +456,28 @@ pub mod transport;
 /// empty result for an empty query should handle that UI/command policy themselves.
 #[must_use]
 pub fn game_matches_search_query(game: &IpcGameEntry, query: &str) -> bool {
-    let terms = query.split_whitespace().map(str::to_lowercase).collect::<Vec<_>>();
+    let terms = query
+        .split_whitespace()
+        .map(str::to_lowercase)
+        .collect::<Vec<_>>();
     if terms.is_empty() {
         return true;
     }
 
     let metadata = game.catalogue_metadata.as_ref();
     let genres = metadata.map_or_else(String::new, |value| value.genres.join(" "));
-    let developer = metadata.and_then(|value| value.developer.as_deref()).unwrap_or_default();
-    let publisher = metadata.and_then(|value| value.publisher.as_deref()).unwrap_or_default();
-    let release_date = metadata.and_then(|value| value.release_date.as_deref()).unwrap_or_default();
-    let description = metadata.and_then(|value| value.description.as_deref()).unwrap_or_default();
+    let developer = metadata
+        .and_then(|value| value.developer.as_deref())
+        .unwrap_or_default();
+    let publisher = metadata
+        .and_then(|value| value.publisher.as_deref())
+        .unwrap_or_default();
+    let release_date = metadata
+        .and_then(|value| value.release_date.as_deref())
+        .unwrap_or_default();
+    let description = metadata
+        .and_then(|value| value.description.as_deref())
+        .unwrap_or_default();
 
     let searchable = format!(
         "{} {} {} {} {} {} {} {} {} {} {}",
@@ -741,7 +752,10 @@ mod tests {
             "amethys-1001",
             "C:/Games expedition",
         ] {
-            assert!(super::game_matches_search_query(&game, query), "query {query:?}");
+            assert!(
+                super::game_matches_search_query(&game, query),
+                "query {query:?}"
+            );
         }
         assert!(!super::game_matches_search_query(&game, "dark science"));
         assert!(super::game_matches_search_query(&game, "   "));
