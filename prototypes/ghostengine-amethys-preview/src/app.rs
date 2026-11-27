@@ -869,7 +869,7 @@ impl App {
                 self.start_store_task(false);
             }
             StoreTaskResult::Synchronized(Err(error)) => {
-                if self.page == Page::Store && !self.store_promotions {
+                if self.page == Page::Store {
                     self.store_error = Some(error);
                 } else {
                     self.store_error = None;
@@ -889,7 +889,7 @@ impl App {
                             }
                         }
                         self.store_error = None;
-                        if self.page == Page::Store && !self.store_promotions {
+                        if self.page == Page::Store {
                             self.notify(
                                 ToastKind::Info,
                                 "Connexion indisponible : catalogue local affiché hors ligne.",
@@ -898,7 +898,7 @@ impl App {
                     }
                     Err(cache_error) => {
                         self.store_results.clear();
-                        if self.page == Page::Store && !self.store_promotions {
+                        if self.page == Page::Store {
                             self.store_error = Some(format!(
                                 "Synchronisation impossible ({sync_error}). Aucun catalogue local utilisable : {cache_error}"
                             ));
