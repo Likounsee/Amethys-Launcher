@@ -723,9 +723,20 @@ fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value
                 })
                 .collect::<Vec<_>>();
             let primary = &installations[0];
-            let directory_available = installations
+            let installation_count = installations.len();
+            let available_installations = installations
                 .iter()
-                .any(|entry| entry["directory_available"] == true);
+                .filter(|entry| entry["directory_available"] == true)
+                .count();
+            let missing_installations = installation_count - available_installations;
+            let directory_available = available_installations > 0;
+            let primary_available = primary["directory_available"] == true;
+            let state = match (primary_available, available_installations == 0, missing_installations > 0) {
+                (_, true, _) => "all_installations_missing",
+                (false, false, _) => "primary_missing_secondary_available",
+                (true, false, true) => "primary_available_some_copies_missing",
+                (true, false, false) => "all_installations_available",
+            };
             let healthy = installations.iter().any(|entry| entry["healthy"] == true);
             let launch_ready = installations
                 .iter()
@@ -737,6 +748,10 @@ fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value
                 "platform_id": game.platform_id,
                 "install_path": game.install_path,
                 "installations": installations,
+                "installation_state": state,
+                "installation_count": installation_count,
+                "available_installations": available_installations,
+                "missing_installations": missing_installations,
                 "directory_available": directory_available,
                 "primary_directory_available": primary["directory_available"],
                 "directory_status": primary["directory_status"],
@@ -760,12 +775,22 @@ fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value
         .filter(|entry| entry["launch_ready"] == true)
         .count();
     let issues = entries.len() - healthy;
+    let total_installations = entries
+        .iter()
+        .map(|entry| entry["installation_count"].as_u64().unwrap_or(0) as usize)
+        .sum::<usize>();
+    let available_installations = entries
+        .iter()
+        .map(|entry| entry["available_installations"].as_u64().unwrap_or(0) as usize)
+        .sum::<usize>();
     json_verify_summary(
         games.len(),
         available,
         healthy,
         launch_ready,
         issues,
+        total_installations,
+        available_installations,
         entries,
     )
 }
@@ -776,10 +801,12 @@ fn json_verify_summary(
     healthy: usize,
     launch_ready: usize,
     issues: usize,
+    total_installations: usize,
+    available_installations: usize,
     games: Vec<serde_json::Value>,
 ) -> serde_json::Value {
     serde_json::json!({
-        "schema_version": 4,
+        "schema_version": 5,
         "read_only": true,
         "total_games": total,
         "available": available,
@@ -787,6 +814,9 @@ fn json_verify_summary(
         "healthy": healthy,
         "launch_ready": launch_ready,
         "issues": issues,
+        "total_installations": total_installations,
+        "available_installations": available_installations,
+        "missing_installations": total_installations - available_installations,
         "games": games,
     })
 }
@@ -832,35 +862,31 @@ async fn verify_saved_games(json_output: bool) -> Result<(), Box<dyn Error>> {
     } else if games.is_empty() {
         println!("Aucun jeu enregistré à vérifier.");
     } else {
-        for game in &games {
-            let directory_status = inspect_path(std::path::Path::new(&game.install_path), true);
-            let executable_status = inspect_game_executable(game);
-            let healthy = directory_status.is_available()
-                && executable_status.is_none_or(PathCheck::is_available);
-            let launch_ready = directory_status.is_available()
-                && executable_status.is_some_and(PathCheck::is_available);
-            let marker = if launch_ready {
-                "PRÊT"
-            } else if healthy {
-                "À CONFIGURER"
-            } else {
-                "ATTENTION"
-            };
+        for entry in report["games"].as_array().into_iter().flatten() {
+            let name = entry["name"].as_str().unwrap_or("Jeu inconnu");
+            let platform = entry["platform"].as_str().unwrap_or("Plateforme inconnue");
+            let state = entry["installation_state"].as_str().unwrap_or("unknown");
             println!(
-                "[{marker}] {} ({}) — dossier : {}",
-                game.name,
-                game.platform,
-                directory_status.as_str()
+                "[{}] {} ({}) — état : {} — {}/{} installation(s) disponible(s)",
+                if entry["launch_ready"] == true { "PRÊT" } else if entry["healthy"] == true { "À CONFIGURER" } else { "ATTENTION" },
+                name,
+                platform,
+                state,
+                entry["available_installations"].as_u64().unwrap_or(0),
+                entry["installation_count"].as_u64().unwrap_or(0)
             );
-            if let Some(status) = executable_status {
-                println!("       Exécutable : {}", status.as_str());
-            }
-            if !directory_status.is_available() {
-                println!("       Chemin : {}", game.install_path);
+            for installation in entry["installations"].as_array().into_iter().flatten() {
+                println!(
+                    "       {} — dossier : {} — exécutable : {} — {}",
+                    installation["kind"].as_str().unwrap_or("copie"),
+                    installation["directory_status"].as_str().unwrap_or("unknown"),
+                    installation["executable_status"].as_str().unwrap_or("not_configured"),
+                    installation["install_path"].as_str().unwrap_or("")
+                );
             }
         }
         println!(
-            "Vérification terminée : {healthy}/{total} installation(s) cohérente(s), {available}/{total} dossier(s) disponible(s), {issues} anomalie(s). Aucun fichier n'a été modifié."
+            "Vérification terminée : {healthy}/{total} jeu(x) cohérent(s), {available}/{total} jeu(x) avec un dossier disponible, {issues} anomalie(s). {} installation(s) disponible(s) sur {}. Aucun fichier n'a été modifié.", report["available_installations"].as_u64().unwrap_or(0), report["total_installations"].as_u64().unwrap_or(0)
         );
     }
 
@@ -1396,7 +1422,7 @@ mod tests {
             executable: None,
         };
         let report = super::build_verify_report(&[game]);
-        assert_eq!(report["schema_version"], 4);
+        assert_eq!(report["schema_version"], 5);
         assert_eq!(report["read_only"], true);
         assert_eq!(report["total_games"], 1);
         assert_eq!(report["available"], 1);
