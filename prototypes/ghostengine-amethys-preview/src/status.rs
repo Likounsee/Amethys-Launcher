@@ -116,6 +116,7 @@ mod tests {
     fn missing_folder_wins_over_every_other_state() {
         let status = classify(false, true, Some("x".into()));
         assert_eq!(status.kind, StatusKind::FolderMissing);
+        assert_eq!(status.kind.label(), "Dossier indisponible");
         assert!(!status.is_ready());
     }
 
