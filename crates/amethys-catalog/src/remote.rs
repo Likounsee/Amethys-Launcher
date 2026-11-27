@@ -1867,8 +1867,12 @@ mod tests {
         current_schema.catalog_schema_version = 2;
         assert!(validate_manifest(&current_schema).is_ok());
 
+        let mut newest_supported_schema = manifest.clone();
+        newest_supported_schema.catalog_schema_version = 3;
+        assert!(validate_manifest(&newest_supported_schema).is_ok());
+
         let mut unsupported_schema = manifest.clone();
-        unsupported_schema.catalog_schema_version = 3;
+        unsupported_schema.catalog_schema_version = 4;
         assert!(validate_manifest(&unsupported_schema).is_err());
 
         let mut wrong_total = manifest.clone();
