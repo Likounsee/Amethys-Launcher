@@ -1276,10 +1276,10 @@ fn image_extension(bytes: &[u8]) -> Option<&'static str> {
 }
 
 fn validate_manifest(manifest: &CatalogManifest) -> RemoteCatalogResult<()> {
-    // Schema 2 adds source identities and other provider-independent fields.
-    // Keep schema 1 readable because its optional fields have serde defaults.
+    // Schema 2 added source identities; schema 3 adds optional verified
+    // store promotions. Older additive catalogue formats remain readable.
     if !matches!(manifest.manifest_schema_version, 1 | 2)
-        || !matches!(manifest.catalog_schema_version, 1 | 2)
+        || !matches!(manifest.catalog_schema_version, 1 | 2 | 3)
     {
         return Err(RemoteCatalogError::InvalidData(
             "unsupported catalogue manifest/schema version".into(),
