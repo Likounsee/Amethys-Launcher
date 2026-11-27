@@ -1649,6 +1649,7 @@ mod tests {
             summary: Some("A short summary".into()),
             release_date: None,
             cover_url: None,
+            promotions: Vec::new(),
             genres: vec!["Adventure".into()],
             source_ids: vec![CatalogSourceIdentity {
                 source: "igdb".into(),
@@ -1847,6 +1848,7 @@ mod tests {
                 slug: Some("clair-obscur-expedition-33".into()),
                 genres: vec!["RPG".into()],
                 cover_url: None,
+            promotions: Vec::new(),
             },
             CatalogSearchEntry {
                 amethys_id: 20,
@@ -1854,6 +1856,7 @@ mod tests {
                 slug: Some("expedition-33".into()),
                 genres: vec!["Adventure".into()],
                 cover_url: None,
+            promotions: Vec::new(),
             },
             CatalogSearchEntry {
                 amethys_id: 10,
@@ -1861,6 +1864,7 @@ mod tests {
                 slug: None,
                 genres: vec!["Action RPG".into()],
                 cover_url: None,
+            promotions: Vec::new(),
             },
         ];
 
@@ -2070,6 +2074,7 @@ mod tests {
                 slug: None,
                 genres: vec!["Action".into()],
                 cover_url: None,
+            promotions: Vec::new(),
             },
             CatalogSearchEntry {
                 amethys_id: 2,
@@ -2077,6 +2082,7 @@ mod tests {
                 slug: None,
                 genres: vec!["Puzzle".into()],
                 cover_url: None,
+            promotions: Vec::new(),
             },
             CatalogSearchEntry {
                 amethys_id: 3,
@@ -2084,6 +2090,7 @@ mod tests {
                 slug: None,
                 genres: vec!["Action".into(), "Adventure".into()],
                 cover_url: None,
+            promotions: Vec::new(),
             },
         ];
         let results = client
@@ -2123,6 +2130,7 @@ mod tests {
                     "Adventure".into(),
                 ],
                 cover_url: None,
+            promotions: Vec::new(),
             },
             CatalogSearchEntry {
                 amethys_id: 2,
@@ -2130,6 +2138,7 @@ mod tests {
                 slug: None,
                 genres: vec!["Adventure".into()],
                 cover_url: None,
+            promotions: Vec::new(),
             },
             CatalogSearchEntry {
                 amethys_id: 3,
@@ -2137,6 +2146,7 @@ mod tests {
                 slug: None,
                 genres: vec!["RPG".into()],
                 cover_url: None,
+            promotions: Vec::new(),
             },
         ];
 
@@ -2168,6 +2178,7 @@ mod tests {
                 slug: None,
                 genres: vec!["RPG".into(), "Adventure".into()],
                 cover_url: None,
+            promotions: Vec::new(),
             },
             CatalogSearchEntry {
                 amethys_id: 2,
@@ -2175,6 +2186,7 @@ mod tests {
                 slug: None,
                 genres: vec!["Adventure".into(), "Strategy".into(), " adventure ".into()],
                 cover_url: None,
+            promotions: Vec::new(),
             },
             CatalogSearchEntry {
                 amethys_id: 3,
@@ -2182,6 +2194,7 @@ mod tests {
                 slug: None,
                 genres: vec!["RPG".into(), "Strategy".into()],
                 cover_url: None,
+            promotions: Vec::new(),
             },
         ];
 
@@ -2214,6 +2227,7 @@ mod tests {
                 slug: None,
                 genres: vec!["Puzzle".into()],
                 cover_url: None,
+            promotions: Vec::new(),
             },
             CatalogSearchEntry {
                 amethys_id: 2,
@@ -2221,6 +2235,7 @@ mod tests {
                 slug: None,
                 genres: vec!["RPG".into()],
                 cover_url: None,
+            promotions: Vec::new(),
             },
         ];
 
@@ -2245,6 +2260,7 @@ mod tests {
                 slug: None,
                 genres: vec!["RPG".into(), "Adventure".into()],
                 cover_url: None,
+            promotions: Vec::new(),
             },
             CatalogSearchEntry {
                 amethys_id: 11,
@@ -2252,6 +2268,7 @@ mod tests {
                 slug: None,
                 genres: vec!["RPG".into()],
                 cover_url: None,
+            promotions: Vec::new(),
             },
             CatalogSearchEntry {
                 amethys_id: 12,
@@ -2259,6 +2276,7 @@ mod tests {
                 slug: None,
                 genres: vec!["Puzzle".into()],
                 cover_url: None,
+            promotions: Vec::new(),
             },
         ];
         let results = client
