@@ -3,6 +3,8 @@ name: CI
 'on':
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
@@ -295,6 +297,7 @@ jobs:
 
   desktop-linux-unit-tests:
     name: Desktop library tests (Linux)
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Amethys Launcher
@@ -310,6 +313,7 @@ jobs:
 
   desktop-linux-package:
     name: Linux desktop package build and smoke test
+    timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -381,6 +385,7 @@ jobs:
 
   desktop-integration:
     name: GhostEngine desktop integration
+    timeout-minutes: 60
     runs-on: windows-latest
     steps:
       - name: Checkout Amethys Launcher
