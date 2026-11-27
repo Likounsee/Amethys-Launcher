@@ -1622,7 +1622,7 @@ impl App {
                     self.render(false);
                     return;
                 };
-                let Some(game) = self.games.get(game_index) else {
+                let Some(game) = self.games.get(game_index).cloned() else {
                     self.notify(ToastKind::Error, "Ce jeu n'existe plus dans la bibliothèque chargée.");
                     self.render(false);
                     return;
