@@ -228,6 +228,23 @@ fn filter_games_by_platform<'a>(
         .collect()
 }
 
+/// Formats the primary and secondary install paths consistently for CLI output.
+fn format_install_locations(game: &amethys_ipc::IpcGameEntry) -> String {
+    let mut locations = Vec::with_capacity(1 + game.install_locations.len());
+    for path in std::iter::once(&game.install_path).chain(game.install_locations.iter()) {
+        if !locations.iter().any(|known: &String| same_install_location(known, std::path::Path::new(path))) {
+            locations.push(path.clone());
+        }
+    }
+    if locations.len() <= 1 {
+        return game.install_path.clone();
+    }
+    locations.iter().enumerate()
+        .map(|(index, path)| format!("{}: {}", if index == 0 { "principal" } else { "copie" }, path))
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
+
 async fn list_games_for_platform(platform: &str) -> Result<(), Box<dyn Error>> {
     if platform.trim().is_empty() {
         return Err("Indique une plateforme : amethysctl games list --platform <nom>.".into());
@@ -254,7 +271,7 @@ async fn list_games_for_platform(platform: &str) -> Result<(), Box<dyn Error>> {
                 .as_deref()
                 .map(|id| format!(" — ID {id}"))
                 .unwrap_or_default(),
-            game.install_path,
+            format_install_locations(game),
             game.id
         );
     }
@@ -303,7 +320,7 @@ async fn search_library(query: &str) -> Result<(), Box<dyn Error>> {
                 .as_deref()
                 .map(|id| format!(" — ID {id}"))
                 .unwrap_or_default(),
-            game.install_path,
+            format_install_locations(game),
             game.id,
         );
     }
@@ -635,25 +652,46 @@ fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value
     let entries = games
         .iter()
         .map(|game| {
-            let directory_status = inspect_path(std::path::Path::new(&game.install_path), true);
-            let executable_status = inspect_game_executable(game);
-            let executable_label = executable_status
-                .map(PathCheck::as_str)
-                .unwrap_or("not_configured");
-            let healthy = directory_status.is_available()
-                && executable_status.is_none_or(PathCheck::is_available);
-            let launch_ready = directory_status.is_available()
-                && executable_status.is_some_and(PathCheck::is_available);
+            let installations = std::iter::once(&game.install_path)
+                .chain(game.install_locations.iter())
+                .enumerate()
+                .map(|(index, install_path)| {
+                    let mut candidate = game.clone();
+                    candidate.install_path = install_path.clone();
+                    let directory_status = inspect_path(std::path::Path::new(install_path), true);
+                    let executable_status = inspect_game_executable(&candidate);
+                    let executable_label = executable_status
+                        .map(PathCheck::as_str)
+                        .unwrap_or("not_configured");
+                    let healthy = directory_status.is_available()
+                        && executable_status.is_none_or(PathCheck::is_available);
+                    let launch_ready = directory_status.is_available()
+                        && executable_status.is_some_and(PathCheck::is_available);
+                    serde_json::json!({
+                        "kind": if index == 0 { "primary" } else { "secondary" },
+                        "install_path": install_path,
+                        "directory_available": directory_status.is_available(),
+                        "directory_status": directory_status.as_str(),
+                        "executable_status": executable_label,
+                        "healthy": healthy,
+                        "launch_ready": launch_ready,
+                    })
+                })
+                .collect::<Vec<_>>();
+            let primary = &installations[0];
+            let healthy = installations.iter().any(|entry| entry["healthy"] == true);
+            let launch_ready = installations.iter().any(|entry| entry["launch_ready"] == true);
             serde_json::json!({
                 "id": game.id,
                 "name": game.name,
                 "platform": game.platform,
                 "platform_id": game.platform_id,
                 "install_path": game.install_path,
-                "directory_available": directory_status.is_available(),
-                "directory_status": directory_status.as_str(),
+                "installations": installations,
+                "directory_available": primary["directory_available"],
+                "directory_status": primary["directory_status"],
                 "executable": game.executable,
-                "executable_status": executable_label,
+                "executable_status": primary["executable_status"],
                 "healthy": healthy,
                 "launch_ready": launch_ready,
             })
