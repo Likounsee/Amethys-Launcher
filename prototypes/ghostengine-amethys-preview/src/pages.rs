@@ -445,15 +445,11 @@ pub struct LibraryView<'a> {
 }
 
 /// Indices of the games to show, filtered then sorted. Pure and testable.
-pub fn visible_games(view: &LibraryView) -> Vec<usize> {
+fn visible_games_with_statuses(view: &LibraryView, statuses: &[GameStatus]) -> Vec<usize> {
     let platforms = library_platforms(view.games);
     let active = if view.filter <= platforms.len() { view.filter } else { 0 };
     let selected = active.checked_sub(1).and_then(|i| platforms.get(i)).map(String::as_str);
-    let rank = |i: usize| {
-        let game = &view.games[i];
-        let selected = view.selected_install_paths.get(&game.id).map(String::as_str).unwrap_or(&game.install_path);
-        crate::status::status_for_installation(game, selected).kind.rank()
-    };
+    let rank = |i: usize| statuses.get(i).map_or(9, |status| status.kind.rank());
     let mut visible: Vec<usize> = (0..view.games.len())
         .filter(|&i| selected.is_none_or(|pl| view.games[i].platform.trim().eq_ignore_ascii_case(pl)))
         .filter(|&i| library_matches_query(&view.games[i], view.query))
@@ -469,6 +465,16 @@ pub fn visible_games(view: &LibraryView) -> Vec<usize> {
     });
     visible
 }
+
+pub fn visible_games(view: &LibraryView) -> Vec<usize> {
+    let statuses = view.games.iter().map(|game| {
+        let selected = view.selected_install_paths.get(&game.id).map(String::as_str).unwrap_or(&game.install_path);
+        crate::status::status_for_installation(game, selected)
+    }).collect::<Vec<_>>();
+    visible_games_with_statuses(view, &statuses)
+}
+
+
 
 // -------------------------------------------------------------- game card
 #[allow(clippy::too_many_arguments)] // Page layout helpers receive explicit geometry and content.
@@ -532,6 +538,7 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
         crate::status::status_for_installation(game, selected)
     }).collect::<Vec<_>>();
     let ready = selected_statuses.iter().filter(|s| s.kind == StatusKind::Ready).count();
+    let visible = visible_games_with_statuses(view, &selected_statuses);
 
     // ---- header
     p.text(mx, 28, 42, "Bibliothèque", 34.0, W::Disp, TXT);
@@ -649,7 +656,7 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
 
     // ---- stat tiles
     if !games.is_empty() {
-        let count = |kinds: &[StatusKind]| view.statuses.iter().filter(|s| kinds.contains(&s.kind)).count();
+        let count = |kinds: &[StatusKind]| selected_statuses.iter().filter(|s| kinds.contains(&s.kind)).count();
         let tiles = [
             ("Jeux", games.len(), VIO),
             ("Prêts à lancer", ready, GREEN),
@@ -699,7 +706,7 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
     }
 
     // ---- grid or empty states
-    let visible = visible_games(view);
+    // Visibility and status ordering use the same selected-install snapshot.
     if games.is_empty() && view.core_error.is_none() && !view.loading {
         let cta = if view.scanning { None } else { Some(("Détecter les jeux", Action::ScanGames, Btn::Primary)) };
         y += empty_state(p, mx, y, mw, Icon::Gem, "Votre bibliothèque est vide", "Lancez la détection pour retrouver les jeux déjà installés sur vos plateformes prises en charge. Rien n'est modifié sur votre disque.", cta) + GAP;
