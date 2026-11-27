@@ -424,7 +424,6 @@ pub fn library_platforms(games: &[IpcGameEntry]) -> Vec<String> {
 
 pub struct LibraryView<'a> {
     pub games: &'a [IpcGameEntry],
-    pub statuses: &'a [GameStatus],
     /// Per-game launch location selected by the user; absent entries use the primary path.
     pub selected_install_paths: &'a std::collections::HashMap<String, String>,
     pub detected: &'a [amethys_discovery::DetectedGame],
