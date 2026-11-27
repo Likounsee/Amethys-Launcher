@@ -2559,5 +2559,4 @@ mod tests {
         };
         assert!(validate_promotion_records(&[promotion], &[mismatched]).is_err());
     }
-
 }
