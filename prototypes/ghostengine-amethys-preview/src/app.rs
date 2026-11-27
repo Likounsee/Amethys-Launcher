@@ -411,10 +411,28 @@ fn save_install_choice(root: &std::path::Path, game_id: &str, install_path: &str
         return Err(error);
     }
     drop(file);
-    if let Err(error) = std::fs::rename(&temporary, &target) {
-        let _ = std::fs::remove_file(&temporary);
-        return Err(error);
+    if let Err(first_error) = std::fs::rename(&temporary, &target) {
+        if !target.exists() {
+            let _ = std::fs::remove_file(&temporary);
+            return Err(first_error);
+        }
+        let backup = target.with_extension("bak");
+        if backup.exists() {
+            std::fs::remove_file(&backup)?;
+        }
+        if let Err(error) = std::fs::rename(&target, &backup) {
+            let _ = std::fs::remove_file(&temporary);
+            return Err(error);
+        }
+        if let Err(error) = std::fs::rename(&temporary, &target) {
+            let _ = std::fs::rename(&backup, &target);
+            let _ = std::fs::remove_file(&temporary);
+            return Err(error);
+        }
+        let _ = std::fs::remove_file(&backup);
     }
+    #[cfg(unix)]
+    std::fs::File::open(root)?.sync_all()?;
     Ok(())
 }
 
@@ -1077,6 +1095,22 @@ impl App {
         let next_profile = recommendation_profile_for_games(&games);
         self.statuses = status::statuses_of(&games);
         self.games = games;
+        self.selected_install_locations.retain(|id, _| self.games.iter().any(|game| &game.id == id));
+        for game in &self.games {
+            let mut locations = game.install_locations.clone();
+            if locations.is_empty() {
+                locations.push(game.install_path.clone());
+            }
+            locations.dedup();
+            let selected_is_known = self.selected_install_locations.get(&game.id)
+                .is_some_and(|selected| locations.iter().any(|path| path == selected));
+            if !selected_is_known {
+                let selected = self.media_store
+                    .map(|store| load_install_choice(store.root(), game))
+                    .unwrap_or_else(|| game.install_path.clone());
+                self.selected_install_locations.insert(game.id.clone(), selected);
+            }
+        }
         self.library_limit = self.library_limit.max(PAGE_SIZE);
         if self.selected_game.is_some_and(|index| index >= self.games.len()) {
             self.selected_game = None;
