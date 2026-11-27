@@ -789,19 +789,19 @@ fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value
         .iter()
         .map(|entry| entry["available_installations"].as_u64().unwrap_or(0) as usize)
         .sum::<usize>();
-    json_verify_summary(
-        games.len(),
+    json_verify_summary(VerifySummary {
+        total: games.len(),
         available,
         healthy,
         launch_ready,
         issues,
         total_installations,
         available_installations,
-        entries,
-    )
+        games: entries,
+    })
 }
 
-fn json_verify_summary(
+struct VerifySummary {
     total: usize,
     available: usize,
     healthy: usize,
@@ -810,21 +810,23 @@ fn json_verify_summary(
     total_installations: usize,
     available_installations: usize,
     games: Vec<serde_json::Value>,
-) -> serde_json::Value {
+}
+
+fn json_verify_summary(summary: VerifySummary) -> serde_json::Value {
     serde_json::json!({
         "schema_version": 5,
         "read_only": true,
-        "total_games": total,
-        "available": available,
-        "missing": total - available,
-        "healthy": healthy,
-        "launch_ready": launch_ready,
-        "issues": issues,
-        "total_installations": total_installations,
-        "available_installations": available_installations,
-        "missing_installations": total_installations - available_installations,
-        "installation_issues": total_installations - available_installations,
-        "games": games,
+        "total_games": summary.total,
+        "available": summary.available,
+        "missing": summary.total - summary.available,
+        "healthy": summary.healthy,
+        "launch_ready": summary.launch_ready,
+        "issues": summary.issues,
+        "total_installations": summary.total_installations,
+        "available_installations": summary.available_installations,
+        "missing_installations": summary.total_installations - summary.available_installations,
+        "installation_issues": summary.total_installations - summary.available_installations,
+        "games": summary.games,
     })
 }
 
