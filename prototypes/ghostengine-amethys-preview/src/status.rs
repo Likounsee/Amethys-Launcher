@@ -14,7 +14,7 @@ pub enum StatusKind {
     NeedsExecutable,
     /// An executable is configured but fails the launch checks.
     InvalidExecutable,
-    /// The registered install folder does not exist.
+    /// The registered install folder cannot currently be accessed; this does not prove deletion.
     FolderMissing,
 }
 
@@ -32,7 +32,7 @@ impl StatusKind {
             Self::Ready => "Prêt à lancer",
             Self::NeedsExecutable => "À configurer",
             Self::InvalidExecutable => "Exécutable invalide",
-            Self::FolderMissing => "Dossier introuvable",
+            Self::FolderMissing => "Dossier indisponible",
         }
     }
 
