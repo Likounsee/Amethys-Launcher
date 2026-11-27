@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#090b12">
 <meta name="description" content="Amethys brings your PC game library into one place. Explore the early desktop preview and follow development.">
-<title>Amethys Launcher — Every game, one place</title>
+<title>Amethys Launcher</title>
 <link rel="icon" href="doc/asset/logo.png">
 <style>
 :root{color-scheme:dark;--bg:#090b12;--panel:#101522;--panel2:#151c2b;--ink:#f4f6fb;--muted:#9ba5b8;--line:#252d3e;--blue:#7c8cff;--cyan:#61d9e8;--glow:rgba(105,126,255,.22);--max:1240px}
@@ -112,6 +112,32 @@ footer{border-top:1px solid #222b3b;padding:23px 0;color:#78859a;font-size:10px}
 @media(max-width:850px){.hero-grid,.download-grid,.about-grid{grid-template-columns:1fr;gap:38px}.hero{padding:65px 0}.hero-copy{max-width:650px}.hero-visual{max-width:850px}.app-frame{transform:none}.download-grid,.about-grid{gap:30px}.about-grid{gap:38px}.section-top{display:block}.section-top p{margin-top:13px}.float-tag{right:10px}.facts-inner{grid-template-columns:repeat(2,1fr)}.fact:nth-child(2){border-right:0}.fact:nth-child(-n+2){border-bottom:1px solid var(--line)}}
 @media(max-width:600px){.wrap{width:calc(100% - 36px)}header{height:70px}.navlinks{display:none}.brand{font-size:14px}.nav-cta{padding:9px 11px}.hero{padding:48px 0 52px}.hero-grid{gap:34px}h1{font-size:51px}.lead{font-size:15px}.float-tag{right:5px;bottom:10px}.facts-inner{grid-template-columns:1fr 1fr}.fact{padding:13px 12px}.fact:first-child{padding-left:0}section{padding:66px 0}.section-top{margin-bottom:24px}.screens-layout{grid-template-columns:1fr}.shot-stack{gap:23px}.download-grid{gap:28px}.download-copy h2{font-size:40px}.file-row{padding:15px 13px}.status-grid{grid-template-columns:1fr}.status-panel{padding:20px}.about-grid{gap:25px}.closing-inner{display:block;padding:24px}.closing h2{font-size:25px}.closing .button{margin-top:18px}.footer-inner{justify-content:center;text-align:center}.footer-links{width:100%;justify-content:center}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{transition:none!important}}
+
+/* A quieter, more product-focused presentation */
+:root{--bg:#111315;--panel:#191d21;--panel2:#20252a;--ink:#eceeed;--muted:#a1a8a5;--line:#30373a;--blue:#a9a0e8;--cyan:#a9a0e8;--glow:transparent}
+body{background:#111315}
+body:before{display:none}
+header{background:#111315;border-color:#30373a}
+.nav-cta{border-color:#625b8c;border-radius:4px;background:transparent}
+.hero{padding-top:68px;padding-bottom:58px}
+h1 em{background:none;color:#b5acee;-webkit-text-fill-color:initial}
+.lead{color:#b5bcba}
+.button{border-radius:4px;background:#776da8;box-shadow:none}
+.button.secondary{background:transparent;border-color:#454c4e}
+.app-frame{border-radius:2px;background:#1a1e20;border-color:#3a4243;box-shadow:none;transform:none;padding:7px}
+.app-frame img{border-radius:0}
+.visual-glow{display:none}
+.float-tag{display:none}
+.facts{background:#151819}
+.fact strong{font-weight:650}
+.shot-image{border-radius:2px;background:#191e20;border-color:#343b3d;box-shadow:none;padding:6px}
+.shot-image img{border-radius:0}
+#download{background:#171b1e;border-color:#30373a}
+.files,.status-panel{border-radius:2px;box-shadow:none}
+.files{background:#131719}
+.status-panel,.status-panel.future{background:#171b1e;border-color:#343c3e}
+.status-pill{border:0;background:none;padding:0}
+.closing-inner{border-radius:2px;background:#171b1e;border-color:#394143}
 </style>
 </head>
 <body>
@@ -126,9 +152,9 @@ footer{border-top:1px solid #222b3b;padding:23px 0;color:#78859a;font-size:10px}
 <section class="hero">
 <div class="wrap hero-grid">
 <div class="hero-copy">
-<div class="eyebrow">A new way to manage your PC library</div>
-<h1>Every game.<br><em>One place.</em></h1>
-<p class="lead">Amethys is building a unified home for the games on your PC. Keep your local library organised, find what is installed and launch configured games from one desktop app.</p>
+<div class="eyebrow">AMETHYS DESKTOP APP</div>
+<h1>Your PC game library,<br><em>in one place.</em></h1>
+<p class="lead">Amethys is a desktop app for keeping track of games installed on your PC. The current preview brings your local library, game details and launch options together.</p>
 <div class="actions"><a class="button" href="#download">Get the 0.2.0 preview <span>↗</span></a><a class="button secondary" href="#screenshots">Explore the app</a></div>
 <p class="build-note">EARLY ACCESS PREVIEW · VERSION 0.2.0 · WINDOWS / LINUX BUILDS</p>
 </div>
@@ -150,7 +176,7 @@ footer{border-top:1px solid #222b3b;padding:23px 0;color:#78859a;font-size:10px}
 </div></div>
 <section id="screenshots">
 <div class="wrap">
-<div class="section-top"><div><div class="section-label">Inside Amethys</div><h2>A closer look at the app.</h2></div><p>Real screenshots from the current desktop build. The interface and catalogue are still evolving — this is what is available today.</p></div>
+<div class="section-top"><div><div class="section-label">Inside Amethys</div><h2>Screenshots from the current build.</h2></div><p>These screenshots are from version 0.2.0. Some areas are still being worked on.</p></div>
 <div class="screens-layout">
 <figure class="shot"><div class="shot-image"><img src="doc/asset/desktop-previews/01-bibliotheque.png" alt="Amethys desktop game library screenshot"></div><figcaption><strong>Your game library</strong><span>Browse, search, sort and filter games in your local collection.</span></figcaption></figure>
 <div class="shot-stack">
@@ -188,7 +214,7 @@ footer{border-top:1px solid #222b3b;padding:23px 0;color:#78859a;font-size:10px}
 </section>
 <section class="about" id="about">
 <div class="wrap about-grid">
-<div class="about-copy"><div class="section-label">The idea behind Amethys</div><h2>Your library, without replacing your stores.</h2>
+<div class="about-copy"><div class="section-label">The idea behind Amethys</div><h2>A library app, not another store.</h2>
 <p>Amethys is not another game store. Purchases, licences and refunds stay with the platform where they belong. The goal is to make it easier to find and start the games already on your PC.</p>
 <p>Deeper integrations will depend on official access and agreements with platform owners. Amethys will not bypass DRM or platform security.</p>
 <p>The application is written in Rust. Its desktop interface communicates with a local core that handles library data and operations.</p></div>
@@ -199,7 +225,7 @@ footer{border-top:1px solid #222b3b;padding:23px 0;color:#78859a;font-size:10px}
 </div>
 </div>
 </section>
-<div class="closing"><div class="wrap closing-inner"><div><h2>Follow the next build.</h2><p>Source code, releases, development updates and open issues live on GitHub.</p></div><a class="button" href="https://github.com/Likounsee/Amethys-Launcher" target="_blank" rel="noopener">Explore the repository ↗</a></div></div>
+<div class="closing"><div class="wrap closing-inner"><div><h2>Follow development.</h2><p>The source code, releases and issue tracker are available on GitHub.</p></div><a class="button" href="https://github.com/Likounsee/Amethys-Launcher" target="_blank" rel="noopener">Explore the repository ↗</a></div></div>
 </main>
 <footer><div class="wrap footer-inner"><span>© <span id="year"></span> Amethys Launcher</span><div class="footer-links"><a href="#screenshots">Showcase</a><a href="#download">Download</a><a href="https://github.com/Likounsee/Amethys-Launcher">GitHub</a></div></div></footer>
 <script>document.getElementById("year").textContent=new Date().getFullYear();</script>
