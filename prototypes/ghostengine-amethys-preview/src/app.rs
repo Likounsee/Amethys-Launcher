@@ -1191,6 +1191,7 @@ impl App {
                 &lay,
                 &LibraryView {
                     games: &self.games,
+                    statuses: &selected_statuses,
                      selected_install_paths: &self.selected_install_locations,
                     detected: &self.detected_games,
                     scanning: self.scan_in_progress,
