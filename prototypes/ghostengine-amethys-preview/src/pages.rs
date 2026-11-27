@@ -2134,10 +2134,17 @@ mod tests {
         g
     }
 
+    fn empty_install_choices() -> &'static std::collections::HashMap<String, String> {
+        static EMPTY: std::sync::OnceLock<std::collections::HashMap<String, String>> =
+            std::sync::OnceLock::new();
+        EMPTY.get_or_init(std::collections::HashMap::new)
+    }
+
     fn view<'a>(games: &'a [IpcGameEntry], statuses: &'a [GameStatus], filter: usize, sort: usize, query: &'a str) -> LibraryView<'a> {
         LibraryView {
             games,
             statuses,
+            selected_install_paths: empty_install_choices(),
             detected: &[],
             scanning: false,
             loading: false,
