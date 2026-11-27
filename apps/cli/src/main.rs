@@ -124,6 +124,7 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
                 name: name.clone(),
                 platform: platform.clone(),
                 install_path: install_path.clone(),
+                install_locations: Vec::new(),
                 executable: None,
             })
         }
@@ -134,6 +135,7 @@ fn parse_arguments(arguments: &[String]) -> Result<IpcCommand, &'static str> {
                 name: name.clone(),
                 platform: platform.clone(),
                 install_path: install_path.clone(),
+                install_locations: Vec::new(),
                 executable: Some(executable.clone()),
             })
         }
@@ -325,6 +327,7 @@ async fn import_one_detected_game(
         platform: game.platform.to_owned(),
         platform_id: game.platform_id.clone(),
         install_path: game.install_path.to_string_lossy().into_owned(),
+        install_locations: Vec::new(),
         executable: inferred_executable(game),
     };
     let response = request_core(command).await.map_err(|error| {
@@ -1016,6 +1019,7 @@ mod tests {
             catalogue_game_id: None,
             catalogue_metadata: None,
             install_path: "/games/example".to_owned(),
+            install_locations: Vec::new(),
             executable: None,
         };
         let same_game = amethys_discovery::DetectedGame {
@@ -1159,6 +1163,7 @@ mod tests {
             catalogue_game_id: None,
             catalogue_metadata: None,
             install_path: install.to_string_lossy().into_owned(),
+            install_locations: Vec::new(),
             executable: Some(path.to_owned()),
         };
 
@@ -1237,6 +1242,7 @@ mod tests {
             catalogue_game_id: None,
             catalogue_metadata: None,
             install_path: root.to_string_lossy().into_owned(),
+            install_locations: Vec::new(),
             executable: None,
         };
         let report = super::build_verify_report(&[game]);
@@ -1276,6 +1282,7 @@ mod tests {
             catalogue_game_id: None,
             catalogue_metadata: None,
             install_path: root.to_string_lossy().into_owned(),
+            install_locations: Vec::new(),
             executable: Some(executable.to_owned()),
         };
         let present = super::build_verify_report(&[make_game("bin/game.exe")]);
@@ -1362,6 +1369,7 @@ mod tests {
             catalogue_game_id: None,
             catalogue_metadata: None,
             install_path: root.to_string_lossy().into_owned(),
+            install_locations: Vec::new(),
             executable: Some(executable.to_owned()),
         };
 
@@ -1474,6 +1482,7 @@ mod tests {
             catalogue_game_id: None,
             catalogue_metadata: None,
             install_path: "/games/shared".to_owned(),
+            install_locations: Vec::new(),
             executable: None,
         };
         let detected = amethys_discovery::DetectedGame {
@@ -1496,6 +1505,7 @@ mod tests {
             catalogue_game_id: None,
             catalogue_metadata: None,
             install_path: "/games/example".to_owned(),
+            install_locations: Vec::new(),
             executable: None,
         };
         let detected = amethys_discovery::DetectedGame {
@@ -1519,6 +1529,7 @@ mod tests {
                 catalogue_game_id: None,
                 catalogue_metadata: None,
                 install_path: "A:/Steam/Example".to_owned(),
+                install_locations: Vec::new(),
                 executable: None,
             },
             amethys_ipc::IpcGameEntry {
@@ -1529,6 +1540,7 @@ mod tests {
                 catalogue_game_id: None,
                 catalogue_metadata: None,
                 install_path: "A:/Epic/Example".to_owned(),
+                install_locations: Vec::new(),
                 executable: None,
             },
         ];
@@ -1556,6 +1568,7 @@ mod tests {
                     description: Some("A journey through a dark fantasy world.".to_owned()),
                 }),
                 install_path: "A:/SteamLibrary/steamapps/common/Expedition 33".to_owned(),
+                install_locations: Vec::new(),
                 executable: Some("Expedition33.exe".to_owned()),
             },
             amethys_ipc::IpcGameEntry {
@@ -1566,6 +1579,7 @@ mod tests {
                 catalogue_game_id: None,
                 catalogue_metadata: None,
                 install_path: "A:/Epic Games/Fortnite".to_owned(),
+                install_locations: Vec::new(),
                 executable: None,
             },
         ];
@@ -1625,6 +1639,7 @@ mod tests {
                 name: "Game".to_owned(),
                 platform: "Steam".to_owned(),
                 install_path: "/games/game".to_owned(),
+                install_locations: Vec::new(),
                 executable: Some("game.exe".to_owned()),
             })
         );
@@ -1652,6 +1667,7 @@ mod tests {
                 name: "Game".to_owned(),
                 platform: "Steam".to_owned(),
                 install_path: "/games/game".to_owned(),
+                install_locations: Vec::new(),
                 executable: None,
             })
         );
@@ -1731,6 +1747,7 @@ mod tests {
             catalogue_game_id: None,
             catalogue_metadata: None,
             install_path: root.to_string_lossy().into_owned(),
+            install_locations: Vec::new(),
             executable: Some(
                 executable
                     .file_name()
@@ -1789,6 +1806,7 @@ mod tests {
             catalogue_game_id: None,
             catalogue_metadata: None,
             install_path: root.to_string_lossy().into_owned(),
+            install_locations: Vec::new(),
             executable: Some("linked-game".into()),
         };
 
