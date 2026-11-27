@@ -425,6 +425,8 @@ pub fn library_platforms(games: &[IpcGameEntry]) -> Vec<String> {
 pub struct LibraryView<'a> {
     pub games: &'a [IpcGameEntry],
     pub statuses: &'a [GameStatus],
+    /// Per-game launch location selected by the user; absent entries use the primary path.
+    pub selected_install_paths: &'a std::collections::HashMap<String, String>,
     pub detected: &'a [amethys_discovery::DetectedGame],
     pub scanning: bool,
     pub loading: bool,
@@ -447,7 +449,11 @@ pub fn visible_games(view: &LibraryView) -> Vec<usize> {
     let platforms = library_platforms(view.games);
     let active = if view.filter <= platforms.len() { view.filter } else { 0 };
     let selected = active.checked_sub(1).and_then(|i| platforms.get(i)).map(String::as_str);
-    let rank = |i: usize| view.statuses.get(i).map_or(9, |s| s.kind.rank());
+    let rank = |i: usize| {
+        let game = &view.games[i];
+        let selected = view.selected_install_paths.get(&game.id).map(String::as_str).unwrap_or(&game.install_path);
+        crate::status::status_for_installation(game, selected).kind.rank()
+    };
     let mut visible: Vec<usize> = (0..view.games.len())
         .filter(|&i| selected.is_none_or(|pl| view.games[i].platform.trim().eq_ignore_ascii_case(pl)))
         .filter(|&i| library_matches_query(&view.games[i], view.query))
@@ -466,7 +472,7 @@ pub fn visible_games(view: &LibraryView) -> Vec<usize> {
 
 // -------------------------------------------------------------- game card
 #[allow(clippy::too_many_arguments)] // Page layout helpers receive explicit geometry and content.
-fn game_card(p: &mut Painter, x: i32, y: i32, cw: i32, ch: i32, index: usize, game: &IpcGameEntry, status: Option<&GameStatus>) {
+fn game_card(p: &mut Painter, x: i32, y: i32, cw: i32, ch: i32, index: usize, game: &IpcGameEntry, install_path: &str, status: Option<&GameStatus>) {
     let total_h = ch + FOOTER_H;
     let kind = status.map_or(StatusKind::NeedsExecutable, |s| s.kind);
     p.shadow(x, y, cw, total_h, 14, 9, 40);
@@ -501,7 +507,7 @@ fn game_card(p: &mut Painter, x: i32, y: i32, cw: i32, ch: i32, index: usize, ga
     let fy = y + ch;
     p.circle(x + 18, fy + 22, 4, fg);
     p.text(x + 29, fy + 12, 20, kind.label(), 12.5, W::Semi, fg);
-    let path = p.ellipsize_path(&game.install_path, 11.0, W::Reg, cw - 32 - 44);
+    let path = p.ellipsize_path(install_path, 11.0, W::Reg, cw - 32 - 44);
     p.text(x + 16, fy + 35, 16, &path, 11.0, W::Reg, FAINT);
 
     p.round_corners(x, y, cw, total_h, 14, BG);
@@ -521,7 +527,11 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
     let (mx, mw) = (lay.mx, lay.mw);
     let compact = lay.compact();
     let games = view.games;
-    let ready = view.statuses.iter().filter(|s| s.kind == StatusKind::Ready).count();
+    let selected_statuses = games.iter().map(|game| {
+        let selected = view.selected_install_paths.get(&game.id).map(String::as_str).unwrap_or(&game.install_path);
+        crate::status::status_for_installation(game, selected)
+    }).collect::<Vec<_>>();
+    let ready = selected_statuses.iter().filter(|s| s.kind == StatusKind::Ready).count();
 
     // ---- header
     p.text(mx, 28, 42, "Bibliothèque", 34.0, W::Disp, TXT);
@@ -712,7 +722,9 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
         let shown = visible.len().min(view.limit.max(1));
         for (n, &index) in visible.iter().take(shown).enumerate() {
             let (col, row) = (n as i32 % cols, n as i32 / cols);
-            game_card(p, mx + col * (cw + GAP), y + row * row_h, cw, ch, index, &games[index], view.statuses.get(index));
+            let game = &games[index];
+            let install_path = view.selected_install_paths.get(&game.id).map(String::as_str).unwrap_or(&game.install_path);
+            game_card(p, mx + col * (cw + GAP), y + row * row_h, cw, ch, index, game, install_path, selected_statuses.get(index));
         }
         let rows = (shown as i32 + cols - 1) / cols;
         y += rows * row_h + 6;
