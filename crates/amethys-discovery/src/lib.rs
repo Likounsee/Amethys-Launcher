@@ -2470,9 +2470,20 @@ pub struct DiscoveryProgress {
 /// Result of a discovery run. Cancellation is cooperative and takes effect
 /// between provider scans; a provider already scanning is allowed to finish.
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiscoverySourceReport {
+    pub source: String,
+    pub found: usize,
+}
+
+/// Result of a discovery run. Source reports include only providers whose scan
+/// function actually returned; cancelled runs therefore expose partial work.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiscoveryOutcome {
     pub games: Vec<DetectedGame>,
     pub cancelled: bool,
+    pub completed_sources: usize,
+    pub total_sources: usize,
+    pub sources: Vec<DiscoverySourceReport>,
 }
 
 /// Performs a read-only scan of supported local game launchers and reports
@@ -2488,18 +2499,26 @@ fn run_discovery_stages(
 ) -> DiscoveryOutcome {
     let total = stages.len();
     let mut games = Vec::new();
+    let mut sources = Vec::with_capacity(total);
 
     for (index, (source, scan)) in stages.into_iter().enumerate() {
         if cancel.load(std::sync::atomic::Ordering::Relaxed) {
             return DiscoveryOutcome {
                 games,
                 cancelled: true,
+                completed_sources: sources.len(),
+                total_sources: total,
+                sources,
             };
         }
 
         let found = scan();
         let found_count = found.len();
         games.extend(found);
+        sources.push(DiscoverySourceReport {
+            source: source.clone(),
+            found: found_count,
+        });
         on_progress(DiscoveryProgress {
             completed: index + 1,
             total,
@@ -2528,6 +2547,9 @@ fn run_discovery_stages(
     DiscoveryOutcome {
         games,
         cancelled: false,
+        completed_sources: sources.len(),
+        total_sources: total,
+        sources,
     }
 }
 
@@ -2943,6 +2965,33 @@ mod tests {
         assert!(outcome.cancelled, "partial scans must never look complete");
         assert_eq!(outcome.games.len(), 1);
         assert_eq!(outcome.games[0].name, "First Game");
+        assert_eq!(outcome.completed_sources, 1);
+        assert_eq!(outcome.total_sources, 2);
+        assert_eq!(outcome.sources.len(), 1);
+        assert_eq!(outcome.sources[0].source, "Available source");
+        assert_eq!(outcome.sources[0].found, 1);
+    }
+
+    #[test]
+    fn completed_empty_discovery_is_distinct_from_cancelled_discovery() {
+        use std::sync::atomic::AtomicBool;
+
+        let stages: Vec<super::DiscoveryStage> = vec![
+            ("Empty source".to_owned(), Box::new(Vec::new)),
+            ("Second empty source".to_owned(), Box::new(Vec::new)),
+        ];
+        let outcome = super::run_discovery_stages(
+            stages,
+            &AtomicBool::new(false),
+            |_| {},
+        );
+
+        assert!(!outcome.cancelled);
+        assert!(outcome.games.is_empty());
+        assert_eq!(outcome.completed_sources, 2);
+        assert_eq!(outcome.total_sources, 2);
+        assert_eq!(outcome.sources.len(), 2);
+        assert!(outcome.sources.iter().all(|source| source.found == 0));
     }
 
     #[test]
