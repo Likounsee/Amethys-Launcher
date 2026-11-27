@@ -691,7 +691,8 @@ where
                 | IpcCommand::SyncMasterCatalog
                 | IpcCommand::SearchMasterCatalog { .. }
                 | IpcCommand::SearchRecommendedCatalog { .. }
-                | IpcCommand::GetMasterCatalogGame { .. } => unreachable!("handled above"),
+                | IpcCommand::GetMasterCatalogGame { .. }
+                | IpcCommand::SearchPromotionsCatalog { .. } => unreachable!("handled above"),
             }
         }
     };
