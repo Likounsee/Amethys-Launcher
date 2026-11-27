@@ -2413,4 +2413,100 @@ mod tests {
         assert!(!valid_sha256("not-a-hash"));
         assert!(valid_sha256(&"a".repeat(64)));
     }
+    #[test]
+    fn promotion_search_filters_expired_and_stale_offers() {
+        let client = RemoteCatalogClient::new(
+            StaticCatalogProvider::new("https://example.com/catalog").unwrap(),
+            std::env::temp_dir().join("amethys-promotion-filter-test"),
+        )
+        .unwrap();
+        let now_seconds = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let now = utc_timestamp_at(now_seconds);
+        let fresh_after = utc_timestamp_at(now_seconds.saturating_sub(48 * 60 * 60));
+        let active = CatalogPromotion {
+            promotion_id: "steam-570-sale".into(),
+            store: "steam".into(),
+            external_id: "570".into(),
+            current_price_minor: 500,
+            regular_price_minor: 1000,
+            currency: "EUR".into(),
+            valid_from: utc_timestamp_at(now_seconds.saturating_sub(60)),
+            valid_until: utc_timestamp_at(now_seconds + 3600),
+            checked_at: now.clone(),
+            source_url: "https://store.steampowered.com/app/570/".into(),
+        };
+        let mut expired = active.clone();
+        expired.promotion_id = "expired".into();
+        expired.valid_until = utc_timestamp_at(now_seconds.saturating_sub(1));
+        let mut stale = active.clone();
+        stale.promotion_id = "stale".into();
+        stale.checked_at = utc_timestamp_at(now_seconds.saturating_sub(72 * 60 * 60));
+        let entries = vec![
+            CatalogSearchEntry {
+                amethys_id: 1,
+                name: "Current offer".into(),
+                slug: None,
+                genres: Vec::new(),
+                cover_url: None,
+                promotions: vec![active],
+            },
+            CatalogSearchEntry {
+                amethys_id: 2,
+                name: "Expired offer".into(),
+                slug: None,
+                genres: Vec::new(),
+                cover_url: None,
+                promotions: vec![expired],
+            },
+            CatalogSearchEntry {
+                amethys_id: 3,
+                name: "Stale offer".into(),
+                slug: None,
+                genres: Vec::new(),
+                cover_url: None,
+                promotions: vec![stale],
+            },
+        ];
+        let results = client.search_promotions_cached(&entries, 20).unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].amethys_id, 1);
+        assert!(results[0].promotions[0].checked_at >= fresh_after);
+    }
+
+    #[test]
+    fn promotion_validation_requires_matching_official_store_identity() {
+        let promotion = CatalogPromotion {
+            promotion_id: "steam-570-sale".into(),
+            store: "steam".into(),
+            external_id: "570".into(),
+            current_price_minor: 500,
+            regular_price_minor: 1000,
+            currency: "EUR".into(),
+            valid_from: "2026-11-26T00:00:00Z".into(),
+            valid_until: "2026-12-01T00:00:00Z".into(),
+            checked_at: "2026-11-27T00:00:00Z".into(),
+            source_url: "https://store.steampowered.com/app/570/".into(),
+        };
+        let store = CatalogStoreIdentity {
+            store: "steam".into(),
+            external_id: Some("570".into()),
+            name: Some("Example".into()),
+            url: Some(promotion.source_url.clone()),
+        };
+        assert!(validate_promotion_records(&[promotion.clone()], &[store]).is_ok());
+        let mismatched = CatalogStoreIdentity {
+            external_id: Some("999".into()),
+            ..CatalogStoreIdentity {
+                store: "steam".into(),
+                external_id: Some("999".into()),
+                name: Some("Example".into()),
+                url: Some(promotion.source_url.clone()),
+            }
+        };
+        assert!(validate_promotion_records(&[promotion], &[mismatched]).is_err());
+    }
+
 }
