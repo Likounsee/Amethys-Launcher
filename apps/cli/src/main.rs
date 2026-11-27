@@ -996,7 +996,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                             .as_deref()
                             .map(|id| format!(" — ID {id}"))
                             .unwrap_or_default(),
-                        game.install_path,
+                        format_install_locations(&game),
                         game.id
                     );
                 }
