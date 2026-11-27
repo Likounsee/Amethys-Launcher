@@ -1181,33 +1181,40 @@ impl App {
                 detail: self.store_detail.as_ref(),
             }),
             Page::Library => {
-                let selected_statuses = self.games.iter().map(|game| {
-                    let selected = self.selected_install_locations.get(&game.id)
-                        .map(String::as_str).unwrap_or(&game.install_path);
-                    status::status_for_installation(game, selected)
-                }).collect::<Vec<_>>();
+                let selected_statuses = self
+                    .games
+                    .iter()
+                    .map(|game| {
+                        let selected = self
+                            .selected_install_locations
+                            .get(&game.id)
+                            .map(String::as_str)
+                            .unwrap_or(&game.install_path);
+                        status::status_for_installation(game, selected)
+                    })
+                    .collect::<Vec<_>>();
                 pages::library(
-                &mut p,
-                &lay,
-                &LibraryView {
-                    games: &self.games,
-                    statuses: &selected_statuses,
-                     selected_install_paths: &self.selected_install_locations,
-                    detected: &self.detected_games,
-                    scanning: self.scan_in_progress,
-                    loading: self.library_loading,
-                    refreshing: self.library_refreshing,
-                    mutating: self.mutation_in_progress,
-                    progress: self.scan_progress.as_ref(),
-                    scan_found: self.scan_found,
-                    filter: self.st.lib_filter,
-                    sort: self.library_sort,
-                    query: &self.search_query,
-                    search_focused: self.search_focused,
-                    core_error: self.core_error.as_deref(),
-                    limit: self.library_limit,
-                },
-            )
+                    &mut p,
+                    &lay,
+                    &LibraryView {
+                        games: &self.games,
+                        statuses: &selected_statuses,
+                        selected_install_paths: &self.selected_install_locations,
+                        detected: &self.detected_games,
+                        scanning: self.scan_in_progress,
+                        loading: self.library_loading,
+                        refreshing: self.library_refreshing,
+                        mutating: self.mutation_in_progress,
+                        progress: self.scan_progress.as_ref(),
+                        scan_found: self.scan_found,
+                        filter: self.st.lib_filter,
+                        sort: self.library_sort,
+                        query: &self.search_query,
+                        search_focused: self.search_focused,
+                        core_error: self.core_error.as_deref(),
+                        limit: self.library_limit,
+                    },
+                )
             },
             Page::Product => {
                 let index = self.selected_game.unwrap_or(usize::MAX);
