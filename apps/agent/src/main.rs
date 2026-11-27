@@ -483,14 +483,42 @@ where
                                             && same_install_path(&game.install_path, &install_path)
                                     });
                                     match legacy {
-                                        Some(game) => database
-                                            .set_game_platform_id(&game.id, &platform, platform_id)?
-                                            .ok_or_else(|| {
-                                                amethys_errors::AmethysError::new(
-                                                    amethys_errors::ErrorCode::StorageQuery,
-                                                    "Legacy game disappeared while attaching its platform ID.",
-                                                )
-                                            }),
+                                        Some(game) => {
+                                            let upgraded = database
+                                                .set_game_platform_id(&game.id, &platform, platform_id)?
+                                                .ok_or_else(|| {
+                                                    amethys_errors::AmethysError::new(
+                                                        amethys_errors::ErrorCode::StorageQuery,
+                                                        "Legacy game disappeared while attaching its platform ID.",
+                                                    )
+                                                })?;
+
+                                            // Upgrading a legacy row must also refresh the
+                                            // metadata discovered in this scan. Preserve its
+                                            // saved path and executable when the candidate
+                                            // directory is stale or no longer available.
+                                            let detected_path_is_valid =
+                                                std::path::Path::new(&install_path).is_dir();
+                                            let (refresh_path, refresh_executable) =
+                                                if detected_path_is_valid {
+                                                    (install_path.as_str(), executable.as_deref())
+                                                } else {
+                                                    (upgraded.install_path.as_str(), None)
+                                                };
+                                            database
+                                                .refresh_detected_installation(
+                                                    &upgraded.id,
+                                                    &name,
+                                                    refresh_path,
+                                                    refresh_executable,
+                                                )?
+                                                .ok_or_else(|| {
+                                                    amethys_errors::AmethysError::new(
+                                                        amethys_errors::ErrorCode::StorageQuery,
+                                                        "Legacy game disappeared while refreshing its installation.",
+                                                    )
+                                                })
+                                        },
                                         None => database.add_game_with_platform_id(
                                             &name,
                                             &platform,
@@ -1413,6 +1441,17 @@ mod tests {
         ));
         let state = Arc::new(AtomicU8::new(super::STATE_RUNNING));
 
+        let root = std::env::temp_dir().join(format!(
+            "amethys-legacy-upgrade-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).expect("create legacy installation");
+        let install_path = root.to_string_lossy().into_owned();
+
         let legacy = round_trip(
             &database,
             &state,
@@ -1420,7 +1459,7 @@ mod tests {
                 name: "Legacy game".to_owned(),
                 platform: "Steam".to_owned(),
                 platform_id: None,
-                install_path: "/games/legacy".to_owned(),
+                install_path: install_path.clone(),
                 executable: Some("legacy.exe".to_owned()),
             },
         )
@@ -1437,7 +1476,7 @@ mod tests {
                 name: "Detected game".to_owned(),
                 platform: "steam".to_owned(),
                 platform_id: Some("12345".to_owned()),
-                install_path: "/games/legacy".to_owned(),
+                install_path: install_path.clone(),
                 executable: Some("detected.exe".to_owned()),
             },
         )
@@ -1449,6 +1488,9 @@ mod tests {
 
         assert_eq!(detected_game.id, legacy_game.id);
         assert_eq!(detected_game.platform_id.as_deref(), Some("12345"));
+        assert_eq!(detected_game.name, "Detected game");
+        assert_eq!(detected_game.install_path, install_path);
+        assert_eq!(detected_game.executable.as_deref(), Some("detected.exe"));
 
         // Once upgraded, the stable source ID must find the same library row.
         // A non-existent replacement path must not overwrite the valid saved path.
@@ -1456,7 +1498,7 @@ mod tests {
             &database,
             &state,
             IpcCommand::AddDetectedGame {
-                name: "Detected game".to_owned(),
+                name: "Detected game renamed".to_owned(),
                 platform: "Steam".to_owned(),
                 platform_id: Some("12345".to_owned()),
                 install_path: "/games/moved".to_owned(),
@@ -1469,6 +1511,9 @@ mod tests {
             other => panic!("unexpected moved import response: {other:?}"),
         };
         assert_eq!(moved_game.id, legacy_game.id);
+        assert_eq!(moved_game.name, "Detected game renamed");
+        assert_eq!(moved_game.install_path, install_path);
+        assert_eq!(moved_game.executable.as_deref(), Some("detected.exe"));
 
         let games = database
             .lock()
@@ -1477,8 +1522,11 @@ mod tests {
             .expect("list imported games");
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].platform_id.as_deref(), Some("12345"));
-        assert_eq!(games[0].install_path, "/games/legacy");
-        assert_eq!(games[0].executable.as_deref(), Some("legacy.exe"));
+        assert_eq!(games[0].install_path, install_path);
+        assert_eq!(games[0].name, "Detected game renamed");
+        assert_eq!(games[0].executable.as_deref(), Some("detected.exe"));
+        drop(database);
+        std::fs::remove_dir_all(root).expect("remove legacy installation fixture");
     }
 
     #[tokio::test]
