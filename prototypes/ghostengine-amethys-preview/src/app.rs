@@ -370,6 +370,20 @@ fn save_library_sort(path: &std::path::Path, sort: usize) -> std::io::Result<()>
 }
 
 
+/// Returns distinct installation paths, keeping the primary location first.
+fn known_install_locations(game: &IpcGameEntry) -> Vec<String> {
+    let mut locations = vec![game.install_path.clone()];
+    for path in &game.install_locations {
+        if !locations
+            .iter()
+            .any(|known| status::same_install_path(known, path))
+        {
+            locations.push(path.clone());
+        }
+    }
+    locations
+}
+
 /// Returns the per-game preference file using a filesystem-safe hexadecimal ID.
 fn install_choice_file(root: &std::path::Path, game_id: &str) -> std::path::PathBuf {
     let encoded = game_id.as_bytes().iter().map(|byte| format!("{byte:02x}")).collect::<String>();
@@ -383,16 +397,11 @@ fn load_install_choice(root: &std::path::Path, game: &IpcGameEntry) -> String {
     let Ok(path) = String::from_utf8(bytes) else {
         return game.install_path.clone();
     };
-    let known = if game.install_locations.is_empty() {
-        std::slice::from_ref(&game.install_path)
-    } else {
-        game.install_locations.as_slice()
-    };
-    if known.iter().any(|candidate| candidate == &path) {
-        path
-    } else {
-        game.install_path.clone()
-    }
+    let locations = known_install_locations(game);
+    locations
+        .into_iter()
+        .find(|candidate| status::same_install_path(candidate, &path))
+        .unwrap_or_else(|| game.install_path.clone())
 }
 
 fn save_install_choice(root: &std::path::Path, game_id: &str, install_path: &str) -> std::io::Result<()> {
@@ -1097,13 +1106,9 @@ impl App {
         self.games = games;
         self.selected_install_locations.retain(|id, _| self.games.iter().any(|game| &game.id == id));
         for game in &self.games {
-            let mut locations = game.install_locations.clone();
-            if locations.is_empty() {
-                locations.push(game.install_path.clone());
-            }
-            locations.dedup();
+            let locations = known_install_locations(game);
             let selected_is_known = self.selected_install_locations.get(&game.id)
-                .is_some_and(|selected| locations.iter().any(|path| path == selected));
+                .is_some_and(|selected| locations.iter().any(|path| status::same_install_path(path, selected)));
             if !selected_is_known {
                 let selected = self.media_store
                     .map(|store| load_install_choice(store.root(), game))
@@ -1624,11 +1629,7 @@ impl App {
                     self.render(false);
                     return;
                 };
-                let mut locations = game.install_locations.clone();
-                if locations.is_empty() {
-                    locations.push(game.install_path.clone());
-                }
-                locations.dedup();
+                let locations = known_install_locations(&game);
                 let Some(path) = locations.get(location_index).cloned() else {
                     self.notify(ToastKind::Error, "Cette installation n'est plus disponible.");
                     self.render(false);
