@@ -815,6 +815,7 @@ fn json_verify_summary(
         "total_installations": total_installations,
         "available_installations": available_installations,
         "missing_installations": total_installations - available_installations,
+        "installation_issues": total_installations - available_installations,
         "games": games,
     })
 }
@@ -854,6 +855,7 @@ async fn verify_saved_games(json_output: bool) -> Result<(), Box<dyn Error>> {
     let healthy = report["healthy"].as_u64().unwrap_or(0) as usize;
     let issues = total - healthy;
     let missing = total - available;
+    let missing_installations = report["missing_installations"].as_u64().unwrap_or(0) as usize;
 
     if json_output {
         println!("{}", serde_json::to_string_pretty(&report)?);
@@ -884,14 +886,18 @@ async fn verify_saved_games(json_output: bool) -> Result<(), Box<dyn Error>> {
             }
         }
         println!(
-            "Vérification terminée : {healthy}/{total} jeu(x) cohérent(s),              {available}/{total} jeu(x) avec un dossier disponible, {issues} anomalie(s).              {} installation(s) disponible(s) sur {}. Aucun fichier n'a été modifié.",
+            "Vérification terminée : {healthy}/{total} jeu(x) cohérent(s),              {available}/{total} jeu(x) avec un dossier disponible, {issues} anomalie(s).              {} installation(s) disponible(s) sur {} ; {} copie(s) manquante(s).              Aucun fichier n'a été modifié.",
             report["available_installations"].as_u64().unwrap_or(0),
-            report["total_installations"].as_u64().unwrap_or(0)
+            report["total_installations"].as_u64().unwrap_or(0),
+            missing_installations
         );
     }
 
-    if missing > 0 || issues > 0 {
-        Err(format!("{issues} installation(s) nécessitent une vérification.").into())
+    if missing > 0 || issues > 0 || missing_installations > 0 {
+        Err(format!(
+            "{issues} jeu(x) nécessitent une vérification ; {missing_installations} installation(s) sont manquantes."
+        )
+        .into())
     } else {
         Ok(())
     }
@@ -1288,6 +1294,7 @@ mod tests {
         assert_eq!(entry["launch_ready"], true);
         assert_eq!(report["available_installations"], 1);
         assert_eq!(report["missing_installations"], 1);
+        assert_eq!(report["installation_issues"], 1);
 
         std::fs::remove_dir_all(root).expect("cleanup");
     }
