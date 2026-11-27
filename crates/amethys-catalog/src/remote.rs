@@ -2515,13 +2515,10 @@ mod tests {
         };
         assert!(validate_promotion_records(&[promotion.clone()], &[store]).is_ok());
         let mismatched = CatalogStoreIdentity {
+            store: "steam".into(),
             external_id: Some("999".into()),
-            ..CatalogStoreIdentity {
-                store: "steam".into(),
-                external_id: Some("999".into()),
-                name: Some("Example".into()),
-                url: Some(promotion.source_url.clone()),
-            }
+            name: Some("Example".into()),
+            url: Some(promotion.source_url.clone()),
         };
         assert!(validate_promotion_records(&[promotion], &[mismatched]).is_err());
     }
