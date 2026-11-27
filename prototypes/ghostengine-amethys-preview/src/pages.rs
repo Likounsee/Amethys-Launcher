@@ -1337,7 +1337,12 @@ fn render_promotions(p: &mut Painter, lay: &Layout, view: &StoreView<'_>, mut y:
                 x + 14,
                 cy + art_h + 54,
                 17,
-                &format!("{} · fin {}", promotion.store, promotion.valid_until.get(..10).unwrap_or(&promotion.valid_until)),
+                &format!(
+                    "{} · vérifié {} · fin {}",
+                    promotion.store,
+                    promotion.checked_at.get(..10).unwrap_or(&promotion.checked_at),
+                    promotion.valid_until.get(..10).unwrap_or(&promotion.valid_until)
+                ),
                 11.0,
                 W::Med,
                 MUT,
@@ -1745,7 +1750,20 @@ pub fn store_product(p: &mut Painter, lay: &Layout, detail: Option<&IpcCatalogGa
             let current = format_promotion_price(promotion.current_price_minor, &promotion.currency);
             let regular = format_promotion_price(promotion.regular_price_minor, &promotion.currency);
             p.text(mx + 24, py, 20, &format!("{} · -{discount}%", promotion.store), 12.5, W::Semi, GREEN);
-            p.text_fit(mx + 24, py + 23, 18, &format!("{current} au lieu de {regular} · jusqu'au {}", promotion.valid_until.get(..10).unwrap_or(&promotion.valid_until)), 11.5, W::Med, TXT, mw - 48);
+            p.text_fit(
+                mx + 24,
+                py + 23,
+                18,
+                &format!(
+                    "{current} au lieu de {regular} · jusqu'au {} · vérifié {}",
+                    promotion.valid_until.get(..10).unwrap_or(&promotion.valid_until),
+                    promotion.checked_at.get(..10).unwrap_or(&promotion.checked_at)
+                ),
+                11.5,
+                W::Med,
+                TXT,
+                mw - 48,
+            );
             if let Some(store_index) = detail.stores.iter().position(|store| {
                 store.store == promotion.store
                     && store.external_id.as_deref() == Some(promotion.external_id.as_str())
