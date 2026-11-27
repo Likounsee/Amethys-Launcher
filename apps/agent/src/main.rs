@@ -543,10 +543,18 @@ where
                                     // and record additional valid paths as secondary rows.
                                     let detected_path_is_valid =
                                         std::path::Path::new(&install_path).is_dir();
-                                    if detected_path_is_valid
-                                        && !same_install_path(&game.install_path, &install_path)
-                                    {
-                                        database.add_game_location(&game.id, &install_path)?;
+                                    if detected_path_is_valid {
+                                        // Compare against every registered location, not only
+                                        // the primary one. Canonical aliases of a secondary
+                                        // installation must not create duplicate database rows.
+                                        let known_locations =
+                                            database.list_game_locations(&game.id)?;
+                                        let already_registered = known_locations.iter().any(|known| {
+                                            same_install_path(known, &install_path)
+                                        });
+                                        if !already_registered {
+                                            database.add_game_location(&game.id, &install_path)?;
+                                        }
                                     }
                                     database
                                         .refresh_detected_installation(
@@ -1530,6 +1538,36 @@ mod tests {
         assert_eq!(games.len(), 1);
         assert_eq!(games[0].id, first_game.id);
         assert_eq!(games[0].name, "Updated name");
+
+        // A later scan may report the same secondary installation through a
+        // lexical alias. It must not create another local_game_locations row.
+        let secondary_alias = moved_path.join(".");
+        let repeated_alias = round_trip(
+            &database,
+            &state,
+            IpcCommand::AddDetectedGame {
+                name: "Updated name".to_owned(),
+                platform: "Steam".to_owned(),
+                platform_id: Some("570".to_owned()),
+                install_path: secondary_alias.to_string_lossy().into_owned(),
+                executable: None,
+            },
+        )
+        .await;
+        assert!(
+            repeated_alias.result.is_ok(),
+            "re-importing a secondary path alias should succeed"
+        );
+        let locations = database
+            .lock()
+            .await
+            .list_game_locations(&first_game.id)
+            .expect("list all registered locations");
+        assert_eq!(
+            locations.len(),
+            2,
+            "primary and secondary paths should each have exactly one database row"
+        );
         assert_eq!(
             games[0].install_path,
             original_path.to_string_lossy().into_owned()
