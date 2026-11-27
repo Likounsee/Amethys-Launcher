@@ -786,6 +786,7 @@ pub struct DetailView<'a> {
     pub status: Option<&'a GameStatus>,
     pub executable_draft: &'a str,
     pub editing_executable: bool,
+    pub selected_install_path: Option<&'a str>,
 }
 
 /// One label / value row of an information panel. Returns the row height.
@@ -1044,6 +1045,38 @@ pub fn game_detail(p: &mut Painter, lay: &Layout, view: &DetailView) -> i32 {
                 path,
                 SOFT,
                 Some(Icon::Folder),
+            );
+        }
+        ly += h + GAP;
+    }
+
+    // Let the user choose which physical copy this launcher entry starts.
+    // The primary install remains the default; secondary copies are selectable
+    // without changing or moving any game files.
+    let mut install_locations = game.install_locations.clone();
+    if install_locations.is_empty() {
+        install_locations.push(game.install_path.clone());
+    }
+    install_locations.dedup();
+    if install_locations.len() > 1 {
+        let row_h = 58;
+        let h = 58 + install_locations.len() as i32 * row_h + 8;
+        panel(p, lx, ly, main_w, h, 18);
+        p.text(lx + 24, ly + 18, 24, "Choisir l'installation à lancer", 16.0, W::Semi, TXT);
+        for (index, path) in install_locations.iter().enumerate() {
+            let row_y = ly + 54 + index as i32 * row_h;
+            p.text_fit(lx + 24, row_y, 24, path, 12.5, W::Med, SOFT, main_w - 190);
+            let selected = view.selected_install_path == Some(path.as_str());
+            button(
+                p,
+                lx + main_w - 24 - 126,
+                row_y - 2,
+                Some(126),
+                if selected { "Sélectionnée" } else { "Utiliser" },
+                if selected { Some(Icon::Check) } else { Some(Icon::Folder) },
+                if selected { Btn::Primary } else { Btn::Secondary },
+                PANEL,
+                if selected { None } else { Some(Action::SelectInstallLocation(index)) },
             );
         }
         ly += h + GAP;
