@@ -96,6 +96,53 @@ async fn sync_master_catalog() -> Result<IpcResponsePayload, String> {
     })
 }
 
+async fn search_promotions_catalog(limit: usize) -> Result<IpcResponsePayload, String> {
+    let data_dir = amethys_config::prepare_data_directory().map_err(|error| error.to_string())?;
+    let base_url = std::env::var("AMETHYS_CATALOG_URL")
+        .unwrap_or_else(|_| DEFAULT_MASTER_CATALOG_URL.to_owned());
+    let provider = amethys_catalog::remote::StaticCatalogProvider::new(&base_url)
+        .map_err(|error| error.to_string())?;
+    let client = amethys_catalog::remote::RemoteCatalogClient::new(
+        provider,
+        data_dir.join("catalog-cache"),
+    )
+    .map_err(|error| error.to_string())?;
+    let entries = client.load_cached_index().map_err(|error| error.to_string())?;
+    let results = client
+        .search_promotions_cached(&entries, limit)
+        .map_err(|error| error.to_string())?;
+    let cover_inputs = results
+        .iter()
+        .map(|entry| (entry.amethys_id, entry.cover_url.clone()))
+        .collect::<Vec<_>>();
+    let cover_paths = cache_visible_covers(&client, &cover_inputs).await;
+    let games = results
+        .into_iter()
+        .enumerate()
+        .map(|(index, entry)| IpcCatalogSearchEntry {
+            amethys_id: entry.amethys_id,
+            name: entry.name,
+            slug: entry.slug,
+            genres: entry.genres,
+            cover_url: entry.cover_url,
+            cover_cache_path: cover_paths.get(index).cloned().flatten(),
+            promotions: entry.promotions.into_iter().map(|promotion| IpcCatalogPromotion {
+                promotion_id: promotion.promotion_id,
+                store: promotion.store,
+                external_id: promotion.external_id,
+                current_price_minor: promotion.current_price_minor,
+                regular_price_minor: promotion.regular_price_minor,
+                currency: promotion.currency,
+                valid_from: promotion.valid_from,
+                valid_until: promotion.valid_until,
+                checked_at: promotion.checked_at,
+                source_url: promotion.source_url,
+            }).collect(),
+        })
+        .collect();
+    Ok(IpcResponsePayload::CatalogSearchResults { games })
+}
+
 async fn search_master_catalog(query: &str, limit: usize) -> Result<IpcResponsePayload, String> {
     let data_dir = amethys_config::prepare_data_directory().map_err(|error| error.to_string())?;
     let base_url = std::env::var("AMETHYS_CATALOG_URL")
@@ -128,6 +175,18 @@ async fn search_master_catalog(query: &str, limit: usize) -> Result<IpcResponseP
             genres: entry.genres,
             cover_url: entry.cover_url,
             cover_cache_path,
+            promotions: entry.promotions.into_iter().map(|promotion| IpcCatalogPromotion {
+                promotion_id: promotion.promotion_id,
+                store: promotion.store,
+                external_id: promotion.external_id,
+                current_price_minor: promotion.current_price_minor,
+                regular_price_minor: promotion.regular_price_minor,
+                currency: promotion.currency,
+                valid_from: promotion.valid_from,
+                valid_until: promotion.valid_until,
+                checked_at: promotion.checked_at,
+                source_url: promotion.source_url,
+            }).collect(),
         });
     }
     Ok(IpcResponsePayload::CatalogSearchResults { games })
@@ -170,6 +229,7 @@ async fn recommend_master_catalog(
             genres: matched_genres,
             cover_url: entry.cover_url,
             cover_cache_path,
+            promotions: Vec::new(),
         });
     }
     Ok(IpcResponsePayload::CatalogSearchResults { games })
@@ -258,6 +318,18 @@ async fn get_master_catalog_game(amethys_id: u64) -> Result<IpcResponsePayload, 
                     url: store.url,
                 })
                 .collect(),
+            promotions: game.promotions.into_iter().map(|promotion| IpcCatalogPromotion {
+                promotion_id: promotion.promotion_id,
+                store: promotion.store,
+                external_id: promotion.external_id,
+                current_price_minor: promotion.current_price_minor,
+                regular_price_minor: promotion.regular_price_minor,
+                currency: promotion.currency,
+                valid_from: promotion.valid_from,
+                valid_until: promotion.valid_until,
+                checked_at: promotion.checked_at,
+                source_url: promotion.source_url,
+            }).collect(),
         },
     })
 }
@@ -311,6 +383,17 @@ where
                 Err(message) => IpcResponse::failure(
                     request.request_id,
                     IpcRemoteError::new("AM-CATALOG-0003", message),
+                ),
+            };
+            write_message(stream, &response).await?;
+            return Ok(());
+        }
+        IpcCommand::SearchPromotionsCatalog { limit } => {
+            let response = match search_promotions_catalog(*limit).await {
+                Ok(payload) => IpcResponse::success(request.request_id, payload),
+                Err(message) => IpcResponse::failure(
+                    request.request_id,
+                    IpcRemoteError::new("AM-CATALOG-0005", message),
                 ),
             };
             write_message(stream, &response).await?;
