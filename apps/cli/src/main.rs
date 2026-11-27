@@ -725,7 +725,11 @@ fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value
             let missing_installations = installation_count - available_installations;
             let directory_available = available_installations > 0;
             let primary_available = primary["directory_available"] == true;
-            let state = match (primary_available, available_installations == 0, missing_installations > 0) {
+            let state = match (
+                primary_available,
+                available_installations == 0,
+                missing_installations > 0,
+            ) {
                 (_, true, _) => "all_installations_missing",
                 (false, false, _) => "primary_missing_secondary_available",
                 (true, false, true) => "primary_available_some_copies_missing",
@@ -880,7 +884,9 @@ async fn verify_saved_games(json_output: bool) -> Result<(), Box<dyn Error>> {
             }
         }
         println!(
-            "Vérification terminée : {healthy}/{total} jeu(x) cohérent(s), {available}/{total} jeu(x) avec un dossier disponible, {issues} anomalie(s). {} installation(s) disponible(s) sur {}. Aucun fichier n'a été modifié.", report["available_installations"].as_u64().unwrap_or(0), report["total_installations"].as_u64().unwrap_or(0)
+            "Vérification terminée : {healthy}/{total} jeu(x) cohérent(s),              {available}/{total} jeu(x) avec un dossier disponible, {issues} anomalie(s).              {} installation(s) disponible(s) sur {}. Aucun fichier n'a été modifié.",
+            report["available_installations"].as_u64().unwrap_or(0),
+            report["total_installations"].as_u64().unwrap_or(0)
         );
     }
 
@@ -1215,7 +1221,8 @@ mod tests {
         std::fs::create_dir_all(secondary.join("bin")).expect("secondary directory");
         let executable = primary.join("bin/game.exe");
         std::fs::write(&executable, b"primary").expect("primary executable");
-        std::fs::write(secondary.join("bin/game.exe"), b"secondary").expect("secondary executable");
+        std::fs::write(secondary.join("bin/game.exe"), b"secondary")
+            .expect("secondary executable");
         let game = amethys_ipc::IpcGameEntry {
             id: "multi".to_owned(),
             name: "Multi".to_owned(),
@@ -1265,7 +1272,9 @@ mod tests {
             catalogue_metadata: None,
             install_path: missing_primary.to_string_lossy().into_owned(),
             install_locations: vec![secondary.to_string_lossy().into_owned()],
-            executable: Some(missing_primary.join("bin/game.exe").to_string_lossy().into_owned()),
+            executable: Some(
+                missing_primary.join("bin/game.exe").to_string_lossy().into_owned(),
+            ),
         };
 
         let report = super::build_verify_report(&[game]);
