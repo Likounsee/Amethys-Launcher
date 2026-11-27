@@ -111,11 +111,7 @@ pub fn same_install_path(left: &str, right: &str) -> bool {
     #[cfg(windows)]
     {
         left.to_string_lossy()
-            .replace('\\\\', "/")
-            .trim_end_matches('/')
-            .eq_ignore_ascii_case(
-                &right.to_string_lossy().replace('\\\\', "/").trim_end_matches('/')
-            )
+            .eq_ignore_ascii_case(&right.to_string_lossy())
     }
     #[cfg(not(windows))]
     {
