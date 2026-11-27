@@ -534,7 +534,10 @@ impl Database {
         }
 
         let id = uuid::Uuid::new_v4().to_string();
-        self.connection
+        let transaction = self.connection.unchecked_transaction().map_err(|error| {
+            storage_error(format!("Could not begin local installation insert: {error}"))
+        })?;
+        transaction
             .execute(
                 "INSERT INTO games (
                     id, name, platform, platform_id, install_path, executable, catalogue_game_id
@@ -542,6 +545,10 @@ impl Database {
                 params![id, name, platform, platform_id, install_path, executable],
             )
             .map_err(|error| storage_error(format!("Could not add local installation: {error}")))?;
+        sync_primary_game_location(&transaction, &id, install_path)?;
+        transaction.commit().map_err(|error| {
+            storage_error(format!("Could not commit local installation insert: {error}"))
+        })?;
         self.get_game(&id)?
             .ok_or_else(|| storage_error("Added game could not be read back."))
     }
@@ -1141,7 +1148,10 @@ impl Database {
             return Err(storage_error("Detected installation metadata is invalid."));
         }
 
-        self.connection
+        let transaction = self.connection.unchecked_transaction().map_err(|error| {
+            storage_error(format!("Could not begin detected installation refresh: {error}"))
+        })?;
+        let changed = transaction
             .execute(
                 "UPDATE games
                  SET name = ?1, install_path = ?2, executable = COALESCE(?3, executable)
@@ -1151,6 +1161,12 @@ impl Database {
             .map_err(|error| {
                 storage_error(format!("Could not refresh detected installation: {error}"))
             })?;
+        if changed > 0 {
+            sync_primary_game_location(&transaction, id, install_path)?;
+        }
+        transaction.commit().map_err(|error| {
+            storage_error(format!("Could not commit detected installation refresh: {error}"))
+        })?;
         self.get_game(id)
     }
 
@@ -1319,6 +1335,34 @@ impl Database {
     pub const fn connection(&self) -> &Connection {
         &self.connection
     }
+}
+
+
+/// Keeps the normalized primary-location row in step with the legacy game path.
+///
+/// Secondary locations are retained; only the previous primary row is replaced.
+/// The caller runs this inside the same transaction as the corresponding game write.
+fn sync_primary_game_location(
+    connection: &Connection,
+    game_id: &str,
+    install_path: &str,
+) -> Result<(), AmethysError> {
+    connection
+        .execute(
+            "DELETE FROM local_game_locations
+             WHERE game_id = ?1 AND is_primary = 1 AND path <> ?2",
+            params![game_id, install_path],
+        )
+        .map_err(|error| storage_error(format!("Could not replace primary game location: {error}")))?;
+    connection
+        .execute(
+            "INSERT INTO local_game_locations (id, game_id, path, is_primary)
+             VALUES (?1, ?2, ?3, 1)
+             ON CONFLICT(game_id, path) DO UPDATE SET is_primary = 1",
+            params![uuid::Uuid::new_v4().to_string(), game_id, install_path],
+        )
+        .map_err(|error| storage_error(format!("Could not save primary game location: {error}")))?;
+    Ok(())
 }
 
 fn game_from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<GameEntry> {
@@ -1602,6 +1646,68 @@ mod tests {
                 .expect("missing game ignored")
         );
     }
+    #[test]
+    fn adding_game_creates_a_matching_primary_location_atomically() {
+        let database = Database::open(":memory:").expect("database opens");
+        let game = database
+            .add_game("Example", "Steam", "/games/example", None)
+            .expect("game is added");
+
+        let locations: Vec<(String, i64)> = database
+            .connection()
+            .prepare(
+                "SELECT path, is_primary FROM local_game_locations
+                 WHERE game_id = ?1 ORDER BY path",
+            )
+            .expect("location query prepares")
+            .query_map([&game.id], |row| Ok((row.get(0)?, row.get(1)?)))
+            .expect("location query runs")
+            .collect::<Result<_, _>>()
+            .expect("locations are readable");
+        assert_eq!(locations, vec![("/games/example".to_owned(), 1)]);
+    }
+
+    #[test]
+    fn refreshing_game_replaces_only_the_primary_location() {
+        let database = Database::open(":memory:").expect("database opens");
+        let game = database
+            .add_game("Example", "Steam", "/games/old", None)
+            .expect("game is added");
+        database
+            .connection()
+            .execute(
+                "INSERT INTO local_game_locations (id, game_id, path, is_primary)
+                 VALUES ('secondary-location', ?1, '/games/secondary', 0)",
+                [&game.id],
+            )
+            .expect("secondary location is inserted");
+
+        let refreshed = database
+            .refresh_detected_installation(&game.id, "Example", "/games/new", None)
+            .expect("refresh succeeds")
+            .expect("game remains available");
+        assert_eq!(refreshed.install_path, "/games/new");
+
+        let locations: Vec<(String, i64)> = database
+            .connection()
+            .prepare(
+                "SELECT path, is_primary FROM local_game_locations
+                 WHERE game_id = ?1 ORDER BY path",
+            )
+            .expect("location query prepares")
+            .query_map([&game.id], |row| Ok((row.get(0)?, row.get(1)?)))
+            .expect("location query runs")
+            .collect::<Result<_, _>>()
+            .expect("locations are readable");
+        assert_eq!(
+            locations,
+            vec![
+                ("/games/new".to_owned(), 1),
+                ("/games/secondary".to_owned(), 0)
+            ]
+        );
+    }
+
     #[test]
     fn refreshing_detected_installation_updates_moved_path_without_changing_library_id() {
         let database = Database::open(":memory:").expect("database opens");
