@@ -846,6 +846,7 @@ fn ipc_game_entry(
     game: amethys_storage::GameEntry,
 ) -> Result<IpcGameEntry, amethys_errors::AmethysError> {
     let catalogue_game_id = database.get_catalogue_game_id(&game.id)?;
+    let install_locations = database.list_game_locations(&game.id)?;
     let catalogue_metadata = catalogue_game_id
         .as_deref()
         .map(|catalogue_id| database.get_catalogue_game_metadata(catalogue_id))
@@ -866,6 +867,7 @@ fn ipc_game_entry(
         platform: game.platform,
         platform_id: game.platform_id,
         install_path: game.install_path,
+        install_locations,
         executable: game.executable,
     })
 }
