@@ -535,7 +535,9 @@ impl Database {
 
         let id = uuid::Uuid::new_v4().to_string();
         let transaction = self.connection.unchecked_transaction().map_err(|error| {
-            storage_error(format!("Could not begin local installation insert: {error}"))
+            storage_error(format!(
+                "Could not begin local installation insert: {error}"
+            ))
         })?;
         transaction
             .execute(
@@ -547,7 +549,9 @@ impl Database {
             .map_err(|error| storage_error(format!("Could not add local installation: {error}")))?;
         sync_primary_game_location(&transaction, &id, install_path)?;
         transaction.commit().map_err(|error| {
-            storage_error(format!("Could not commit local installation insert: {error}"))
+            storage_error(format!(
+                "Could not commit local installation insert: {error}"
+            ))
         })?;
         self.get_game(&id)?
             .ok_or_else(|| storage_error("Added game could not be read back."))
@@ -1149,7 +1153,9 @@ impl Database {
         }
 
         let transaction = self.connection.unchecked_transaction().map_err(|error| {
-            storage_error(format!("Could not begin detected installation refresh: {error}"))
+            storage_error(format!(
+                "Could not begin detected installation refresh: {error}"
+            ))
         })?;
         let changed = transaction
             .execute(
@@ -1165,7 +1171,9 @@ impl Database {
             sync_primary_game_location(&transaction, id, install_path)?;
         }
         transaction.commit().map_err(|error| {
-            storage_error(format!("Could not commit detected installation refresh: {error}"))
+            storage_error(format!(
+                "Could not commit detected installation refresh: {error}"
+            ))
         })?;
         self.get_game(id)
     }
@@ -1212,7 +1220,9 @@ impl Database {
                 storage_error(format!("Could not check game for location: {error}"))
             })?;
         if !game_exists {
-            return Err(storage_error("Cannot add a location to a game that does not exist."));
+            return Err(storage_error(
+                "Cannot add a location to a game that does not exist.",
+            ));
         }
         let changed = transaction
             .execute(
@@ -1397,7 +1407,6 @@ impl Database {
     }
 }
 
-
 /// Keeps the normalized primary-location row in step with the legacy game path.
 ///
 /// Secondary locations are retained; only the previous primary row is replaced.
@@ -1413,7 +1422,9 @@ fn sync_primary_game_location(
              WHERE game_id = ?1 AND is_primary = 1 AND path <> ?2",
             params![game_id, install_path],
         )
-        .map_err(|error| storage_error(format!("Could not replace primary game location: {error}")))?;
+        .map_err(|error| {
+            storage_error(format!("Could not replace primary game location: {error}"))
+        })?;
     connection
         .execute(
             "INSERT INTO local_game_locations (id, game_id, path, is_primary)
@@ -1775,12 +1786,16 @@ mod tests {
             .add_game("Example", "Steam", "/games/primary", None)
             .expect("game is added");
 
-        assert!(database
-            .add_game_location(&game.id, "/games/secondary")
-            .expect("secondary location is inserted"));
-        assert!(!database
-            .add_game_location(&game.id, "/games/secondary")
-            .expect("duplicate location is ignored"));
+        assert!(
+            database
+                .add_game_location(&game.id, "/games/secondary")
+                .expect("secondary location is inserted")
+        );
+        assert!(
+            !database
+                .add_game_location(&game.id, "/games/secondary")
+                .expect("duplicate location is ignored")
+        );
 
         let locations: Vec<(String, i64)> = database
             .connection()
