@@ -66,6 +66,29 @@ fn list_games_with_timeouts(
 }
 
 
+/// Finds an executable's relative location in any registered game installation.
+/// Lexical matching preserves recovery when the original installation no longer exists.
+fn executable_relative_to_known_install(
+    game: &IpcGameEntry,
+    executable: &std::path::Path,
+) -> Option<std::path::PathBuf> {
+    let resolved = executable
+        .canonicalize()
+        .unwrap_or_else(|_| executable.to_path_buf());
+    for location in std::iter::once(&game.install_path).chain(game.install_locations.iter()) {
+        let known_root = std::path::Path::new(location);
+        if let Ok(relative) = executable.strip_prefix(known_root) {
+            return Some(relative.to_path_buf());
+        }
+        if let Ok(canonical_root) = known_root.canonicalize() {
+            if let Ok(relative) = resolved.strip_prefix(&canonical_root) {
+                return Some(relative.to_path_buf());
+            }
+        }
+    }
+    None
+}
+
 /// Resolves a configured executable and guarantees it remains inside the selected game installation.
 fn resolve_launch_executable(game: &IpcGameEntry) -> Result<(std::path::PathBuf, std::path::PathBuf), String> {
     use std::path::Path;
@@ -87,20 +110,7 @@ fn resolve_launch_executable(game: &IpcGameEntry) -> Result<(std::path::PathBuf,
         if configured.starts_with(&root) {
             configured.to_path_buf()
         } else {
-            let configured_resolved = configured.canonicalize()
-                .map_err(|error| format!("Exécutable introuvable ou inaccessible : {error}"))?;
-            let mut relative = None;
-            for location in std::iter::once(&game.install_path).chain(game.install_locations.iter()) {
-                let known_root = match Path::new(location).canonicalize() {
-                    Ok(path) => path,
-                    Err(_) => continue,
-                };
-                if let Ok(path) = configured_resolved.strip_prefix(&known_root) {
-                    relative = Some(path.to_path_buf());
-                    break;
-                }
-            }
-            match relative {
+            match executable_relative_to_known_install(game, configured) {
                 Some(path) => root.join(path),
                 None => configured.to_path_buf(),
             }
