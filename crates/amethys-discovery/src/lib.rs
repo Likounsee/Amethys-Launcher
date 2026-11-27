@@ -2533,7 +2533,7 @@ fn run_discovery_stages(
 
 pub fn discover_all_games_with_progress(
     cancel: &std::sync::atomic::AtomicBool,
-    mut on_progress: impl FnMut(DiscoveryProgress),
+    on_progress: impl FnMut(DiscoveryProgress),
 ) -> DiscoveryOutcome {
     let mut stages: Vec<DiscoveryStage> = Vec::new();
     stages.push(("Steam".to_owned(), Box::new(discover_steam_games)));
