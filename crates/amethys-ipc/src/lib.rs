@@ -553,7 +553,6 @@ mod tests {
             platform: "Steam".to_owned(),
             platform_id: Some("570".to_owned()),
             install_path: "/games/dota2".to_owned(),
-            install_locations: Vec::new(),
             executable: None,
         };
         let encoded = serde_json::to_vec(&command).expect("command serializes");
