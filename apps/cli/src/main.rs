@@ -567,14 +567,26 @@ fn resolve_launch_executable(
         return Err("Le chemin d'installation n'est pas un dossier.".to_owned());
     }
 
-    let candidate = std::path::Path::new(executable);
-    let candidate = if candidate.is_absolute() {
-        candidate.to_path_buf()
+    let configured = std::path::Path::new(executable);
+    let candidate = if configured.is_absolute() {
+        let resolved_configured = configured.canonicalize().unwrap_or_else(|_| configured.to_path_buf());
+        let mut relative = None;
+        for known_install in std::iter::once(&game.install_path).chain(game.install_locations.iter()) {
+            let known_root = match std::path::Path::new(known_install).canonicalize() {
+                Ok(path) => path,
+                Err(_) => continue,
+            };
+            if let Ok(path) = resolved_configured.strip_prefix(&known_root) {
+                relative = Some(path.to_path_buf());
+                break;
+            }
+        }
+        relative.map(|path| root.join(path)).unwrap_or_else(|| configured.to_path_buf())
     } else {
         if !is_safe_relative_executable(executable) {
             return Err("Chemin d'exécutable relatif non sûr.".to_owned());
         }
-        root.join(candidate)
+        root.join(configured)
     };
     let resolved = candidate
         .canonicalize()
@@ -600,7 +612,21 @@ fn inspect_game_executable(game: &amethys_ipc::IpcGameEntry) -> Option<PathCheck
     };
     let executable_path = std::path::Path::new(executable);
     let candidate = if executable_path.is_absolute() {
-        executable_path.to_path_buf()
+        let resolved_configured = executable_path.canonicalize()
+            .unwrap_or_else(|_| executable_path.to_path_buf());
+        let mut relative = None;
+        for known_install in std::iter::once(&game.install_path).chain(game.install_locations.iter()) {
+            let known_root = match std::path::Path::new(known_install).canonicalize() {
+                Ok(path) => path,
+                Err(_) => continue,
+            };
+            if let Ok(path) = resolved_configured.strip_prefix(&known_root) {
+                relative = Some(path.to_path_buf());
+                break;
+            }
+        }
+        relative.map(|path| canonical_root.join(path))
+            .unwrap_or_else(|| executable_path.to_path_buf())
     } else {
         if !is_safe_relative_executable(executable) {
             return Some(PathCheck::InvalidPath);
