@@ -644,7 +644,7 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
             ("Jeux", games.len(), VIO),
             ("Prêts à lancer", ready, GREEN),
             ("À configurer", count(&[StatusKind::NeedsExecutable, StatusKind::InvalidExecutable]), AMBER),
-            ("Dossiers introuvables", count(&[StatusKind::FolderMissing]), RED),
+            ("Dossiers indisponibles", count(&[StatusKind::FolderMissing]), RED),
         ];
         let per_row = if mw < 420 { 1 } else if compact { 2 } else { 4 };
         let tw = (mw - GAP * (per_row - 1)) / per_row;
@@ -992,7 +992,7 @@ pub fn game_detail(p: &mut Painter, lay: &Layout, view: &DetailView) -> i32 {
             None => ("Prêt à lancer".to_owned(), GREEN, Icon::Check),
             Some(reason) => (reason.clone(), AMBER, Icon::Alert),
         };
-        let (dir_text, dir_color, dir_icon) = if status.directory_exists { ("Présent sur le disque", GREEN, Icon::Check) } else { ("Introuvable sur le disque", RED, Icon::Alert) };
+        let (dir_text, dir_color, dir_icon) = if status.directory_exists { ("Présent sur le disque", GREEN, Icon::Check) } else { ("Indisponible — disque déconnecté, déplacé ou accès refusé", RED, Icon::Alert) };
         // Measure first so the panel fits its rows.
         let start = p.hits.len();
         let mut probe = 62;
