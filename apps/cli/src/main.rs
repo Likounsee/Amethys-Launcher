@@ -230,7 +230,10 @@ fn filter_games_by_platform<'a>(
 fn format_install_locations(game: &amethys_ipc::IpcGameEntry) -> String {
     let mut locations = Vec::with_capacity(1 + game.install_locations.len());
     for path in std::iter::once(&game.install_path).chain(game.install_locations.iter()) {
-        if !locations.iter().any(|known: &String| same_install_location(known, std::path::Path::new(path))) {
+        if !locations
+            .iter()
+            .any(|known: &String| same_install_location(known, std::path::Path::new(path)))
+        {
             locations.push(path.clone());
         }
     }
@@ -566,9 +569,13 @@ fn resolve_launch_executable(
 
     let configured = std::path::Path::new(executable);
     let candidate = if configured.is_absolute() {
-        let resolved_configured = configured.canonicalize().unwrap_or_else(|_| configured.to_path_buf());
+        let resolved_configured = configured
+            .canonicalize()
+            .unwrap_or_else(|_| configured.to_path_buf());
         let mut relative = None;
-        for known_install in std::iter::once(&game.install_path).chain(game.install_locations.iter()) {
+        for known_install in
+            std::iter::once(&game.install_path).chain(game.install_locations.iter())
+        {
             let known_root = match std::path::Path::new(known_install).canonicalize() {
                 Ok(path) => path,
                 Err(_) => continue,
@@ -578,7 +585,9 @@ fn resolve_launch_executable(
                 break;
             }
         }
-        relative.map(|path| root.join(path)).unwrap_or_else(|| configured.to_path_buf())
+        relative
+            .map(|path| root.join(path))
+            .unwrap_or_else(|| configured.to_path_buf())
     } else {
         if !is_safe_relative_executable(executable) {
             return Err("Chemin d'exécutable relatif non sûr.".to_owned());
@@ -609,7 +618,8 @@ fn inspect_game_executable(game: &amethys_ipc::IpcGameEntry) -> Option<PathCheck
     };
     let executable_path = std::path::Path::new(executable);
     let candidate = if executable_path.is_absolute() {
-        let resolved_configured = executable_path.canonicalize()
+        let resolved_configured = executable_path
+            .canonicalize()
             .unwrap_or_else(|_| executable_path.to_path_buf());
         let mut relative = None;
         for known_install in std::iter::once(&game.install_path).chain(game.install_locations.iter()) {
@@ -622,7 +632,8 @@ fn inspect_game_executable(game: &amethys_ipc::IpcGameEntry) -> Option<PathCheck
                 break;
             }
         }
-        relative.map(|path| canonical_root.join(path))
+        relative
+            .map(|path| canonical_root.join(path))
             .unwrap_or_else(|| executable_path.to_path_buf())
     } else {
         if !is_safe_relative_executable(executable) {
@@ -676,14 +687,17 @@ fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value
         .iter()
         .map(|game| {
             let mut unique_locations = Vec::new();
-            for install_path in std::iter::once(&game.install_path).chain(game.install_locations.iter()) {
+            for install_path in
+                std::iter::once(&game.install_path).chain(game.install_locations.iter())
+            {
                 if !unique_locations.iter().any(|known: &String| {
                     same_install_location(known, std::path::Path::new(install_path))
                 }) {
                     unique_locations.push(install_path.clone());
                 }
             }
-            let installations = unique_locations.iter()
+            let installations = unique_locations
+                .iter()
                 .enumerate()
                 .map(|(index, install_path)| {
                     let mut candidate = game.clone();
@@ -709,9 +723,13 @@ fn build_verify_report(games: &[amethys_ipc::IpcGameEntry]) -> serde_json::Value
                 })
                 .collect::<Vec<_>>();
             let primary = &installations[0];
-            let directory_available = installations.iter().any(|entry| entry["directory_available"] == true);
+            let directory_available = installations
+                .iter()
+                .any(|entry| entry["directory_available"] == true);
             let healthy = installations.iter().any(|entry| entry["healthy"] == true);
-            let launch_ready = installations.iter().any(|entry| entry["launch_ready"] == true);
+            let launch_ready = installations
+                .iter()
+                .any(|entry| entry["launch_ready"] == true);
             serde_json::json!({
                 "id": game.id,
                 "name": game.name,
@@ -1164,8 +1182,13 @@ mod tests {
     #[test]
     fn verify_report_checks_primary_and_secondary_installations_independently() {
         let nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH).expect("clock").as_nanos();
-        let root = std::env::temp_dir().join(format!("amethys-verify-multi-{}-{nonce}", std::process::id()));
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "amethys-verify-multi-{}-{nonce}",
+            std::process::id()
+        ));
         let primary = root.join("primary");
         let secondary = root.join("secondary");
         std::fs::create_dir_all(primary.join("bin")).expect("primary directory");
@@ -1186,7 +1209,9 @@ mod tests {
         };
 
         let report = super::build_verify_report(&[game]);
-        let installations = report["games"][0]["installations"].as_array().expect("installations");
+        let installations = report["games"][0]["installations"]
+            .as_array()
+            .expect("installations");
         assert_eq!(installations.len(), 2);
         assert_eq!(installations[0]["kind"], "primary");
         assert_eq!(installations[0]["launch_ready"], true);
