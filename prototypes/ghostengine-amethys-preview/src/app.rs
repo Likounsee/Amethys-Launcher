@@ -725,10 +725,7 @@ impl App {
         let result_limit = self.store_result_limit.clamp(PAGE_SIZE, 500);
         let promotions = self.store_promotions;
         std::thread::spawn(move || {
-            if promotions {
-                let result = crate::core_client::search_master_catalog_promotions(result_limit);
-                let _ = sender.send(StoreTaskResult::Search(result));
-            } else if synchronize {
+            if synchronize {
                 match crate::core_client::sync_master_catalog() {
                     Ok(result) => {
                         let _ = sender.send(StoreTaskResult::Synchronized(Ok(result)));
@@ -738,7 +735,9 @@ impl App {
                         // synchronized catalogue disappear from the Store.
                         // Search/recommendation commands read only the verified
                         // local index and therefore remain usable offline.
-                        let result = if personalized {
+                        let result = if promotions {
+                            crate::core_client::search_master_catalog_promotions(result_limit)
+                        } else if personalized {
                             crate::core_client::recommend_master_catalog(
                                 genres, owned_ids, owned_names, result_limit,
                             )
@@ -751,6 +750,9 @@ impl App {
                         });
                     }
                 }
+            } else if promotions {
+                let result = crate::core_client::search_master_catalog_promotions(result_limit);
+                let _ = sender.send(StoreTaskResult::Search(result));
             } else if personalized {
                 let result = crate::core_client::recommend_master_catalog(
                     genres, owned_ids, owned_names, result_limit,
