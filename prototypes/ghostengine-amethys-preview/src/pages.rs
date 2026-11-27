@@ -783,7 +783,7 @@ pub fn library(p: &mut Painter, lay: &Layout, view: &LibraryView) -> i32 {
 pub struct DetailView<'a> {
     pub game: Option<&'a IpcGameEntry>,
     pub index: usize,
-    pub status: Option<&'a GameStatus>,
+    pub status: Option<GameStatus>,
     pub executable_draft: &'a str,
     pub editing_executable: bool,
     pub selected_install_path: Option<&'a str>,
@@ -838,7 +838,7 @@ pub fn game_detail(p: &mut Painter, lay: &Layout, view: &DetailView) -> i32 {
         empty_state(p, mx, 100, mw, Icon::Info, "Aucun jeu sélectionné", "Retournez à la bibliothèque pour choisir un jeu.", Some(("Retour à la bibliothèque", Action::Go(Page::Library), Btn::Secondary)));
         return 420;
     };
-    let status = view.status.cloned().unwrap_or_else(|| crate::status::classify(false, game.executable.is_some(), None));
+    let status = view.status.clone().unwrap_or_else(|| crate::status::classify(false, game.executable.is_some(), None));
     let ready = status.is_ready();
 
     // ---- hero geometry
