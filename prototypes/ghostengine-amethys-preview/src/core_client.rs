@@ -563,6 +563,21 @@ pub fn recommend_master_catalog(
     }
 }
 
+/// Lists current, recently verified promotions from the offline catalogue index.
+pub fn search_master_catalog_promotions(
+    limit: usize,
+) -> Result<Vec<IpcCatalogSearchEntry>, String> {
+    match send_core_command(
+        IpcCommand::SearchPromotionsCatalog {
+            limit: limit.clamp(1, 500),
+        },
+        std::time::Duration::from_secs(30),
+    )? {
+        IpcResponsePayload::CatalogSearchResults { games } => Ok(games),
+        other => Err(format!("Réponse IPC inattendue : {other:?}")),
+    }
+}
+
 /// Loads a single catalogue detail and its store identities through Core.
 pub fn get_master_catalog_game(
     amethys_id: u64,
