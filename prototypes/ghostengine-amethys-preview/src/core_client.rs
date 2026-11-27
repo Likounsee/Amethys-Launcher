@@ -634,6 +634,38 @@ mod tests {
     }
 
     #[test]
+    fn launches_surviving_secondary_when_primary_install_is_missing() {
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let base = std::env::temp_dir().join(format!(
+            "amethys-recover-secondary-{}-{nonce}",
+            std::process::id()
+        ));
+        let missing_primary = base.join("old-primary");
+        let secondary = base.join("secondary");
+        std::fs::create_dir_all(secondary.join("bin")).unwrap();
+        std::fs::write(secondary.join("bin/game.exe"), b"secondary").unwrap();
+
+        let game = IpcGameEntry {
+            id: "recoverable".to_owned(),
+            name: "Recoverable".to_owned(),
+            platform: "Tests".to_owned(),
+            platform_id: Some("42".to_owned()),
+            catalogue_game_id: None,
+            catalogue_metadata: None,
+            install_path: missing_primary.to_string_lossy().into_owned(),
+            install_locations: vec![secondary.to_string_lossy().into_owned()],
+            executable: Some(missing_primary.join("bin/game.exe").to_string_lossy().into_owned()),
+        };
+
+        let mut selected = game.clone();
+        selected.install_path = secondary.to_string_lossy().into_owned();
+        let (root, executable) = resolve_launch_executable(&selected).unwrap();
+        assert_eq!(root, secondary.canonicalize().unwrap());
+        assert_eq!(executable, secondary.join("bin/game.exe").canonicalize().unwrap());
+        std::fs::remove_dir_all(base).unwrap();
+    }
+
+    #[test]
     fn finds_agent_in_parent_workspace_target_directory() {
         let root = std::env::temp_dir().join(format!("amethys-agent-search-{}", std::process::id()));
         let launcher_dir = root.join("prototypes/preview/target/release");
