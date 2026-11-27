@@ -2481,6 +2481,56 @@ pub struct DiscoveryOutcome {
 /// filesystem/database operation.
 type DiscoveryStage = (String, Box<dyn FnOnce() -> Vec<DetectedGame>>);
 
+fn run_discovery_stages(
+    stages: Vec<DiscoveryStage>,
+    cancel: &std::sync::atomic::AtomicBool,
+    mut on_progress: impl FnMut(DiscoveryProgress),
+) -> DiscoveryOutcome {
+    let total = stages.len();
+    let mut games = Vec::new();
+
+    for (index, (source, scan)) in stages.into_iter().enumerate() {
+        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
+            return DiscoveryOutcome {
+                games,
+                cancelled: true,
+            };
+        }
+
+        let found = scan();
+        let found_count = found.len();
+        games.extend(found);
+        on_progress(DiscoveryProgress {
+            completed: index + 1,
+            total,
+            source,
+            found: found_count,
+        });
+    }
+
+    games.sort_by_key(|game| {
+        (
+            game.platform,
+            game.name.to_lowercase(),
+            game.install_path.clone(),
+            game.platform_id.clone(),
+        )
+    });
+    let mut seen_installations = BTreeSet::new();
+    games.retain(|game| {
+        insert_unique_platform_install_path(
+            &mut seen_installations,
+            game.platform,
+            &game.install_path,
+        )
+    });
+
+    DiscoveryOutcome {
+        games,
+        cancelled: false,
+    }
+}
+
 pub fn discover_all_games_with_progress(
     cancel: &std::sync::atomic::AtomicBool,
     mut on_progress: impl FnMut(DiscoveryProgress),
@@ -2553,46 +2603,7 @@ pub fn discover_all_games_with_progress(
         stages.push(("Xbox".to_owned(), Box::new(discover_xbox_games)));
     }
 
-    let total = stages.len();
-    let mut games = Vec::new();
-    for (index, (source, scan)) in stages.into_iter().enumerate() {
-        if cancel.load(std::sync::atomic::Ordering::Relaxed) {
-            return DiscoveryOutcome {
-                games,
-                cancelled: true,
-            };
-        }
-        let found = scan();
-        let found_count = found.len();
-        games.extend(found);
-        on_progress(DiscoveryProgress {
-            completed: index + 1,
-            total,
-            source,
-            found: found_count,
-        });
-    }
-
-    games.sort_by_key(|game| {
-        (
-            game.platform,
-            game.name.to_lowercase(),
-            game.install_path.clone(),
-            game.platform_id.clone(),
-        )
-    });
-    let mut seen_installations = BTreeSet::new();
-    games.retain(|game| {
-        insert_unique_platform_install_path(
-            &mut seen_installations,
-            game.platform,
-            &game.install_path,
-        )
-    });
-    DiscoveryOutcome {
-        games,
-        cancelled: false,
-    }
+    run_discovery_stages(stages, cancel, on_progress)
 }
 
 /// Backwards-compatible complete scan for callers that do not need progress.
@@ -2908,6 +2919,30 @@ mod tests {
         };
         assert_eq!(super::resolve_game_executable(&detected), None);
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn discovery_cancellation_after_a_source_preserves_partial_results_and_marks_them_incomplete() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let cancel = AtomicBool::new(false);
+        let first = super::DetectedGame {
+            platform_id: Some("100".to_owned()),
+            name: "First Game".to_owned(),
+            install_path: std::path::PathBuf::from("/games/first"),
+            platform: "Test Store",
+        };
+        let stages: Vec<super::DiscoveryStage> = vec![
+            ("Available source".to_owned(), Box::new(move || vec![first])),
+            ("Not reached".to_owned(), Box::new(Vec::new)),
+        ];
+        let outcome = super::run_discovery_stages(stages, &cancel, |_| {
+            cancel.store(true, Ordering::Relaxed);
+        });
+
+        assert!(outcome.cancelled, "partial scans must never look complete");
+        assert_eq!(outcome.games.len(), 1);
+        assert_eq!(outcome.games[0].name, "First Game");
     }
 
     #[test]
